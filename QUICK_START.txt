@@ -1,0 +1,107 @@
+🚀 VERISOURCE API - QUICK START GUIDE
+═══════════════════════════════════════════════════════════
+
+📋 WHAT YOU NEED
+═══════════════════════════════════════════════════════════
+✓ Node.js 18 or higher (download from nodejs.org)
+✓ FFmpeg (for video processing)
+  - Windows: Download from ffmpeg.org
+  - Mac: brew install ffmpeg
+  - Linux: apt-get install ffmpeg
+
+═══════════════════════════════════════════════════════════
+🎯 METHOD 1: RUN LOCALLY (EASIEST)
+═══════════════════════════════════════════════════════════
+
+Step 1: Open Terminal/Command Prompt
+
+Step 2: Navigate to this folder
+  cd path/to/verisource-api-complete
+
+Step 3: Install dependencies
+  npm install
+
+Step 4: Start the server
+  node server/index.js
+
+Step 5: Test it's working
+  Open browser: http://localhost:8080/health
+  
+  You should see:
+  {"status":"ok","service":"verisource-video-verifier"}
+
+✅ SUCCESS! Your API is running on http://localhost:8080
+
+═══════════════════════════════════════════════════════════
+🐳 METHOD 2: RUN WITH DOCKER (RECOMMENDED FOR PRODUCTION)
+═══════════════════════════════════════════════════════════
+
+Step 1: Make sure Docker is installed
+  docker --version
+
+Step 2: Build the image
+  docker build -t verisource-api .
+
+Step 3: Run the container
+  docker run -p 8080:8080 verisource-api
+
+Step 4: Test
+  curl http://localhost:8080/health
+
+✅ SUCCESS! Your API is running in Docker
+
+═══════════════════════════════════════════════════════════
+🧪 TESTING YOUR API
+═══════════════════════════════════════════════════════════
+
+Health Check:
+  GET http://localhost:8080/health
+
+Verify Video:
+  POST http://localhost:8080/verify
+  Content-Type: multipart/form-data
+  
+  Parameters:
+  - file: your video file
+  - reference: JSON with segment hashes
+
+═══════════════════════════════════════════════════════════
+📚 NEXT STEPS
+═══════════════════════════════════════════════════════════
+
+1. Read README.md for full documentation
+2. Check DOCUMENTATION.md for detailed guides
+3. Review openapi.yaml for API specification
+4. Explore tests/ folder for examples
+5. Check docs/ folder for deployment guides
+
+═══════════════════════════════════════════════════════════
+🆘 TROUBLESHOOTING
+═══════════════════════════════════════════════════════════
+
+Problem: "Cannot find module 'express'"
+Solution: Run: npm install
+
+Problem: "FFmpeg not found"
+Solution: Install FFmpeg (see top of this file)
+
+Problem: "Port 8080 already in use"
+Solution: Use different port: PORT=3000 node server/index.js
+
+Problem: "Worker failed"
+Solution: Check FFmpeg is installed: ffmpeg -version
+
+═══════════════════════════════════════════════════════════
+📁 KEY FILES
+═══════════════════════════════════════════════════════════
+
+server/index.js          - Main API server
+package.json             - Node.js dependencies
+Dockerfile              - Docker configuration
+docker-compose.yml      - Full stack setup
+openapi.yaml            - API specification
+credential_system_v3.py - Credential generator
+
+═══════════════════════════════════════════════════════════
+🎉 YOU'RE READY TO GO!
+═══════════════════════════════════════════════════════════

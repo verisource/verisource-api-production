@@ -1,0 +1,401 @@
+openapi: 3.0.3
+info:
+  title: Verisource Video Verification API
+  version: 1.0.0
+  description: |
+    Verisource Video Verification API provides C2PA-based video authenticity verification.
+    
+    ## Features
+    
+    - Multiple canonicalization strategies
+    - Support for /verify (upload) and /verify-by-url (fetch)
+    - Comprehensive verdict types
+    - Coverage metrics
+    
+    ## Rate Limits
+    
+    - Per-IP: 60 requests/minute
+    - Per-API-Key: 1000 requests/hour
+    
+  contact:
+    name: Verisource Support
+    email: support@verisource.io
+    url: https://verisource.io
+  license:
+    name: Proprietary
+    url: https://verisource.io/license
+
+servers:
+  - url: https://api.verisource.io
+    description: Production
+  - url: https://stg-api.verisource.io
+    description: Staging
+
+security:
+  - ApiKeyAuth: []
+
+tags:
+  - name: verification
+    description: Video verification endpoints
+  - name: health
+    description: Health and status endpoints
+
+paths:
+  /verify:
+    post:
+      tags:
+        - verification
+      summary: Verify video authenticity (upload)
+      description: |
+        Upload a video file and C2PA credential for verification.
+        
+        Maximum file size: 250MB
+        Maximum duration: 300 seconds
+        Supported formats: MP4, MOV, MKV, WebM
+        Supported codecs: H.264, HEVC, VP9, AV1
+      operationId: verifyUpload
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - file
+                - credential
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: Video file to verify
+                credential:
+                  type: object
+                  description: C2PA credential JSON
+      responses:
+        '200':
+          description: Verification successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VerificationResult'
+              examples:
+                proven_strong:
+                  value:
+                    verdict: PROVEN_STRONG
+                    coverage: 0.98
+                    requestId: req_abc123xyz789
+                    timestamp: '2025-10-26T15:30:00.000Z'
+                mismatch:
+                  value:
+                    verdict: MISMATCH
+                    coverage: 0.45
+                    requestId: req_def456uvw012
+                    timestamp: '2025-10-26T15:31:00.000Z'
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                missing_field:
+                  value:
+                    error: Bad Request
+                    message: Missing required field 'credential'
+                    code: MISSING_FIELD
+                file_too_large:
+                  value:
+                    error: Bad Request
+                    message: File size exceeds 250MB limit
+                    code: FILE_TOO_LARGE
+        '401':
+          description: Unauthorized - Invalid or missing API key
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Unauthorized
+                message: Invalid API key
+                code: INVALID_API_KEY
+        '413':
+          description: Payload too large
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: Unprocessable entity - Invalid credential format
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Unprocessable Entity
+                message: Invalid C2PA credential format
+                code: INVALID_CREDENTIAL
+        '429':
+          description: Too many requests - Rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Too Many Requests
+                message: Rate limit exceeded. Try again in 60 seconds.
+                code: RATE_LIMIT_EXCEEDED
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  
+  /verify-by-url:
+    post:
+      tags:
+        - verification
+      summary: Verify video authenticity (URL)
+      description: |
+        Verify a video by providing its URL and C2PA credential.
+        
+        The URL must be from an allowlisted domain.
+        The API will fetch the video and verify it.
+      operationId: verifyByUrl
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - url
+                - credential
+              properties:
+                url:
+                  type: string
+                  format: uri
+                  description: URL of video to verify (must be allowlisted)
+                  example: https://cdn.partner.example/videos/sample.mp4
+                credential:
+                  type: object
+                  description: C2PA credential
+            example:
+              url: https://cdn.partner.example/videos/sample.mp4
+              credential:
+                assertions:
+                  - label: c2pa.actions
+                    data:
+                      actions:
+                        - action: c2pa.created
+      responses:
+        '200':
+          description: Verification successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VerificationResult'
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                invalid_url:
+                  value:
+                    error: Bad Request
+                    message: Invalid URL format
+                    code: INVALID_URL
+                url_not_allowed:
+                  value:
+                    error: Bad Request
+                    message: URL domain not in allowlist
+                    code: URL_NOT_ALLOWED
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+        '502':
+          description: Bad gateway - Failed to fetch video from URL
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Bad Gateway
+                message: Failed to fetch video from provided URL
+                code: FETCH_FAILED
+  
+  /healthz:
+    get:
+      tags:
+        - health
+      summary: Health check
+      description: Returns the health status of the API
+      operationId: healthCheck
+      security: []
+      responses:
+        '200':
+          description: API is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum: [healthy]
+                  timestamp:
+                    type: string
+                    format: date-time
+                  uptime:
+                    type: number
+                    description: Uptime in seconds
+                  environment:
+                    type: string
+                    enum: [production, staging, development]
+              example:
+                status: healthy
+                timestamp: '2025-10-26T15:30:00.000Z'
+                uptime: 3600
+                environment: staging
+        '503':
+          description: API is unhealthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum: [unhealthy]
+                  reason:
+                    type: string
+
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: x-api-key
+      description: |
+        API key for authentication. Contact support@verisource.io to obtain a key.
+  
+  schemas:
+    VerificationResult:
+      type: object
+      required:
+        - verdict
+        - coverage
+        - requestId
+        - timestamp
+      properties:
+        verdict:
+          type: string
+          enum:
+            - PROVEN_STRONG
+            - PROVEN_MODERATE
+            - PROVEN_WEAK
+            - MISMATCH
+            - NO_CREDENTIAL_FOUND
+          description: |
+            Verification verdict:
+            - PROVEN_STRONG: High confidence match (coverage >= 0.95)
+            - PROVEN_MODERATE: Moderate confidence match (0.70 <= coverage < 0.95)
+            - PROVEN_WEAK: Low confidence match (0.50 <= coverage < 0.70)
+            - MISMATCH: Video doesn't match credential
+            - NO_CREDENTIAL_FOUND: No valid C2PA credential in video or provided credential
+        coverage:
+          type: number
+          format: float
+          minimum: 0
+          maximum: 1
+          description: Coverage score (0.0 to 1.0) indicating how much of the video matches
+          example: 0.98
+        requestId:
+          type: string
+          description: Unique request identifier for tracking
+          example: req_abc123xyz789
+        timestamp:
+          type: string
+          format: date-time
+          description: Timestamp of verification
+          example: '2025-10-26T15:30:00.000Z'
+        metadata:
+          type: object
+          description: Additional metadata (optional)
+          properties:
+            canonicalizationStrategy:
+              type: string
+              enum: [unified, hevc, legacy]
+            processingTimeMs:
+              type: number
+    
+    Error:
+      type: object
+      required:
+        - error
+        - message
+        - code
+      properties:
+        error:
+          type: string
+          description: Error type
+          example: Bad Request
+        message:
+          type: string
+          description: Human-readable error message
+          example: Invalid credential format
+        code:
+          type: string
+          description: Machine-readable error code
+          enum:
+            - MISSING_FIELD
+            - INVALID_URL
+            - URL_NOT_ALLOWED
+            - FILE_TOO_LARGE
+            - INVALID_CREDENTIAL
+            - INVALID_API_KEY
+            - RATE_LIMIT_EXCEEDED
+            - FETCH_FAILED
+            - UNSUPPORTED_FORMAT
+            - PROCESSING_ERROR
+          example: INVALID_CREDENTIAL
+        requestId:
+          type: string
+          description: Request ID for tracking (if available)
+          example: req_def456uvw012
+  
+  responses:
+    Unauthorized:
+      description: Unauthorized - Invalid or missing API key
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    
+    UnprocessableEntity:
+      description: Unprocessable entity - Invalid request data
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    
+    TooManyRequests:
+      description: Too many requests - Rate limit exceeded
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    
+    InternalServerError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'

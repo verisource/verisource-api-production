@@ -1,0 +1,94 @@
+# ==============================================================================
+# Prometheus Recording Rules
+# ==============================================================================
+#
+# Pre-computed metrics for dashboards and alerts
+# These rules run at evaluation_interval (15s by default)
+#
+# ==============================================================================
+
+groups:
+  # ===========================================================================
+  # SLO Metrics
+  # ===========================================================================
+  - name: slo_metrics
+    interval: 30s
+    rules:
+      # Request rate (requests per second)
+      - record: verisource:request_rate
+        expr: rate(http_request_duration_seconds_count[5m])
+      
+      # Success rate (non-5xx responses)
+      - record: verisource:success_rate
+        expr: |
+          sum(rate(http_request_duration_seconds_count{status_code!~"5.."}[5m]))
+          /
+          sum(rate(http_request_duration_seconds_count[5m]))
+      
+      # Error rate (5xx responses)
+      - record: verisource:error_rate
+        expr: |
+          sum(rate(http_request_duration_seconds_count{status_code=~"5.."}[5m]))
+          /
+          sum(rate(http_request_duration_seconds_count[5m]))
+      
+      # P50 latency
+      - record: verisource:latency_p50
+        expr: histogram_quantile(0.50, sum(rate(http_request_duration_seconds_bucket[5m])) by (le))
+      
+      # P95 latency
+      - record: verisource:latency_p95
+        expr: histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le))
+      
+      # P99 latency
+      - record: verisource:latency_p99
+        expr: histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket[5m])) by (le))
+      
+      # Average coverage score
+      - record: verisource:avg_coverage
+        expr: avg(verisource_verify_coverage)
+      
+      # Verification rate by verdict
+      - record: verisource:verification_rate
+        expr: rate(verisource_verify_verdict_total[5m])
+  
+  # ===========================================================================
+  # Resource Utilization
+  # ===========================================================================
+  - name: resource_metrics
+    interval: 30s
+    rules:
+      # CPU usage percentage
+      - record: verisource:cpu_usage_percent
+        expr: |
+          rate(verisource_process_cpu_seconds_total[1m]) * 100
+      
+      # Memory usage in MB
+      - record: verisource:memory_usage_mb
+        expr: |
+          verisource_process_resident_memory_bytes / 1024 / 1024
+      
+      # Event loop lag (ms)
+      - record: verisource:event_loop_lag_ms
+        expr: |
+          verisource_nodejs_eventloop_lag_seconds * 1000
+  
+  # ===========================================================================
+  # Business Metrics
+  # ===========================================================================
+  - name: business_metrics
+    interval: 1m
+    rules:
+      # Verification success ratio (PROVEN_STRONG / total)
+      - record: verisource:verification_success_ratio
+        expr: |
+          sum(rate(verisource_verify_verdict_total{verdict="PROVEN_STRONG"}[5m]))
+          /
+          sum(rate(verisource_verify_verdict_total[5m]))
+      
+      # Average worker processing time
+      - record: verisource:avg_worker_duration
+        expr: |
+          rate(verisource_worker_duration_seconds_sum[5m])
+          /
+          rate(verisource_worker_duration_seconds_count[5m])

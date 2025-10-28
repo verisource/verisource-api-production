@@ -1,0 +1,186 @@
+version: '3.8'
+
+services:
+  # ===========================================================================
+  # Verisource Video Verification API
+  # ===========================================================================
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: verisource-api:latest
+    container_name: verisource-api
+    
+    # Port mapping
+    ports:
+      - "8080:8080"
+    
+    # Environment variables
+    environment:
+      NODE_ENV: production
+      PORT: 8080
+      LOG_LEVEL: info
+      MAX_INFLIGHT: 2
+      
+      # Security (override these!)
+      API_KEYS: ${API_KEYS:-change-me-in-production}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:3000}
+      ALLOWED_FETCH_HOSTS: ${ALLOWED_FETCH_HOSTS:-cdn.example.com}
+      
+      # Limits
+      MAX_FILE_MB: ${MAX_FILE_MB:-250}
+      MAX_DURATION_SECONDS: ${MAX_DURATION_SECONDS:-300}
+      
+      # Codecs and containers
+      ALLOWED_CODECS: ${ALLOWED_CODECS:-h264,hevc,vp9,av1}
+      ALLOWED_CONTAINERS: ${ALLOWED_CONTAINERS:-mp4,mov,mkv,webm}
+    
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
+        reservations:
+          cpus: '1.0'
+          memory: 1G
+    
+    # Health check (uses Docker HEALTHCHECK from Dockerfile)
+    # Status visible with: docker ps
+    # Logs visible with: docker inspect --format='{{json .State.Health}}' verisource-api
+    
+    # Restart policy
+    restart: unless-stopped
+    
+    # Logging
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    
+    # Security
+    security_opt:
+      - no-new-privileges:true
+    
+    # Read-only root filesystem (except /tmp)
+    read_only: true
+    tmpfs:
+      - /tmp:noexec,nosuid,size=512m
+    
+    # Drop all capabilities except needed ones
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - SETGID
+      - SETUID
+    
+    # Networks
+    networks:
+      - api-network
+
+  # ===========================================================================
+  # Prometheus (metrics collection & alerting)
+  # ===========================================================================
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: verisource-prometheus
+    
+    ports:
+      - "9090:9090"
+    
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./prometheus-recording-rules.yml:/etc/prometheus/recording-rules.yml:ro
+      - ./prometheus-alerting-rules.yml:/etc/prometheus/alerting-rules.yml:ro
+      - prometheus-data:/prometheus
+    
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+      - '--web.enable-lifecycle'  # Enable hot reload via /-/reload
+    
+    restart: unless-stopped
+    
+    networks:
+      - api-network
+    
+    profiles:
+      - monitoring
+
+  # ===========================================================================
+  # Alertmanager (alert routing & notifications)
+  # ===========================================================================
+  alertmanager:
+    image: prom/alertmanager:latest
+    container_name: verisource-alertmanager
+    
+    ports:
+      - "9093:9093"
+    
+    volumes:
+      - ./alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - alertmanager-data:/alertmanager
+    
+    command:
+      - '--config.file=/etc/alertmanager/alertmanager.yml'
+      - '--storage.path=/alertmanager'
+      - '--web.external-url=http://localhost:9093'
+    
+    restart: unless-stopped
+    
+    networks:
+      - api-network
+    
+    profiles:
+      - monitoring
+
+  # ===========================================================================
+  # Grafana (dashboards & visualization)
+  # ===========================================================================
+  grafana:
+    image: grafana/grafana:latest
+    container_name: verisource-grafana
+    
+    ports:
+      - "3000:3000"
+    
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin}
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_SERVER_ROOT_URL=http://localhost:3000
+      - GF_ANALYTICS_REPORTING_ENABLED=false
+      - GF_ANALYTICS_CHECK_FOR_UPDATES=false
+      
+      # Environment variables for contact points
+      - PAGERDUTY_INTEGRATION_KEY=${PAGERDUTY_INTEGRATION_KEY:-YOUR_KEY_HERE}
+      - SLACK_WEBHOOK_PLATFORM=${SLACK_WEBHOOK_PLATFORM:-https://hooks.slack.com/services/YOUR/WEBHOOK}
+      - SLACK_WEBHOOK_TRUST_SAFETY=${SLACK_WEBHOOK_TRUST_SAFETY:-https://hooks.slack.com/services/YOUR/WEBHOOK}
+    
+    volumes:
+      - grafana-data:/var/lib/grafana
+      # Dashboard provisioning
+      - ./grafana-dashboard.json:/etc/grafana/provisioning/dashboards/verisource.json:ro
+      # Alerting provisioning
+      - ./grafana/provisioning/alerting/verisource-rules.yml:/etc/grafana/provisioning/alerting/verisource-rules.yml:ro
+      - ./grafana/provisioning/alerting/verisource-contact-points.yml:/etc/grafana/provisioning/alerting/verisource-contact-points.yml:ro
+    
+    restart: unless-stopped
+    
+    networks:
+      - api-network
+    
+    profiles:
+      - monitoring
+
+networks:
+  api-network:
+    driver: bridge
+
+volumes:
+  prometheus-data:
+  alertmanager-data:
+  grafana-data:

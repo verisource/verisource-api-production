@@ -1,0 +1,112 @@
+📋 VERISOURCE API - INSTALLATION CHECKLIST
+═══════════════════════════════════════════════════════════
+
+PRE-INSTALLATION
+═══════════════════════════════════════════════════════════
+☐ Downloaded verisource-api-complete.zip
+☐ Extracted to a folder
+☐ Opened this folder in Terminal/Command Prompt
+
+DEPENDENCIES
+═══════════════════════════════════════════════════════════
+☐ Node.js installed (v18+)
+  Test: node --version
+  
+☐ npm installed
+  Test: npm --version
+  
+☐ FFmpeg installed
+  Test: ffmpeg -version
+  
+☐ (Optional) Docker installed
+  Test: docker --version
+
+INSTALLATION STEPS
+═══════════════════════════════════════════════════════════
+☐ Navigated to project folder
+  cd verisource-api-complete
+  
+☐ Installed Node.js dependencies
+  npm install
+  
+☐ Checked package.json exists
+  
+☐ Verified server/index.js exists
+
+FIRST RUN
+═══════════════════════════════════════════════════════════
+☐ Started the server
+  node server/index.js
+  
+☐ Server started successfully
+  Look for: "Verifier API listening on :8080"
+  
+☐ Health check passed
+  Open: http://localhost:8080/health
+  Should see: {"status":"ok",...}
+
+VERIFICATION
+═══════════════════════════════════════════════════════════
+☐ Can access API at http://localhost:8080
+☐ Health endpoint returns 200 OK
+☐ No error messages in console
+☐ Server stays running (doesn't crash)
+
+OPTIONAL: DOCKER SETUP
+═══════════════════════════════════════════════════════════
+☐ Built Docker image
+  docker build -t verisource-api .
+  
+☐ Run Docker container
+  docker run -p 8080:8080 verisource-api
+  
+☐ Container running successfully
+  docker ps
+  
+☐ Health check works in Docker
+  curl http://localhost:8080/health
+
+OPTIONAL: FULL STACK
+═══════════════════════════════════════════════════════════
+☐ Started with docker-compose
+  docker-compose up
+  
+☐ All services running:
+  - API (port 8080)
+  - Prometheus (port 9090)
+  - Grafana (port 3000)
+
+TESTING
+═══════════════════════════════════════════════════════════
+☐ Golden tests setup reviewed
+  Check: tests/ folder
+  
+☐ Test vectors available
+  Check: test-vectors/ folder
+  
+☐ Can run tests
+  npm test
+
+DOCUMENTATION REVIEWED
+═══════════════════════════════════════════════════════════
+☐ Read README.md
+☐ Read QUICK_START.txt
+☐ Reviewed DOCUMENTATION.md
+☐ Checked openapi.yaml for API spec
+
+NEXT STEPS
+═══════════════════════════════════════════════════════════
+☐ Decide on deployment method (local/docker/k8s/cloud)
+☐ Configure environment variables (.env file)
+☐ Set up monitoring (if using Grafana)
+☐ Review security settings
+☐ Plan testing strategy
+☐ Read deployment guides in docs/
+
+═══════════════════════════════════════════════════════════
+✅ INSTALLATION COMPLETE!
+═══════════════════════════════════════════════════════════
+
+Your VeriSource API is ready to use!
+
+Next: Read the deployment guides in docs/ folder

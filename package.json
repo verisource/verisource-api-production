@@ -1,0 +1,23 @@
+{
+  "name": "verisource-golden-tests",
+  "version": "1.0.0",
+  "description": "Golden test suite for Verisource Video Verification API",
+  "main": "golden-test-runner.js",
+  "scripts": {
+    "test": "node golden-test-runner.js",
+    "test:update": "UPDATE_SNAPSHOTS=true node golden-test-runner.js",
+    "test:staging": "API_URL=https://stg-api.verisource.io node golden-test-runner.js",
+    "test:prod": "API_URL=https://api.verisource.io node golden-test-runner.js"
+  },
+  "keywords": [
+    "verisource",
+    "golden-tests",
+    "snapshot-tests",
+    "api-testing"
+  ],
+  "author": "Verisource",
+  "license": "PROPRIETARY",
+  "engines": {
+    "node": ">=14.0.0"
+  }
+}

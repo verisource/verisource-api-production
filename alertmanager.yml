@@ -1,0 +1,246 @@
+# ==============================================================================
+# Alertmanager Configuration
+# ==============================================================================
+#
+# Routes alerts based on severity and team labels
+# Integrates with: PagerDuty, Slack, Email
+#
+# ==============================================================================
+
+global:
+  # Global defaults
+  resolve_timeout: 5m
+  
+  # Slack webhook (replace with your webhook URL)
+  slack_api_url: 'https://hooks.slack.com/services/YOUR/SLACK/WEBHOOK'
+  
+  # PagerDuty integration key (replace with your key)
+  pagerduty_url: 'https://events.pagerduty.com/v2/enqueue'
+
+# Templates for notification messages
+templates:
+  - '/etc/alertmanager/templates/*.tmpl'
+
+# Route tree - defines how alerts are routed
+route:
+  # Default receiver for unmatched alerts
+  receiver: 'default'
+  
+  # Group alerts to reduce noise
+  group_by: ['alertname', 'cluster', 'service']
+  
+  # Wait time before sending initial notification
+  group_wait: 30s
+  
+  # Wait time before sending batch of new alerts for existing group
+  group_interval: 5m
+  
+  # Wait time before re-sending a notification
+  repeat_interval: 4h
+  
+  # Child routes (evaluated in order)
+  routes:
+    # =========================================================================
+    # CRITICAL ALERTS → PagerDuty (immediate page)
+    # =========================================================================
+    - matchers:
+        - severity="critical"
+      receiver: pagerduty-critical
+      continue: false  # Stop processing after match
+      group_wait: 10s
+      group_interval: 1m
+      repeat_interval: 1h
+    
+    # =========================================================================
+    # PLATFORM TEAM → Slack channel
+    # =========================================================================
+    - matchers:
+        - team="platform"
+        - severity=~"warning|info"
+      receiver: platform-slack
+      continue: false
+      group_interval: 10m
+      repeat_interval: 12h
+    
+    # =========================================================================
+    # TRUST & SAFETY TEAM → Dedicated Slack channel
+    # =========================================================================
+    - matchers:
+        - team="trust-safety"
+      receiver: trust-safety-slack
+      continue: false
+      group_interval: 10m
+      repeat_interval: 12h
+    
+    # =========================================================================
+    # HIGH PRIORITY WARNINGS → Slack with different formatting
+    # =========================================================================
+    - matchers:
+        - severity="warning"
+        - category=~"reliability|performance"
+      receiver: platform-slack-urgent
+      continue: true  # Also send to default
+      group_interval: 5m
+      repeat_interval: 4h
+    
+    # =========================================================================
+    # INFO LEVEL → Email only (no noise)
+    # =========================================================================
+    - matchers:
+        - severity="info"
+      receiver: platform-email
+      continue: false
+      group_interval: 30m
+      repeat_interval: 24h
+
+# Inhibition rules - suppress alerts when others are firing
+inhibit_rules:
+  # If instance is down, don't alert on high error rate from same instance
+  - source_matchers:
+      - alertname="VerisourceInstanceDown"
+    target_matchers:
+      - severity="warning"
+    equal: ['instance']
+  
+  # If critical alert is firing, suppress related warnings
+  - source_matchers:
+      - severity="critical"
+    target_matchers:
+      - severity="warning"
+    equal: ['alertname', 'instance']
+  
+  # If severe error rate is firing, suppress high error rate
+  - source_matchers:
+      - alertname="VerisourceSevereErrorRate"
+    target_matchers:
+      - alertname="VerisourceHighErrorRate"
+    equal: ['instance']
+
+# Receivers - define notification integrations
+receivers:
+  # ===========================================================================
+  # DEFAULT - Email fallback
+  # ===========================================================================
+  - name: 'default'
+    email_configs:
+      - to: 'platform-oncall@example.com'
+        from: 'alertmanager@example.com'
+        smarthost: 'smtp.example.com:587'
+        auth_username: 'alertmanager@example.com'
+        auth_password: 'smtp-password'
+        headers:
+          Subject: '[Verisource] {{ .GroupLabels.alertname }}'
+        text: |
+          {{ range .Alerts }}
+          Alert: {{ .Labels.alertname }}
+          Severity: {{ .Labels.severity }}
+          Description: {{ .Annotations.description }}
+          {{ end }}
+  
+  # ===========================================================================
+  # PAGERDUTY - Critical alerts (24/7 on-call)
+  # ===========================================================================
+  - name: 'pagerduty-critical'
+    pagerduty_configs:
+      - service_key: 'YOUR_PAGERDUTY_SERVICE_KEY'
+        description: '{{ .GroupLabels.alertname }}: {{ .CommonAnnotations.summary }}'
+        details:
+          firing: '{{ .Alerts.Firing | len }}'
+          resolved: '{{ .Alerts.Resolved | len }}'
+          severity: '{{ .CommonLabels.severity }}'
+          service: '{{ .CommonLabels.service }}'
+          description: '{{ .CommonAnnotations.description }}'
+          runbook: '{{ .CommonAnnotations.runbook }}'
+  
+  # ===========================================================================
+  # SLACK - Platform team channel
+  # ===========================================================================
+  - name: 'platform-slack'
+    slack_configs:
+      - channel: '#verisource-platform-alerts'
+        title: '{{ .GroupLabels.alertname }}'
+        title_link: 'https://prometheus.example.com/alerts'
+        text: |
+          {{ range .Alerts }}
+          *Alert:* {{ .Labels.alertname }}
+          *Severity:* {{ .Labels.severity }}
+          *Summary:* {{ .Annotations.summary }}
+          *Description:* {{ .Annotations.description }}
+          *Runbook:* {{ .Annotations.runbook }}
+          {{ end }}
+        color: '{{ if eq .Status "firing" }}warning{{ else }}good{{ end }}'
+        send_resolved: true
+  
+  # ===========================================================================
+  # SLACK - Platform urgent (warnings)
+  # ===========================================================================
+  - name: 'platform-slack-urgent'
+    slack_configs:
+      - channel: '#verisource-platform-alerts'
+        title: '⚠️ {{ .GroupLabels.alertname }}'
+        title_link: 'https://prometheus.example.com/alerts'
+        text: |
+          {{ range .Alerts }}
+          *Alert:* {{ .Labels.alertname }}
+          *Severity:* {{ .Labels.severity }}
+          *Category:* {{ .Labels.category }}
+          *Summary:* {{ .Annotations.summary }}
+          *Description:* {{ .Annotations.description }}
+          {{ end }}
+        color: 'danger'
+        send_resolved: true
+  
+  # ===========================================================================
+  # SLACK - Trust & Safety team
+  # ===========================================================================
+  - name: 'trust-safety-slack'
+    slack_configs:
+      - channel: '#verisource-trust-safety'
+        title: '🔍 {{ .GroupLabels.alertname }}'
+        title_link: 'https://grafana.example.com/d/verisource-api-ops'
+        text: |
+          {{ range .Alerts }}
+          *Alert:* {{ .Labels.alertname }}
+          *Summary:* {{ .Annotations.summary }}
+          *Description:* {{ .Annotations.description }}
+          *Action Required:* Review verification patterns and content quality
+          {{ end }}
+        color: 'warning'
+        send_resolved: true
+  
+  # ===========================================================================
+  # EMAIL - Platform team (info level)
+  # ===========================================================================
+  - name: 'platform-email'
+    email_configs:
+      - to: 'platform-team@example.com'
+        from: 'alertmanager@example.com'
+        smarthost: 'smtp.example.com:587'
+        auth_username: 'alertmanager@example.com'
+        auth_password: 'smtp-password'
+        headers:
+          Subject: '[Verisource][Info] {{ .GroupLabels.alertname }}'
+        html: |
+          <h2>{{ .GroupLabels.alertname }}</h2>
+          <table>
+          {{ range .Alerts }}
+          <tr><td><b>Severity:</b></td><td>{{ .Labels.severity }}</td></tr>
+          <tr><td><b>Summary:</b></td><td>{{ .Annotations.summary }}</td></tr>
+          <tr><td><b>Description:</b></td><td>{{ .Annotations.description }}</td></tr>
+          <tr><td><b>Runbook:</b></td><td><a href="{{ .Annotations.runbook }}">Link</a></td></tr>
+          {{ end }}
+          </table>
+
+# ==============================================================================
+# Additional Configuration
+# ==============================================================================
+
+# Time intervals for muting (optional)
+# time_intervals:
+#   - name: business-hours
+#     time_intervals:
+#       - weekdays: ['monday:friday']
+#         times:
+#           - start_time: '09:00'
+#             end_time: '17:00'
+#         location: 'America/Los_Angeles'

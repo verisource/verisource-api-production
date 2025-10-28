@@ -1,0 +1,91 @@
+# ==============================================================================
+# Prometheus Configuration for Verisource Video Verification API
+# ==============================================================================
+#
+# Features:
+# - Scrapes API metrics endpoint
+# - Self-monitoring (Prometheus metrics)
+# - Recording rules for SLO tracking
+# - Alerting rules for production monitoring
+# - Alertmanager integration for notifications
+#
+# ==============================================================================
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  
+  # External labels attached to all metrics
+  external_labels:
+    cluster: 'verisource-api'
+    environment: 'production'
+
+# Alert rule files
+rule_files:
+  - 'recording-rules.yml'
+  - 'alerting-rules.yml'
+
+# Alertmanager configuration
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ['alertmanager:9093']
+      timeout: 10s
+
+# Scrape configurations
+scrape_configs:
+  # ===========================================================================
+  # Verisource API Metrics
+  # ===========================================================================
+  - job_name: 'verisource-api'
+    
+    # Scrape every 30 seconds
+    scrape_interval: 30s
+    
+    # Timeout after 10 seconds
+    scrape_timeout: 10s
+    
+    # Metrics endpoint path
+    metrics_path: /metrics
+    
+    # HTTP scheme
+    scheme: http
+    
+    # Static targets (for Docker Compose)
+    # For Kubernetes, use kubernetes_sd_configs instead
+    static_configs:
+      - targets: ['api:8080']
+        labels:
+          service: 'verisource-api'
+          app: 'video-verification'
+    
+    # Optional: Add basic auth if metrics endpoint is protected
+    # basic_auth:
+    #   username: 'prometheus'
+    #   password: 'secret'
+  
+  # ===========================================================================
+  # Prometheus Self-Monitoring
+  # ===========================================================================
+  - job_name: 'prometheus'
+    
+    scrape_interval: 30s
+    scrape_timeout: 10s
+    
+    static_configs:
+      - targets: ['localhost:9090']
+        labels:
+          service: 'prometheus'
+  
+  # ===========================================================================
+  # Alertmanager Monitoring
+  # ===========================================================================
+  - job_name: 'alertmanager'
+    
+    scrape_interval: 30s
+    scrape_timeout: 10s
+    
+    static_configs:
+      - targets: ['alertmanager:9093']
+        labels:
+          service: 'alertmanager'

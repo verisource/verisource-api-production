@@ -1,0 +1,504 @@
+# ==============================================================================
+# Prometheus Alerting Rules - Production Ready
+# ==============================================================================
+#
+# Alert categories:
+# - Availability/Uptime (critical system availability)
+# - Reliability/Errors (error rates and types)
+# - Performance/Latency (response time SLOs)
+# - Domain Signals (business metrics and anomalies)
+#
+# Severity levels:
+# - critical: Page on-call immediately
+# - warning: Investigate within 30 minutes
+# - info: Review during business hours
+#
+# ==============================================================================
+
+groups:
+  - name: verisource-api.alerts
+    interval: 30s
+
+    rules:
+      # =======================================================================
+      # AVAILABILITY / UPTIME
+      # =======================================================================
+
+      - alert: VerisourceInstanceDown
+        expr: up{job="verisource-api"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          service: verisource-api
+          team: platform
+          category: availability
+        annotations:
+          summary: "Verisource API instance is down"
+          description: "Instance {{ $labels.instance }} for job=verisource-api has not responded to Prometheus scrapes for 2 minutes."
+          runbook: "Check container logs, health endpoints, and service status. Restart if necessary."
+
+      - alert: VerisourceNoTraffic5m
+        expr: sum(increase(http_request_duration_seconds_count{job="verisource-api"}[5m])) == 0
+        for: 5m
+        labels:
+          severity: warning
+          service: verisource-api
+          team: platform
+          category: availability
+        annotations:
+          summary: "No API requests observed in last 5 minutes"
+          description: "The API may be down, unreachable, or receiving no traffic. Check load balancer, DNS, and network connectivity."
+          runbook: "Verify API is accessible from expected sources. Check rate limiting, authentication, and firewall rules."
+
+      # =======================================================================
+      # RELIABILITY / ERRORS
+      # =======================================================================
+
+      - alert: VerisourceHighErrorRate
+        expr: |
+          (
+            sum(rate(http_request_duration_seconds_count{job="verisource-api",status_code=~"5.."}[5m]))
+            /
+            sum(rate(http_request_duration_seconds_count{job="verisource-api"}[5m]))
+          ) > 0.02
+        for: 5m
+        labels:
+          severity: warning
+          service: verisource-api
+          team: platform
+          category: reliability
+        annotations:
+          summary: "5xx error rate exceeds 2% over 5 minutes"
+          description: "Current 5xx rate: {{ $value | humanizePercentage }}. Investigate recent deploys, worker timeouts, or upstream issues."
+          runbook: "Check application logs for error patterns. Review recent deployments. Verify FFmpeg and worker processes are healthy."
+
+      - alert: VerisourceSevereErrorRate
+        expr: |
+          (
+            sum(rate(http_request_duration_seconds_count{job="verisource-api",status_code=~"5.."}[10m]))
+            /
+            sum(rate(http_request_duration_seconds_count{job="verisource-api"}[10m]))
+          ) > 0.05
+        for: 10m
+        labels:
+          severity: critical
+          service: verisource-api
+          team: platform
+          category: reliability
+        annotations:
+          summary: "CRITICAL: 5xx error rate exceeds 5% over 10 minutes"
+          description: "Current 5xx rate: {{ $value | humanizePercentage }}. Sustained high error rate detected. Roll back deployment or scale out immediately."
+          runbook: "Immediate action required. Check for recent changes. Consider rollback. Scale horizontally if resource constrained."
+
+      - alert: VerisourceHighGatewayTimeouts
+        expr: |
+          (
+            sum(rate(http_request_duration_seconds_count{job="verisource-api",status_code="504"}[10m]))
+            /
+            sum(rate(http_request_duration_seconds_count{job="verisource-api"}[10m]))
+          ) > 0.02
+        for: 10m
+        labels:
+          severity: warning
+          service: verisource-api
+          team: platform
+          category: performance
+        annotations:
+          summary: "Gateway timeout rate exceeds 2% over 10 minutes"
+          description: "504 errors suggest worker slowness or overloaded nodes. Check CPU/IO and worker queue depth."
+          runbook: "Review worker processing times. Check MAX_INFLIGHT setting. Monitor CPU and memory usage. Consider scaling."
+
+      - alert: VerisourceHighRateLimitHits
+        expr: |
+          (
+            sum(rate(http_request_duration_seconds_count{job="verisource-api",status_code="429"}[10m]))
+            /
+            sum(rate(http_request_duration_seconds_count{job="verisource-api"}[10m]))
+          ) > 0.20
+        for: 10m
+        labels:
+          severity: info
+          service: verisource-api
+          team: platform
+          category: capacity
+        annotations:
+          summary: "High rate limit hits (>20% of requests)"
+          description: "429 rate: {{ $value | humanizePercentage }}. Clients are hitting rate or quota limits. Could be abuse or misconfigured partner."
+          runbook: "Review API key usage metrics. Identify top clients. Contact partner if misconfigured. Adjust limits if legitimate traffic."
+
+      # =======================================================================
+      # PERFORMANCE / LATENCY
+      # =======================================================================
+
+      - alert: VerisourceHighLatencyP95
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum by (le) (rate(http_request_duration_seconds_bucket{job="verisource-api"}[5m]))
+          ) > 0.5
+        for: 10m
+        labels:
+          severity: warning
+          service: verisource-api
+          team: platform
+          category: performance
+        annotations:
+          summary: "P95 latency exceeds 500ms over 10 minutes"
+          description: "P95 latency: {{ $value | humanizeDuration }}. User-perceived latency is elevated. Consider scaling or investigating worker performance."
+          runbook: "Check worker duration metrics. Review FFprobe performance. Monitor CPU and event loop lag. Scale if needed."
+
+      - alert: VerisourceSevereLatencyP95
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum by (le) (rate(http_request_duration_seconds_bucket{job="verisource-api"}[10m]))
+          ) > 1
+        for: 10m
+        labels:
+          severity: critical
+          service: verisource-api
+          team: platform
+          category: performance
+        annotations:
+          summary: "CRITICAL: P95 latency exceeds 1 second over 10 minutes"
+          description: "P95 latency: {{ $value | humanizeDuration }}. Sustained high latency will impact user experience significantly."
+          runbook: "Immediate investigation required. Check for resource exhaustion. Review worker processes. Consider emergency scaling."
+
+      # =======================================================================
+      # RESOURCE UTILIZATION
+      # =======================================================================
+
+      - alert: VerisourceHighMemoryUsage
+        expr: |
+          (
+            verisource_process_resident_memory_bytes{job="verisource-api"}
+            / (2 * 1024 * 1024 * 1024)
+          ) > 0.85
+        for: 5m
+        labels:
+          severity: warning
+          service: verisource-api
+          team: platform
+          category: resources
+        annotations:
+          summary: "Memory usage exceeds 85% of limit"
+          description: "Instance {{ $labels.instance }} is using {{ $value | humanizePercentage }} of 2GB memory limit."
+          runbook: "Check for memory leaks. Review large video processing. Consider increasing memory limit or scaling horizontally."
+
+      - alert: VerisourceCriticalMemoryUsage
+        expr: |
+          (
+            verisource_process_resident_memory_bytes{job="verisource-api"}
+            / (2 * 1024 * 1024 * 1024)
+          ) > 0.95
+        for: 2m
+        labels:
+          severity: critical
+          service: verisource-api
+          team: platform
+          category: resources
+        annotations:
+          summary: "CRITICAL: Memory usage exceeds 95% of limit"
+          description: "Instance {{ $labels.instance }} is at {{ $value | humanizePercentage }} of memory limit. OOM kill imminent."
+          runbook: "Immediate action required. Restart container or scale horizontally. Investigate memory leak if recurring."
+
+      - alert: VerisourceHighCPUUsage
+        expr: |
+          rate(verisource_process_cpu_seconds_total{job="verisource-api"}[5m]) * 100 > 80
+        for: 15m
+        labels:
+          severity: warning
+          service: verisource-api
+          team: platform
+          category: resources
+        annotations:
+          summary: "CPU usage exceeds 80% for 15 minutes"
+          description: "Instance {{ $labels.instance }} CPU: {{ $value | humanize }}%"
+          runbook: "Check for CPU-intensive operations. Review video complexity. Consider scaling if sustained."
+
+      - alert: VerisourceHighEventLoopLag
+        expr: |
+          verisource_nodejs_eventloop_lag_seconds{job="verisource-api"} * 1000 > 100
+        for: 5m
+        labels:
+          severity: warning
+          service: verisource-api
+          team: platform
+          category: performance
+        annotations:
+          summary: "Event loop lag exceeds 100ms"
+          description: "Instance {{ $labels.instance }} event loop lag: {{ $value | humanize }}ms. Node.js event loop is blocked."
+          runbook: "Check for synchronous operations. Review worker processing. Look for blocking I/O or CPU-intensive tasks."
+
+      # =======================================================================
+      # DOMAIN SIGNALS (BUSINESS METRICS)
+      # =======================================================================
+
+      - alert: VerisourceMismatchSpike
+        expr: |
+          (
+            sum(increase(verisource_verify_verdict_total{job="verisource-api", verdict=~"NOT_PROVEN|INCONCLUSIVE"}[10m]))
+            /
+            sum(increase(verisource_verify_verdict_total{job="verisource-api"}[10m]))
+          ) > 0.40
+        for: 10m
+        labels:
+          severity: warning
+          service: verisource-api
+          team: trust-safety
+          category: business
+        annotations:
+          summary: "Spike in NOT_PROVEN/INCONCLUSIVE verdicts (>40% in 10m)"
+          description: "{{ $value | humanizePercentage }} of verifications are failing. Could indicate mass tampering, ingestion changes, or canonicalization regression."
+          runbook: "Review recent content changes. Check canonicalization version. Verify worker is functioning correctly. Contact trust & safety team."
+
+      - alert: VerisourceCanonicalizationMismatch
+        expr: |
+          sum(increase(http_request_duration_seconds_count{job="verisource-api", status_code="400"}[10m])) > 10
+          and on()
+          sum(increase(verisource_verify_verdict_total{job="verisource-api"}[10m])) > 0
+        for: 10m
+        labels:
+          severity: info
+          service: verisource-api
+          team: platform
+          category: business
+        annotations:
+          summary: "Elevated 400 errors (possible canonicalization/credential issues)"
+          description: "{{ $value }} 400 responses in last 10m. Often means clients are sending mismatched or malformed credentials."
+          runbook: "Review API logs for error details. Check if specific partner is affected. Verify credential format documentation."
+
+      - alert: VerisourceLowVerificationRate
+        expr: |
+          sum(rate(verisource_verify_verdict_total{job="verisource-api"}[10m])) < 0.1
+        for: 30m
+        labels:
+          severity: info
+          service: verisource-api
+          team: platform
+          category: business
+        annotations:
+          summary: "Very low verification rate (<0.1/sec for 30m)"
+          description: "Only {{ $value | humanize }} verifications/second. May be expected (off-hours) or indicate an issue."
+          runbook: "Check if this is expected traffic pattern. Verify API is accessible. Review partner integrations."
+
+      - alert: VerisourceSlowWorkerProcessing
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum by (le) (rate(verisource_worker_duration_seconds_bucket{job="verisource-api"}[10m]))
+          ) > 60
+        for: 15m
+        labels:
+          severity: warning
+          service: verisource-api
+          team: platform
+          category: performance
+        annotations:
+          summary: "Worker P95 processing time exceeds 60 seconds"
+          description: "P95 worker time: {{ $value | humanizeDuration }}. Video processing is slower than expected."
+          runbook: "Check video complexity. Review FFmpeg performance. Monitor CPU and I/O. Consider worker tuning."
+
+      # =======================================================================
+      # CAPACITY & SATURATION
+      # =======================================================================
+
+      - alert: VerisourceAtMaxConcurrency
+        expr: |
+          verisource_inflight_verifications{job="verisource-api"} >= 
+          on() group_left max_over_time(verisource_inflight_verifications{job="verisource-api"}[1h])
+        for: 10m
+        labels:
+          severity: warning
+          service: verisource-api
+          team: platform
+          category: capacity
+        annotations:
+          summary: "Running at maximum concurrent verification capacity"
+          description: "API is at MAX_INFLIGHT limit. Requests may be queuing or being rejected."
+          runbook: "Increase MAX_INFLIGHT setting or scale horizontally. Monitor queue depth and rejection rate."
+
+      
+      # Alert: High error rate (>1%)
+      - alert: HighErrorRate
+        expr: |
+          verisource:error_rate > 0.01
+        for: 5m
+        labels:
+          severity: warning
+          component: api
+        annotations:
+          summary: "High error rate detected"
+          description: "Error rate is {{ $value | humanizePercentage }} (threshold: 1%)"
+          runbook: "Check application logs for 5xx errors"
+      
+      # Alert: P95 latency > 30 seconds
+      - alert: HighLatency
+        expr: |
+          verisource:latency_p95 > 30
+        for: 10m
+        labels:
+          severity: warning
+          component: api
+        annotations:
+          summary: "High P95 latency detected"
+          description: "P95 latency is {{ $value | humanizeDuration }} (threshold: 30s)"
+          runbook: "Check for slow video processing, resource constraints, or database issues"
+      
+      # Alert: P99 latency > 60 seconds
+      - alert: VeryHighLatency
+        expr: |
+          verisource:latency_p99 > 60
+        for: 5m
+        labels:
+          severity: critical
+          component: api
+        annotations:
+          summary: "Very high P99 latency detected"
+          description: "P99 latency is {{ $value | humanizeDuration }} (threshold: 60s)"
+          runbook: "Immediate investigation required - check worker processes and FFmpeg"
+      
+      # Alert: Low success rate (<95%)
+      - alert: LowSuccessRate
+        expr: |
+          verisource:success_rate < 0.95
+        for: 10m
+        labels:
+          severity: warning
+          component: api
+        annotations:
+          summary: "Low success rate detected"
+          description: "Success rate is {{ $value | humanizePercentage }} (threshold: 95%)"
+          runbook: "Check for validation errors, authentication issues, or service degradation"
+  
+  # ===========================================================================
+  # Resource Alerts
+  # ===========================================================================
+  - name: resource_alerts
+    rules:
+      # Alert: High memory usage (>1.5GB)
+      - alert: HighMemoryUsage
+        expr: |
+          verisource:memory_usage_mb > 1536
+        for: 5m
+        labels:
+          severity: warning
+          component: api
+        annotations:
+          summary: "High memory usage detected"
+          description: "Memory usage is {{ $value | humanize }}MB (threshold: 1536MB)"
+          runbook: "Check for memory leaks or increase container memory limit"
+      
+      # Alert: Very high memory usage (>1.8GB)
+      - alert: VeryHighMemoryUsage
+        expr: |
+          verisource:memory_usage_mb > 1843
+        for: 2m
+        labels:
+          severity: critical
+          component: api
+        annotations:
+          summary: "Very high memory usage - approaching limit"
+          description: "Memory usage is {{ $value | humanize }}MB (limit: 2048MB)"
+          runbook: "Immediate action required - container may be OOM killed"
+      
+      # Alert: High CPU usage (>80%)
+      - alert: HighCPUUsage
+        expr: |
+          verisource:cpu_usage_percent > 80
+        for: 10m
+        labels:
+          severity: warning
+          component: api
+        annotations:
+          summary: "High CPU usage detected"
+          description: "CPU usage is {{ $value | humanize }}% (threshold: 80%)"
+          runbook: "Check for CPU-intensive operations or increase CPU limits"
+      
+      # Alert: High event loop lag (>100ms)
+      - alert: HighEventLoopLag
+        expr: |
+          verisource:event_loop_lag_ms > 100
+        for: 5m
+        labels:
+          severity: warning
+          component: api
+        annotations:
+          summary: "High event loop lag detected"
+          description: "Event loop lag is {{ $value | humanize }}ms (threshold: 100ms)"
+          runbook: "Node.js event loop is blocked - check for synchronous operations"
+  
+  # ===========================================================================
+  # Business Alerts
+  # ===========================================================================
+  - name: business_alerts
+    rules:
+      # Alert: Low verification success ratio
+      - alert: LowVerificationSuccessRatio
+        expr: |
+          verisource:verification_success_ratio < 0.5
+        for: 30m
+        labels:
+          severity: info
+          component: business
+        annotations:
+          summary: "Low verification success ratio"
+          description: "Only {{ $value | humanizePercentage }} of verifications are PROVEN_STRONG"
+          runbook: "This may be normal depending on content quality, but monitor for trends"
+      
+      # Alert: No verifications processed
+      - alert: NoVerificationsProcessed
+        expr: |
+          rate(verisource_verify_verdict_total[10m]) == 0
+        for: 30m
+        labels:
+          severity: info
+          component: business
+        annotations:
+          summary: "No verifications processed recently"
+          description: "No verification requests in the last 30 minutes"
+          runbook: "Check if this is expected (off-hours) or if there's an issue"
+      
+      # Alert: Slow worker processing
+      - alert: SlowWorkerProcessing
+        expr: |
+          verisource:avg_worker_duration > 60
+        for: 15m
+        labels:
+          severity: warning
+          component: worker
+        annotations:
+          summary: "Slow video worker processing"
+          description: "Average worker duration is {{ $value | humanizeDuration }} (threshold: 60s)"
+          runbook: "Check FFmpeg performance, video complexity, or resource constraints"
+  
+  # ===========================================================================
+  # Infrastructure Alerts
+  # ===========================================================================
+  - name: infrastructure_alerts
+    rules:
+      # Alert: Too many inflight verifications
+      - alert: TooManyInflightVerifications
+        expr: |
+          verisource_inflight_verifications >= on() group_left max_over_time(verisource_inflight_verifications[5m])
+        for: 10m
+        labels:
+          severity: warning
+          component: api
+        annotations:
+          summary: "At maximum concurrent verification capacity"
+          description: "Running at max concurrency - may need to increase MAX_INFLIGHT"
+          runbook: "Monitor queue depth and consider scaling horizontally or increasing MAX_INFLIGHT"
+      
+      # Alert: Prometheus scrape failures
+      - alert: PrometheusScrapeFailure
+        expr: |
+          up{job="verisource-api"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          component: monitoring
+        annotations:
+          summary: "Prometheus cannot scrape Verisource API"
+          description: "Metrics endpoint is unreachable"
+          runbook: "Check if API is running and /metrics endpoint is accessible"
