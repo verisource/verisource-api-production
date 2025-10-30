@@ -1,0 +1,80 @@
+========================================
+   RAILWAY DEPLOYMENT GUIDE
+========================================
+
+🌐 STEP 1: Go to Railway
+   https://railway.app
+
+🔐 STEP 2: Sign Up / Log In
+   → Click "Login" button (top right)
+   → Choose "Login with GitHub"
+   → Authorize Railway to access your GitHub
+
+📦 STEP 3: Create New Project
+   → Click "New Project" button
+   → Select "Deploy from GitHub repo"
+   → Find and select: verisource-api
+   → Click "Deploy Now"
+
+⚙️ STEP 4: Wait for Auto-Detection
+   Railway automatically detects:
+   ✓ Node.js project
+   ✓ package.json dependencies
+   ✓ Installs npm packages
+   ✓ Starts with: node index.js
+   
+   This takes 2-3 minutes... ☕
+
+🔧 STEP 5: Add Environment Variables
+   In Railway dashboard:
+   → Click on your deployed service
+   → Click "Variables" tab
+   → Click "Add Variable" and add these:
+
+   NODE_ENV=production
+   PORT=8080
+   MAX_UPLOAD_SIZE_MB=50
+   MAX_REQUESTS_PER_DAY=10000
+   RATE_LIMIT_WINDOW_MS=900000
+   RATE_LIMIT_MAX_REQUESTS=100
+
+   → Click "Save"
+   → Railway will redeploy automatically
+
+🌍 STEP 6: Generate Domain
+   → Go to "Settings" tab
+   → Scroll to "Networking"
+   → Click "Generate Domain"
+   → Copy your URL (something like):
+     https://verisource-api-production-abc123.up.railway.app
+
+💰 STEP 7: Set Spending Limit (IMPORTANT!)
+   → Click your profile icon (top right)
+   → Select "Account Settings"
+   → Go to "Usage" section
+   → Click "Set Budget"
+   → Set: $20/month
+   → Enable email alerts ✅
+
+📧 STEP 8: Enable Alerts
+   → Settings → Notifications
+   → Enable:
+     ✓ Deployment failures
+     ✓ High resource usage
+     ✓ Budget warnings
+
+✅ STEP 9: Verify Deployment
+   Check logs:
+   → Click "Deployments" tab
+   → Click latest deployment
+   → Check logs for:
+     "VeriSource Media Verification API"
+     "✓ Ready!"
+
+========================================
+DEPLOYMENT COMPLETE! 🎉
+========================================
+
+Your Railway URL: https://________.up.railway.app
+Save this URL!
+
