@@ -1,0 +1,212 @@
+#!/usr/bin/env node
+/**
+ * Image worker - processes images and outputs fingerprint
+ * Usage: node worker/image-worker.js <input-image-path>
+ */
+
+const path = require('path');
+const fs = require('fs');
+
+// Get input path
+const inputPath = process.argv[2];
+
+if (!inputPath) {
+  console.error(JSON.stringify({ error: "No input path provided" }));
+  process.exit(1);
+}
+
+if (!fs.existsSync(inputPath)) {
+  console.error(JSON.stringify({ error: `Input file does not exist: ${inputPath}` }));
+  process.exit(1);
+}
+
+// Import the canonicalization module
+const { canonicalizeImage } = require('../canonicalization.js');
+
+// Process the image
+(async () => {
+  try {
+    const result = await canonicalizeImage(inputPath);
+    console.log(JSON.stringify(result));
+    process.exit(0);
+  } catch (error) {
+    console.error(JSON.stringify({ 
+      error: error.message,
+      stack: error.stack 
+    }));
+    process.exit(1);
+  }
+})();
+#!/usr/bin/env node
+/**
+ * Image worker - outputs JSON fingerprint for a local image file
+ * Usage: node worker/image-worker.js /path/to/image
+ */
+
+const fs = require("fs");
+const path = require("path");
+const { fingerprintImage } = require("../canonicalization.js");
+
+(async () => {
+  try {
+    const inputPath = process.argv[2];
+
+    if (!inputPath) {
+      console.error("Usage: node worker/image-worker.js /path/to/image");
+      process.exit(1);
+    }
+
+    const absPath = path.resolve(inputPath);
+    if (!fs.existsSync(absPath)) {
+      console.error(`File not found: ${absPath}`);
+      process.exit(1);
+    }
+
+    const result = await fingerprintImage(absPath);
+
+    // Print JSON result to stdout
+    console.log(JSON.stringify({
+      ok: true,
+      ...result,
+      sourceFile: path.basename(absPath)
+    }, null, 2));
+
+  } catch (e) {
+    console.error(JSON.stringify({
+      ok: false,
+      error: e?.message || String(e),
+      stack: e?.stack
+    }, null, 2));
+    process.exit(1);
+  }
+})();
+cat > worker/image-worker.js <<'EOF'
+#!/usr/bin/env node
+/**
+ * Image worker - outputs JSON fingerprint for a local image file
+ * Usage: node worker/image-worker.js /path/to/image
+ */
+
+const fs = require("fs");
+const path = require("path");
+const { fingerprintImage } = require("../canonicalization.js");
+
+(async () => {
+  try {
+    const inputPath = process.argv[2];
+
+    if (!inputPath) {
+      console.error("Usage: node worker/image-worker.js /path/to/image");
+      process.exit(1);
+    }
+
+    const absPath = path.resolve(inputPath);
+    if (!fs.existsSync(absPath)) {
+      console.error(`File not found: ${absPath}`);
+      process.exit(1);
+    }
+
+    const result = await fingerprintImage(absPath);
+
+    console.log(JSON.stringify({
+      ok: true,
+      ...result,
+      sourceFile: path.basename(absPath)
+    }, null, 2));
+  } catch (e) {
+    console.error(JSON.stringify({
+      ok: false,
+      error: e?.message || String(e),
+      stack: e?.stack
+    }, null, 2));
+    process.exit(1);
+  }
+})();
+EOF
+
+chmod +x worker/image-worker.js
+#!/usr/bin/env node
+/**
+ * Image worker — outputs a JSON fingerprint for a local image file.
+ * Usage: node worker/image-worker.js /path/to/image
+ */
+
+"use strict";
+
+/* eslint-disable no-console */
+
+const fs = require("fs");
+const path = require("path");
+const crypto = require("crypto");
+
+// Try to use your project's canonicalization logic if present
+let fingerprintImage;
+try {
+  ({ fingerprintImage } = require("../canonicalization.js"));
+} catch {
+  // no-op; we'll fall back below
+}
+
+/**
+ * Very small fallback so this worker still runs even if canonicalization.js
+ * isn't available. You can delete this if fingerprintImage is guaranteed.
+ */
+function fallbackFingerprintImage(buffer, absPath) {
+  const hash = crypto.createHash("sha256").update(buffer).digest("hex");
+  const ext = path.extname(absPath).toLowerCase();
+  const mime =
+    ext === ".png" ? "image/png" :
+    ext === ".jpg" || ext === ".jpeg" ? "image/jpeg" :
+    ext === ".webp" ? "image/webp" :
+    ext === ".gif" ? "image/gif" :
+    "application/octet-stream";
+
+  return {
+    kind: "image",
+    path: absPath,
+    filename: path.basename(absPath),
+    size_bytes: buffer.length,
+    sha256_hex: hash,
+    mime_type: mime,
+  };
+}
+
+(async function main() {
+  try {
+    const inputPath = process.argv[2];
+    if (!inputPath) {
+      console.error("Usage: node worker/image-worker.js /path/to/image");
+      process.exit(1);
+    }
+
+    const absPath = path.resolve(inputPath);
+    if (!fs.existsSync(absPath) || !fs.statSync(absPath).isFile()) {
+      console.error(`File not found: ${absPath}`);
+      process.exit(1);
+    }
+
+    const data = fs.readFileSync(absPath);
+
+    let result;
+    if (typeof fingerprintImage === "function") {
+      // Your project’s canonical image fingerprint
+      // Adjust arg shape if your canonicalization expects different params
+      result = await fingerprintImage(data, {
+        path: absPath,
+        filename: path.basename(absPath),
+      });
+    } else {
+      // Safe fallback so the worker still works
+      result = fallbackFingerprintImage(data, absPath);
+    }
+
+    // Print JSON to stdout
+    console.log(JSON.stringify(result, null, 2));
+  } catch (e) {
+    console.error(e && e.stack ? e.stack : String(e));
+    process.exit(1);
+  }
+})();
+
+
+

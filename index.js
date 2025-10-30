@@ -1,179 +1,40 @@
-/**
- * Minimal HTTP API for video verification (vid:v1).
- * POST /verify
- * Body (multipart/form-data or JSON by URL):
- *  - file: binary video (preferred)  OR
- *  - url: http(s) URL to fetch
- *  - reference: JSON with { canonicalization:'vid:v1:...', segmentHashes:[...], segmentsTotal:n }
- *
- * Response:
- * { 
- *   verdict, 
- *   coverage, 
- *   segmentsMatched, 
- *   segmentsCompared, 
- *   candidateSegmentsTotal, 
- *   referenceSegmentsTotal, 
- *   canonicalization, 
- *   notes:[] 
- * }
- */
+#!/usr/bin/env node
+"use strict";
+require('dotenv').config();
 const express = require("express");
 const multer = require("multer");
 const fs = require("fs");
 const path = require("path");
 const { spawnSync } = require("child_process");
-const fetch = require("node-fetch");
-
-const app = express();
-const upload = multer({ dest: "/tmp" });
-
-app.use(express.json({ limit: "5mb" }));
-
-function segMap(list) {
-  const m = new Map();
-  for (const s of list) {
-    const [id, hex] = s.split(":");
-    m.set(id, hex);
-  }
-  return m;
-}
-
-function verdictFromCoverage(c) {
-  if (c === 1) return "PROVEN_STRONG";
-  if (c >= 0.80) return "PROVEN_DERIVED";
-  if (c >= 0.30) return "INCONCLUSIVE";
-  return "NOT_PROVEN";
-}
-
-async function runWorker(inputPath) {
-  const run = spawnSync("node", ["worker/video-worker.js", inputPath], { 
-    encoding: "utf8",
-    maxBuffer: 50 * 1024 * 1024  // 50MB buffer for large videos
-  });
-  if (run.status !== 0) {
-    throw new Error(run.stderr || run.stdout || "worker failed");
-  }
-  return JSON.parse(run.stdout);
-}
-
-async function downloadToTmp(url) {
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`fetch failed: ${res.status}`);
-  const tmp = path.join(
-    "/tmp",
-    `veri_${Date.now()}_${Math.random().toString(16).slice(2)}.bin`
-  );
-  const file = fs.createWriteStream(tmp);
-  await new Promise((resolve, reject) => {
-    res.body.pipe(file);
-    res.body.on("error", reject);
-    file.on("finish", resolve);
-  });
-  return tmp;
-}
-
-app.get("/health", (req, res) => {
-  res.json({ status: "ok", service: "verisource-video-verifier" });
-});
-
-app.post("/verify", upload.single("file"), async (req, res) => {
-  let inputPath = null;
-  let downloadedFile = null;
-  
-  try {
-    // 1) get candidate file path
-    if (req.file?.path) {
-      inputPath = req.file.path;
-    } else if (req.body?.url) {
-      downloadedFile = await downloadToTmp(req.body.url);
-      inputPath = downloadedFile;
-    } else {
-      return res.status(400).json({ 
-        error: "Provide file (multipart) or url" 
-      });
-    }
-    
-    // 2) parse reference JSON
-    let reference = null;
-    try {
-      reference = typeof req.body.reference === "string" 
-        ? JSON.parse(req.body.reference) 
-        : req.body.reference;
-    } catch {
-      return res.status(400).json({ error: "Invalid reference JSON" });
-    }
-    
-    if (!reference?.segmentHashes || !reference?.canonicalization?.startsWith("vid:v1")) {
-      return res.status(400).json({ 
-        error: "reference must include vid:v1 segmentHashes and canonicalization" 
-      });
-    }
-    
-    // 3) run worker on candidate
-    const cand = await runWorker(inputPath);
-    
-    const refMap = segMap(reference.segmentHashes);
-    const candMap = segMap(cand.segmentHashes);
-    
-    let matched = 0;
-    let compared = 0;
-    const diffs = [];
-    
-    for (const [id, hex] of candMap.entries()) {
-      if (!refMap.has(id)) continue;
-      compared++;
-      if (hex === refMap.get(id)) {
-        matched++;
-      } else {
-        diffs.push(id);
-      }
-    }
-    
-    const coverage = compared ? matched / compared : 0;
-    
-    const out = {
-      verdict: verdictFromCoverage(coverage),
-      coverage: Number(coverage.toFixed(4)),
-      segmentsMatched: matched,
-      segmentsCompared: compared,
-      candidateSegmentsTotal: cand.segmentHashes.length,
-      referenceSegmentsTotal: reference.segmentHashes.length,
-      canonicalization: cand.canonicalization,
-      firstMismatches: diffs.slice(0, 5),
-      notes: ["VFR→CFR resample", "De-interlaced"]
-    };
-    
-    return res.json(out);
-    
-  } catch (e) {
-    console.error("Verification error:", e);
-    return res.status(500).json({ 
-      error: e.message || String(e) 
-    });
-  } finally {
-    // Best-effort cleanup
-    if (req.file?.path) {
-      try { 
-        fs.unlinkSync(req.file.path); 
-      } catch (err) {
-        console.error("Cleanup error:", err);
-      }
-    }
-    if (downloadedFile) {
-      try { 
-        fs.unlinkSync(downloadedFile); 
-      } catch (err) {
-        console.error("Cleanup error:", err);
-      }
-    }
-  }
-});
-
+const rateLimit = require('express-rate-limit');
+const helmet = require('helmet');
+const cors = require('cors');
 const PORT = process.env.PORT || 8080;
-
-app.listen(PORT, () => {
-  console.log(`Verifier API listening on :${PORT}`);
-  console.log(`Health check: http://localhost:${PORT}/health`);
-  console.log(`Verify endpoint: POST http://localhost:${PORT}/verify`);
+let canonicalizeImage;
+try { ({ canonicalizeImage } = require("./canonicalization.js")); } catch (e) {}
+function runVideoWorker(p) { const r = spawnSync("node", ["worker/video-worker.js", p], { encoding: "utf8", maxBuffer: 50*1024*1024 }); if (r.status !== 0) throw new Error(r.stderr || "failed"); return JSON.parse(r.stdout); }
+function runAudioWorker(p) { const r = spawnSync("node", ["worker/audio-worker.js", p], { encoding: "utf8", maxBuffer: 50*1024*1024 }); if (r.status !== 0) throw new Error(r.stderr || "failed"); return JSON.parse(r.stdout); }
+const app = express();
+app.use(helmet()); app.use(cors());
+app.use('/verify', rateLimit({ windowMs: 15*60*1000, max: 100 }));
+const upload = multer({ dest: "./uploads", limits: { fileSize: 50*1024*1024 } });
+app.get("/", (req, res) => res.json({ status: "ok", service: "VeriSource", supports: ["image","video","audio"] }));
+app.get("/health", (req, res) => res.json({ status: "ok", uptime: process.uptime() }));
+app.post("/verify", upload.single("file"), async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: "No file" });
+  let wp = req.file.path;
+  try {
+    const buf = fs.readFileSync(req.file.path);
+    const isImg = /^image\//i.test(req.file.mimetype) || /\.(png|jpe?g)$/i.test(req.file.originalname);
+    const isVid = /^video\//i.test(req.file.mimetype) || /\.(mp4|mov)$/i.test(req.file.originalname);
+    const isAud = /^audio\//i.test(req.file.mimetype) || /\.(mp3|wav)$/i.test(req.file.originalname);
+    if (isVid || isAud) { wp = req.file.path + (path.extname(req.file.originalname) || (isVid?'.mp4':'.mp3')); fs.copyFileSync(req.file.path, wp); }
+    let r = { kind: isImg?'image':(isVid?'video':(isAud?'audio':'unknown')), filename: req.file.originalname, size_bytes: req.file.size };
+    if (isImg && canonicalizeImage) r.canonical = await canonicalizeImage(buf);
+    else if (isVid) r.canonical = runVideoWorker(wp);
+    else if (isAud) r.canonical = runAudioWorker(wp);
+    res.json(r);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+  finally { try { if (fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path); if (wp !== req.file.path && fs.existsSync(wp)) fs.unlinkSync(wp); } catch(e){} }
 });
+app.listen(PORT, () => console.log("API on :" + PORT));

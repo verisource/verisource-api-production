@@ -184,7 +184,7 @@ export async function extractFrames(
         '-vf', videoFilters.join(','),
         '-vsync', '0',    // Don't invent extra frames
         '-f', 'image2pipe',
-        '-vcodec', 'mjpeg',
+        '-vcodec', 'rawvideo',
         '-pix_fmt', 'rgb24'
       ]);
     
@@ -254,7 +254,13 @@ export async function computeFramePHash(
 ): Promise<string> {
   try {
     // Convert to 32x32 grayscale
-    const resized = await sharp(frameBuffer)
+    const resized = await sharp(frameBuffer, {
+      raw: {
+        width,
+        height,
+        channels: 3
+      }
+    })
       .resize(CONFIG.PHASH_SIZE, CONFIG.PHASH_SIZE, {
         fit: 'fill',
         kernel: 'lanczos3'

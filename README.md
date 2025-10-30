@@ -1,305 +1,289 @@
-# 🎬 VeriSource - Video Verification & Content Authentication System
+# 🎯 VeriSource Media Verification API
 
-## 🎯 What is VeriSource?
+A complete media authentication and fingerprinting API supporting **images**, **videos**, and **audio files**.
 
-VeriSource is a comprehensive content authenticity and verification system that provides:
+## 🌟 Features
 
-1. **Video Verification API** - Verify videos haven't been tampered with using cryptographic hashing
-2. **Content Origin Credentials** - Digital credentials for content authentication
-3. **Blockchain Integration** (Optional) - Immutable audit trail via blockchain anchoring
-4. **AI Content Transparency** - Track and label AI-generated content
-5. **Chain of Custody** - Complete provenance tracking
-
-## 📦 What's Included in This Bundle
-
-```
-verisource-api-complete/
-├── server/                    # Main API server
-│   ├── index.js              # Express HTTP server (vid:v1)
-│   └── generate-credential-endpoint.ts
-├── worker/                    # Video processing worker
-├── cli/                       # Command-line tools
-│   ├── generate-image-credential.js
-│   └── verify-video.js
-├── src/                       # Core source code
-│   └── metrics.ts            # Prometheus metrics
-├── tests/                     # Test suites
-│   ├── api.golden.test.ts
-│   └── api.snapshot.test.ts
-├── k8s/                       # Kubernetes deployments
-├── grafana/                   # Monitoring dashboards
-├── docs/                      # Comprehensive documentation
-├── Dockerfile                 # Docker containerization
-├── docker-compose.yml         # Local development stack
-├── openapi.yaml              # API specification
-├── package.json              # Node.js dependencies
-├── credential_system_v3.py   # Python credential generator
-└── *.sh                      # Deployment & testing scripts
-```
+- ✅ **Image Verification** - Perceptual hashing and canonicalization
+- ✅ **Video Verification** - Segment-based fingerprinting resistant to tampering
+- ✅ **Audio Verification** - Chromaprint + SHA256 normalized hashing
+- ✅ **Tamper Detection** - Detect edits, crops, filters, and manipulations
+- ✅ **Multiple Formats** - Support for common media formats
+- ✅ **Rate Limiting** - Built-in API protection
+- ✅ **Production Ready** - Secure, fast, and scalable
 
 ## 🚀 Quick Start
 
-### Option 1: Run Locally (Simplest)
-
-**Prerequisites:**
-- Node.js 18+ 
-- FFmpeg (for video processing)
-
-**Steps:**
+### Installation
 ```bash
-# 1. Install dependencies
+# Clone repository
+git clone https://github.com/yourusername/verisource-api.git
+cd verisource-api
+
+# Install dependencies
 npm install
 
-# 2. Start the server
-node server/index.js
-
-# 3. Test it's running
-curl http://localhost:8080/health
+# Start server
+npm start
 ```
 
-The API will be available at `http://localhost:8080`
-
-### Option 2: Run with Docker
-
+### Docker (Alternative)
 ```bash
-# Build the image
 docker build -t verisource-api .
-
-# Run the container
 docker run -p 8080:8080 verisource-api
-
-# Test
-curl http://localhost:8080/health
 ```
 
-### Option 3: Full Stack with Docker Compose
+## 📖 API Documentation
 
-```bash
-# Start all services (API + Prometheus + Grafana)
-docker-compose up
-
-# Access:
-# - API: http://localhost:8080
-# - Grafana: http://localhost:3000
-# - Prometheus: http://localhost:9090
+### Base URL
+```
+http://localhost:8080
 ```
 
-## 🔌 API Endpoints
+### Endpoints
 
-### Health Check
-```bash
-GET /health
-```
+#### `GET /` - API Information
+Returns API status and available endpoints.
 
-### Verify Video
-```bash
-POST /verify
-Content-Type: multipart/form-data
-
-# Parameters:
-# - file: video file (binary)
-# - reference: JSON with segmentHashes and canonicalization
-```
+#### `GET /health` - Health Check
+Returns server health and uptime.
 
 **Response:**
 ```json
 {
-  "verdict": "PROVEN_STRONG",
-  "coverage": 1.0,
-  "segmentsMatched": 150,
-  "segmentsCompared": 150,
-  "candidateSegmentsTotal": 150,
-  "referenceSegmentsTotal": 150,
-  "canonicalization": "vid:v1:...",
-  "notes": ["VFR→CFR resample", "De-interlaced"]
+  "status": "ok",
+  "timestamp": "2025-10-30T12:00:00.000Z",
+  "uptime": 3600.5
 }
 ```
 
-**Verdict Types:**
-- `PROVEN_STRONG` - 100% match
-- `PROVEN_DERIVED` - 80-99% match (likely edited)
-- `INCONCLUSIVE` - 30-79% match
-- `NOT_PROVEN` - <30% match
+#### `POST /verify` - Verify Media File
 
-## 📚 Documentation
+Upload a media file for verification and fingerprinting.
 
-### Core Guides
-- **[QUICKSTART.md](QUICKSTART.md)** - Get started in 5 minutes
-- **[DOCUMENTATION.md](DOCUMENTATION.md)** - Complete system documentation
-- **[DOCKER_GUIDE.md](DOCKER_GUIDE.md)** - Docker deployment
-- **[K8S_DEPLOYMENT_GUIDE.md](K8S_DEPLOYMENT_GUIDE.md)** - Kubernetes deployment
-- **[PRODUCTION_DEPLOYMENT_GUIDE.md](PRODUCTION_DEPLOYMENT_GUIDE.md)** - Production setup
-- **[TESTING_GUIDE.md](TESTING_GUIDE.md)** - Testing strategies
+**Request:**
+```bash
+curl -X POST http://localhost:8080/verify \
+  -F "file=@image.png"
+```
 
-### Additional Docs (in /docs/)
-- Complete execution guides
-- Security audit improvements
-- Monitoring and alerting setup
-- CI/CD integration
-- Golden test documentation
+**Response (Image):**
+```json
+{
+  "kind": "image",
+  "filename": "photo.jpg",
+  "size_bytes": 245832,
+  "mime_type": "image/jpeg",
+  "processed_at": "2025-10-30T12:00:00.000Z",
+  "canonical": {
+    "v1": { "hash": "abc123..." },
+    "v2": { "hash": "def456..." }
+  },
+  "processing_time_ms": 145
+}
+```
+
+**Response (Video):**
+```json
+{
+  "kind": "video",
+  "filename": "video.mp4",
+  "size_bytes": 5242880,
+  "canonical": {
+    "algorithm": "sha256+segphash",
+    "segmentHashes": ["seg_0:abc...", "seg_1:def..."],
+    "canonicalization": "vid:v1:deint=yadif|bt709|..."
+  },
+  "processing_time_ms": 3420
+}
+```
+
+**Response (Audio):**
+```json
+{
+  "kind": "audio",
+  "filename": "song.mp3",
+  "size_bytes": 4194304,
+  "canonical": {
+    "algorithm": "chromaprint+sha256",
+    "sha256_normalized": "abc123...",
+    "duration": 180.5,
+    "sample_rate": 44100,
+    "channels": 2
+  },
+  "processing_time_ms": 892
+}
+```
 
 ## 🔧 Configuration
 
-### Environment Variables
-
-Create a `.env` file (see `.env.example`):
-
-```bash
+Create a `.env` file:
+```env
 PORT=8080
 NODE_ENV=production
-
-# Optional: Blockchain anchoring
-BLOCKCHAIN_ENABLED=false
-BLOCKCHAIN_RPC_URL=https://...
-
-# Optional: Metrics
-PROMETHEUS_ENABLED=true
-METRICS_PORT=9090
-
-# Optional: Content credentials
-CREATOR_DID=did:key:z6Mk...
-REVOCATION_BASE=https://revocation.example.com/v1/cred
+MAX_UPLOAD_SIZE_MB=50
+RATE_LIMIT_WINDOW_MS=900000
+RATE_LIMIT_MAX_REQUESTS=100
 ```
 
-## 🧪 Running Tests
+## 📊 Supported Formats
 
-### Golden Tests (API Regression Tests)
-```bash
-# Run golden tests
-./RUN_GOLDEN_TESTS.sh
+### Images
+- PNG, JPEG, GIF, WebP, BMP, TIFF
 
-# Or manually
-cd tests
-npm test
-```
+### Videos
+- MP4, MOV, AVI, MKV, WebM, M4V
 
-### Snapshot Tests
-```bash
-./snapshot-tests.sh
-```
+### Audio
+- MP3, WAV, M4A, FLAC, OGG, AAC
 
-### E2E Tests
-```bash
-./e2e-test-suite.sh
-```
+## 🛡️ Security Features
 
-### Load Tests
-```bash
-./load-test.sh
-```
+- ✅ Rate limiting (100 requests per 15 minutes)
+- ✅ File size limits (50MB default)
+- ✅ File type validation
+- ✅ Helmet.js security headers
+- ✅ CORS enabled
+- ✅ Input sanitization
+
+## 💡 Use Cases
+
+- **Content Authenticity** - Verify news photos/videos haven't been altered
+- **Copyright Protection** - Prove ownership of original media
+- **Evidence Verification** - Authenticate legal evidence
+- **Deepfake Detection** - Compare media against known originals
+- **Social Media Moderation** - Detect reuploaded banned content
+- **Music Rights** - Identify copyrighted audio
 
 ## 🏗️ Architecture
-
-### Video Verification Flow
-
 ```
-1. Client uploads video + reference hashes
-2. API receives request at /verify endpoint
-3. Worker processes video:
-   - Extracts frames at intervals
-   - Normalizes to CFR (constant frame rate)
-   - Generates perceptual hashes for each segment
-4. API compares hashes:
-   - Matches segments between candidate and reference
-   - Calculates coverage percentage
-5. Returns verdict based on match coverage
+verisource-api/
+├── index.js                 # Main API server
+├── canonicalization.js      # Image processing
+├── worker/
+│   ├── video-worker.js      # Video fingerprinting
+│   └── audio-worker.js      # Audio fingerprinting
+├── uploads/                 # Temporary upload directory
+└── package.json
 ```
 
-### Content Credential System
+## 🚀 Deployment
 
-```
-1. Content is hashed (SHA-256)
-2. Metadata is collected (creator, timestamp, etc.)
-3. Credential is signed with private key
-4. (Optional) Transaction anchored to blockchain
-5. Credential is stored and can be verified
-```
-
-## 🔐 Security Features
-
-- ✅ Cryptographic hashing (SHA-256, SHA-512)
-- ✅ RSA digital signatures
-- ✅ Optional blockchain anchoring
-- ✅ API rate limiting
-- ✅ Input validation
-- ✅ Secure file handling with cleanup
-- ✅ CORS protection
-- ✅ Helmet.js security headers
-
-## 📊 Monitoring
-
-### Prometheus Metrics
-- Request rates and latency
-- Verification verdicts distribution
-- Error rates
-- System resource usage
-
-### Grafana Dashboards
-Pre-configured dashboards included:
-- API performance
-- Video processing metrics
-- System health
-- Alert status
-
-## 🌐 Deployment Options
-
-### Cloud Platforms
-- **AWS**: ECS, EKS, Lambda
-- **Google Cloud**: GKE, Cloud Run
-- **Azure**: AKS, Container Instances
-- **Heroku, Railway, Render**: Simple deployments
-
-### Kubernetes
-Complete K8s manifests included:
+### Railway
 ```bash
-kubectl apply -f k8s/deployment.yml
-kubectl apply -f k8s/service.yml
-kubectl apply -f k8s/ingress.yml
+# Install Railway CLI
+npm install -g @railway/cli
+
+# Deploy
+railway login
+railway init
+railway up
 ```
 
-## 🆘 Troubleshooting
+### Heroku
+```bash
+heroku create your-app-name
+git push heroku main
+```
 
-### "Worker failed" error
-- Ensure FFmpeg is installed: `ffmpeg -version`
-- Check video file format is supported
-- Verify sufficient disk space in /tmp
+### DigitalOcean App Platform
 
-### API not responding
-- Check if port 8080 is available
-- Review logs: `docker logs <container-id>`
-- Verify Node.js version: `node --version` (need 18+)
+Connect your GitHub repository and deploy automatically.
 
-### Memory issues
-- Increase Docker memory limit
-- Adjust `maxBuffer` in server/index.js
-- Process videos in smaller chunks
+## 📈 Performance
 
-## 📝 License
-
-See LICENSE file for details.
+- **Image processing:** ~100-300ms
+- **Video processing:** ~2-5 seconds per minute of video
+- **Audio processing:** ~500ms-2s per minute of audio
 
 ## 🤝 Contributing
 
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests
-5. Submit a pull request
+Contributions welcome! Please open an issue or submit a PR.
 
-## 📞 Support
+## 📄 License
 
-For issues and questions:
-- Check the documentation in `/docs/`
-- Review the troubleshooting guide
-- Open an issue on the repository
+MIT License - See LICENSE file for details.
 
-## 🎓 Learn More
+## 🆘 Support
 
-- **Video Canonicalization**: Read `video-canonicalization.ts`
-- **Credential System**: Read `credential_system_v3.py`
-- **API Spec**: Review `openapi.yaml`
-- **Architecture**: See `DOCUMENTATION.md`
+- Documentation: [https://docs.verisource.com](https://docs.verisource.com)
+- Issues: [GitHub Issues](https://github.com/yourusername/verisource-api/issues)
+- Email: support@verisource.com
+
+## 🎉 Credits
+
+Built with:
+- Express.js
+- FFmpeg
+- Multer
+- Sharp
+- Chromaprint
 
 ---
 
-**Built with ❤️ for content authenticity and verification**
+**Made with ❤️ by the VeriSource team**
+
+---
+
+## 🔒 Security Features
+
+### Built-in Protection
+
+- ✅ **Rate Limiting**: 100 requests per 15 minutes per IP
+- ✅ **Daily Limits**: 10,000 requests per day (configurable)
+- ✅ **DDoS Protection**: Automatic IP blocking after 1000 requests/hour
+- ✅ **File Validation**: Blocks executables and malicious files
+- ✅ **Size Limits**: 50MB maximum file size
+- ✅ **Resource Management**: Max 3 concurrent processing jobs
+- ✅ **Helmet.js**: Security headers enabled
+- ✅ **CORS**: Configured and enabled
+- ✅ **Privacy**: Files deleted immediately after processing
+
+### Monitoring
+
+- Real-time stats: `GET /stats`
+- Health checks: `GET /health`
+- Hourly performance logs
+- Error tracking and alerts
+- Memory usage monitoring
+
+### Compliance
+
+- ✅ GDPR compliant (no data storage)
+- ✅ Privacy policy included
+- ✅ Terms of service included
+- ✅ Graceful shutdown handling
+
+### Best Practices
+
+1. Set Railway spending limit: $10-20/month
+2. Enable Railway email alerts
+3. Monitor `/stats` endpoint daily
+4. Review error logs weekly
+5. Update dependencies monthly
+
+---
+
+## ⚠️ Important Notes
+
+### Before Going Public
+
+1. **Set API Keys** (coming soon - optional for v1)
+2. **Configure Alerts**: Set up email notifications
+3. **Monitor Costs**: Check Railway dashboard daily
+4. **Review Logs**: Watch for suspicious activity
+5. **Backup Strategy**: No backups needed (stateless API)
+
+### Cost Management
+
+- Free tier: ~$5/month Railway credit
+- Expected costs (100 users): $10-25/month
+- With 1000 users: $50-100/month
+- Daily limit prevents runaway costs
+
+### Support
+
+- Security issues: security@verisource.com
+- General support: support@verisource.com
+- Bug reports: GitHub Issues
+
