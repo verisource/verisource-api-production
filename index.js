@@ -33,7 +33,14 @@ app.post("/verify", upload.single("file"), async (req, res) => {
     const isAud = /^audio\//i.test(req.file.mimetype) || /\.(mp3|wav)$/i.test(req.file.originalname);
     if (isVid || isAud) { wp = req.file.path + (path.extname(req.file.originalname) || (isVid?'.mp4':'.mp3')); fs.copyFileSync(req.file.path, wp); }
     let r = { kind: isImg?'image':(isVid?'video':(isAud?'audio':'unknown')), filename: req.file.originalname, size_bytes: req.file.size };
-    if (isImg && canonicalizeImage) r.canonical = await canonicalizeImage(buf);
+    if (isImg && canonicalizeImage) {
+      const canonBuf = await canonicalizeImage(buf);
+      r.canonical = {
+        algorithm: 'perceptual_hash',
+        fingerprint: canonBuf.toString('hex'),
+        version: 'img:v2'
+      };
+    }
     else if (isVid) r.canonical = runVideoWorker(wp);
     else if (isAud) r.canonical = runAudioWorker(wp);
     res.json(r);
