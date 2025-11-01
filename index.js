@@ -47,6 +47,43 @@ app.post("/verify", upload.single("file"), async (req, res) => {
     }
     else if (isVid) r.canonical = runVideoWorker(wp);
     else if (isAud) r.canonical = runAudioWorker(wp);
+    // REVERSE SEARCH: Check database for previous verifications
+    let searchResults = { found: false, is_first_verification: true };
+    let savedRecord = null;
+    
+    if (fingerprint) {
+      try {
+        const userTier = req.headers['x-user-tier'] || 'free';
+        const forceExternal = req.query.search_external === 'true';
+        
+        // Search using hybrid approach
+        searchResults = await hybridSearch(fingerprint, req.file.path, {
+          tier: userTier,
+          alwaysSearchExternal: forceExternal
+        });
+        
+        // Save this verification to database
+        savedRecord = await saveVerification({
+          fingerprint: fingerprint,
+          algorithm: r.canonical?.algorithm || 'sha256',
+          filename: req.file.originalname,
+          file_size: req.file.size,
+          file_type: req.file.mimetype,
+          media_kind: r.kind,
+          ip_address: req.ip
+        });
+      } catch (dbError) {
+        console.error('Database error (non-fatal):', dbError.message);
+      }
+      
+      // Add verification history to response
+      r.verification_history = searchResults;
+      if (savedRecord) {
+        r.verification_id = savedRecord.verification_id;
+        r.verified_at = savedRecord.upload_date;
+      }
+    }
+    
     res.json(r);
   } catch (e) { res.status(500).json({ error: e.message }); }
   finally { try { if (fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path); if (wp !== req.file.path && fs.existsSync(wp)) fs.unlinkSync(wp); } catch(e){} }
