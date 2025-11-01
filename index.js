@@ -15,6 +15,9 @@ try { ({ canonicalizeImage } = require("./canonicalization.js")); } catch (e) {}
 function runVideoWorker(p) { const r = spawnSync("node", ["worker/video-worker.js", p], { encoding: "utf8", maxBuffer: 50*1024*1024 }); if (r.status !== 0) throw new Error(r.stderr || "failed"); return JSON.parse(r.stdout); }
 function runAudioWorker(p) { const r = spawnSync("node", ["worker/audio-worker.js", p], { encoding: "utf8", maxBuffer: 50*1024*1024 }); if (r.status !== 0) throw new Error(r.stderr || "failed"); return JSON.parse(r.stdout); }
 const app = express();
+
+// Trust Railway proxy for accurate IP detection
+app.set('trust proxy', 1);
 app.use(helmet()); app.use(cors());
 app.use('/verify', rateLimit({ windowMs: 15*60*1000, max: 100 }));
 const upload = multer({ dest: "./uploads", limits: { fileSize: 50*1024*1024 } });
