@@ -35,13 +35,11 @@ app.post("/verify", upload.single("file"), async (req, res) => {
     let r = { kind: isImg?'image':(isVid?'video':(isAud?'audio':'unknown')), filename: req.file.originalname, size_bytes: req.file.size };
     if (isImg && canonicalizeImage) {
       const canonBuf = await canonicalizeImage(buf);
-      const canonHash = crypto.createHash('sha256').update(canonBuf).digest('hex');
       r.canonical = {
-        algorithm: 'sha256',
-        fingerprint: canonHash,
+        algorithm: 'perceptual_hash',
+        fingerprint: canonBuf.toString('hex'),
         version: 'img:v2'
       };
-    };
     }
     else if (isVid) r.canonical = runVideoWorker(wp);
     else if (isAud) r.canonical = runAudioWorker(wp);
