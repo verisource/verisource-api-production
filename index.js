@@ -12,6 +12,8 @@ const cors = require('cors');
 const PORT = process.env.PORT || 8080;
 let canonicalizeImage;
 try { ({ canonicalizeImage } = require("./canonicalization.js")); } catch (e) {}
+const { searchByFingerprint, saveVerification, getStats } = require('./search');
+const { hybridSearch } = require('./search-hybrid');
 function runVideoWorker(p) { const r = spawnSync("node", ["worker/video-worker.js", p], { encoding: "utf8", maxBuffer: 100*1024*1024 }); if (r.status !== 0) throw new Error(r.stderr || "failed"); return JSON.parse(r.stdout); }
 function runAudioWorker(p) { const r = spawnSync("node", ["worker/audio-worker.js", p], { encoding: "utf8", maxBuffer: 100*1024*1024 }); if (r.status !== 0) throw new Error(r.stderr || "failed"); return JSON.parse(r.stdout); }
 const app = express();
@@ -50,3 +52,29 @@ app.post("/verify", upload.single("file"), async (req, res) => {
   finally { try { if (fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path); if (wp !== req.file.path && fs.existsSync(wp)) fs.unlinkSync(wp); } catch(e){} }
 });
 app.listen(PORT, () => console.log("API on :" + PORT));
+
+// Statistics endpoint
+app.get("/stats", async (req, res) => {
+  try {
+    const stats = await getStats();
+    res.json(stats);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Direct search endpoint
+app.post("/search", async (req, res) => {
+  const { fingerprint } = req.body;
+  
+  if (!fingerprint) {
+    return res.status(400).json({ error: "Fingerprint required" });
+  }
+  
+  try {
+    const results = await searchByFingerprint(fingerprint);
+    res.json(results);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
