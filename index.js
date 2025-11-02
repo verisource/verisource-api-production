@@ -39,6 +39,7 @@ app.post("/verify", upload.single("file"), async (req, res) => {
       const canonBuf = await canonicalizeImage(buf);
       const crypto = require('crypto');
       const hash = crypto.createHash('sha256').update(canonBuf).digest('hex');
+        fingerprint = hash;
       r.canonical = {
         algorithm: 'sha256',
         fingerprint: hash,
