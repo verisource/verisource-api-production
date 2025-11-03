@@ -1,20 +1,16 @@
-// PostgreSQL connection with initialization support
+const { Pool } = require('pg');
 
 let pool = null;
-let dbAvailable = false;
-let connectionPromise = null;
+let isReady = false;
 
-async function connect() {
+async function initialize() {
   if (!process.env.DATABASE_URL) {
     console.log('⚠️ DATABASE_URL not configured');
     return false;
   }
 
   try {
-    console.log('✅ DATABASE_URL found');
-    console.log('🔌 Connecting to PostgreSQL...');
-    
-    const { Pool } = require('pg');
+    console.log('🔌 Initializing PostgreSQL...');
     
     pool = new Pool({
       connectionString: process.env.DATABASE_URL,
@@ -22,51 +18,35 @@ async function connect() {
       connectionTimeoutMillis: 10000,
       max: 10
     });
-    
-    // Test connection
+
     const client = await pool.connect();
-    console.log('✅ PostgreSQL client connected');
-    
     const result = await client.query('SELECT NOW()');
-    console.log('✅ Database test query successful:', result.rows[0].now);
-    
     client.release();
-    dbAvailable = true;
     
-    pool.on('error', (err) => {
-      console.error('⚠️ Database error:', err.message);
-      dbAvailable = false;
-    });
-    
+    console.log('✅ PostgreSQL initialized:', result.rows[0].now);
+    isReady = true;
     return true;
     
   } catch (error) {
-    console.error('❌ Database connection failed:', error.message);
-    dbAvailable = false;
+    console.error('❌ PostgreSQL initialization failed:', error.message);
+    isReady = false;
     return false;
   }
 }
 
-// Start connection immediately
-connectionPromise = connect();
-
-const query = async (text, params) => {
-  // Wait for connection to be ready
-  await connectionPromise;
-  
-  if (!pool || !dbAvailable) {
-    throw new Error('Database not available');
+async function query(text, params) {
+  if (!isReady || !pool) {
+    throw new Error('Database not initialized');
   }
   return pool.query(text, params);
-};
+}
 
-const isAvailable = () => dbAvailable;
-
-// Wait for connection to be ready
-const waitForConnection = () => connectionPromise;
+function isAvailable() {
+  return isReady;
+}
 
 module.exports = {
+  initialize,
   query,
-  isAvailable,
-  waitForConnection
+  isAvailable
 };
