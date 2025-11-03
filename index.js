@@ -140,6 +140,115 @@ app.post("/verify", upload.single("file"), async (req, res) => {
   }
 });
 
+// Test database connection
+app.get("/db-test", async (req, res) => {
+  try {
+    const dbMin = require('./db-minimal');
+    const result = await dbMin.query('SELECT NOW() as time, version() as version');
+    res.json({
+      success: true,
+      connected: true,
+      time: result.rows[0].time,
+      version: result.rows[0].version
+    });
+  } catch (error) {
+    res.json({
+      success: false,
+      connected: false,
+      error: error.message
+    });
+  }
+});
+
+// Create tables endpoint
+app.post("/db-create-tables", async (req, res) => {
+  try {
+    const dbMin = require('./db-minimal');
+    
+    await dbMin.query(`
+      CREATE TABLE IF NOT EXISTS verifications (
+        id SERIAL PRIMARY KEY,
+        fingerprint VARCHAR(64) NOT NULL,
+        fingerprint_algorithm VARCHAR(20) DEFAULT 'sha256',
+        original_filename VARCHAR(255),
+        file_size INTEGER,
+        file_type VARCHAR(50),
+        media_kind VARCHAR(20),
+        upload_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        ip_address VARCHAR(45)
+      );
+      
+      CREATE INDEX IF NOT EXISTS idx_fingerprint ON verifications(fingerprint);
+      CREATE INDEX IF NOT EXISTS idx_upload_date ON verifications(upload_date DESC);
+    `);
+    
+    const count = await dbMin.query('SELECT COUNT(*) FROM verifications');
+    
+    res.json({
+      success: true,
+      message: 'Tables created',
+      records: count.rows[0].count
+    });
+  } catch (error) {
+    res.json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// Save verification to database (test)
+app.post("/db-save-test", async (req, res) => {
+  try {
+    const dbMin = require('./db-minimal');
+    const { fingerprint, filename } = req.body;
+    
+    const result = await dbMin.query(
+      `INSERT INTO verifications (fingerprint, original_filename, file_size, media_kind) 
+       VALUES (app.get("/health", $2, $3, $4) RETURNING id, upload_date`,
+      [fingerprint || 'test123', filename || 'test.txt', 100, 'test']
+    );
+    
+    res.json({
+      success: true,
+      saved: true,
+      id: result.rows[0].id,
+      date: result.rows[0].upload_date
+    });
+  } catch (error) {
+    res.json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// Search database (test)
+app.get("/db-search-test/:fingerprint", async (req, res) => {
+  try {
+    const dbMin = require('./db-minimal');
+    const { fingerprint } = req.params;
+    
+    const result = await dbMin.query(
+      'SELECT * FROM verifications WHERE fingerprint = app.get("/health" ORDER BY upload_date',
+      [fingerprint]
+    );
+    
+    res.json({
+      success: true,
+      found: result.rows.length > 0,
+      count: result.rows.length,
+      matches: result.rows
+    });
+  } catch (error) {
+    res.json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+
 app.get("/health", (req, res) => {
   res.json({ status: "ok", uptime: process.uptime() });
 });
