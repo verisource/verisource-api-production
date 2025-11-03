@@ -133,6 +133,39 @@ app.get("/stats", (req, res) => {
   res.json({ message: 'Database being configured', total_verifications: 0 });
 });
 
+
+// Debug endpoint to check DATABASE_URL
+app.get("/debug-env", (req, res) => {
+  res.json({
+    has_database_url: !!process.env.DATABASE_URL,
+    database_url_format: process.env.DATABASE_URL ? 
+      process.env.DATABASE_URL.substring(0, 20) + '...' : 
+      'NOT SET',
+    node_env: process.env.NODE_ENV,
+    port: process.env.PORT
+  });
+});
+
+// Manual database initialization
+app.post("/init-database", async (req, res) => {
+  try {
+    const { initDatabase } = require('./init-db');
+    const result = await initDatabase();
+    
+    res.json({ 
+      success: result,
+      message: result ? 'Database tables created successfully' : 'Database not available or initialization failed',
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    res.status(500).json({ 
+      success: false, 
+      error: error.message,
+      stack: error.stack
+    });
+  }
+});
+
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`✅ VeriSource API running on port ${PORT}`);
