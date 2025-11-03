@@ -66,6 +66,19 @@ app.post("/verify", upload.single("file"), async (req, res) => {
       r.canonical = audResult.canonical;
     }
     
+    
+    // FALLBACK: If no specialized processing, hash raw file
+    if (!r.canonical) {
+      const crypto = require('crypto');
+      const hash = crypto.createHash('sha256').update(buf).digest('hex');
+      r.canonical = {
+        algorithm: 'sha256',
+        fingerprint: hash,
+        version: 'raw:v1'
+      };
+      console.log('Generated fallback fingerprint');
+    }
+    
     // Mock verification history (database being configured)
     r.verification_history = {
       internal: { 
