@@ -34,6 +34,7 @@ try { ({ runWorker: runVideoWorker } = require('./videoWorker.cjs')); } catch(e)
 try { ({ runWorker: runAudioWorker } = require('./audioWorker.cjs')); } catch(e) {}
 
 app.post("/verify", upload.single("file"), async (req, res) => {
+  let wp = req.file?.path;
   try {
     if (!req.file) return res.status(400).json({ error: "No file uploaded" });
     
