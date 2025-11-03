@@ -2,16 +2,6 @@ const db = require('./db');
 
 async function searchByFingerprint(fingerprint) {
   try {
-    // Ensure database is initialized
-    if (!db.isAvailable()) {
-      console.log('⚠️ Database not available for search');
-      return {
-        found: false,
-        is_first_verification: true,
-        message: 'Database temporarily unavailable'
-      };
-    }
-    
     const query = `
       SELECT * FROM verifications 
       WHERE fingerprint = $1
@@ -23,43 +13,36 @@ async function searchByFingerprint(fingerprint) {
     if (result.rows.length === 0) {
       return {
         found: false,
-        is_first_verification: true,
-        message: "First time this file has been verified"
+        is_first_verification: true
       };
     }
     
-    const matches = result.rows;
     return {
       found: true,
       is_first_verification: false,
-      total_verifications: matches.length,
-      first_seen: matches[0].upload_date,
-      first_filename: matches[0].original_filename,
-      matches: matches.map(m => ({
+      total_verifications: result.rows.length,
+      first_seen: result.rows[0].upload_date,
+      first_filename: result.rows[0].original_filename,
+      matches: result.rows.map(m => ({
         verification_id: m.id,
         date: m.upload_date,
-        filename: m.original_filename,
-        file_size: m.file_size
+        filename: m.original_filename
       }))
     };
     
   } catch (error) {
-    console.error('❌ Search error:', error.message);
+    // Database not available - just log and continue
+    console.log('⚠️ Database unavailable:', error.message);
     return {
       found: false,
       is_first_verification: true,
-      message: 'Search failed: ' + error.message
+      message: 'Database temporarily unavailable'
     };
   }
 }
 
 async function saveVerification(data) {
   try {
-    if (!db.isAvailable()) {
-      console.log('⚠️ Database not available for save');
-      return null;
-    }
-    
     const query = `
       INSERT INTO verifications (
         fingerprint, fingerprint_algorithm, original_filename,
@@ -87,21 +70,13 @@ async function saveVerification(data) {
     };
     
   } catch (error) {
-    console.error('❌ Save error:', error.message);
+    console.log('⚠️ Save failed:', error.message);
     return null;
   }
 }
 
 async function getStats() {
   try {
-    if (!db.isAvailable()) {
-      console.log('⚠️ Database not available for stats, isAvailable():', db.isAvailable());
-      return {
-        message: 'Database being configured',
-        total_verifications: 0
-      };
-    }
-    
     const query = `
       SELECT 
         COUNT(*) as total_verifications,
@@ -116,10 +91,10 @@ async function getStats() {
     return result.rows[0];
     
   } catch (error) {
-    console.error('❌ Stats error:', error.message);
+    console.log('⚠️ Stats unavailable:', error.message);
     return {
-      error: 'Database error',
-      message: error.message
+      message: 'Database temporarily unavailable',
+      total_verifications: 0
     };
   }
 }

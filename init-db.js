@@ -2,12 +2,6 @@ const db = require('./db');
 
 async function initDatabase() {
   try {
-    // Database should already be initialized by index.js
-    if (!db.isAvailable()) {
-      console.log('⚠️ Database not available for table creation');
-      return false;
-    }
-    
     console.log('🔨 Creating database tables...');
     
     const createTableQuery = `
@@ -28,16 +22,15 @@ async function initDatabase() {
     `;
     
     await db.query(createTableQuery);
-    console.log('✅ Tables created/verified successfully');
+    console.log('✅ Tables created successfully');
     
-    // Count existing records
     const result = await db.query('SELECT COUNT(*) FROM verifications');
-    console.log('📊 Current records in database:', result.rows[0].count);
+    console.log('📊 Records:', result.rows[0].count);
     
     return true;
     
   } catch (error) {
-    console.error('❌ Table creation failed:', error.message);
+    console.log('⚠️ Table creation skipped:', error.message);
     return false;
   }
 }
