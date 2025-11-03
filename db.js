@@ -1,50 +1,59 @@
-// PostgreSQL connection with graceful fallback
+// PostgreSQL connection with initialization support
 
 let pool = null;
 let dbAvailable = false;
+let connectionPromise = null;
 
-try {
+async function connect() {
   if (!process.env.DATABASE_URL) {
-    console.log('⚠️ DATABASE_URL not configured - database features disabled');
-  } else {
-    console.log('✅ DATABASE_URL found, connecting to PostgreSQL...');
+    console.log('⚠️ DATABASE_URL not configured');
+    return false;
+  }
+
+  try {
+    console.log('✅ DATABASE_URL found');
+    console.log('🔌 Connecting to PostgreSQL...');
+    
     const { Pool } = require('pg');
     
     pool = new Pool({
       connectionString: process.env.DATABASE_URL,
       ssl: { rejectUnauthorized: false },
-      connectionTimeoutMillis: 5000,
+      connectionTimeoutMillis: 10000,
       max: 10
     });
     
-    pool.on('connect', () => {
-      console.log('✅ PostgreSQL connected successfully');
-      dbAvailable = true;
-    });
+    // Test connection
+    const client = await pool.connect();
+    console.log('✅ PostgreSQL client connected');
+    
+    const result = await client.query('SELECT NOW()');
+    console.log('✅ Database test query successful:', result.rows[0].now);
+    
+    client.release();
+    dbAvailable = true;
     
     pool.on('error', (err) => {
-      console.error('⚠️ PostgreSQL error:', err.message);
+      console.error('⚠️ Database error:', err.message);
       dbAvailable = false;
     });
     
-    // Test connection immediately
-    pool.query('SELECT NOW()', (err, res) => {
-      if (err) {
-        console.error('⚠️ Database test query failed:', err.message);
-        dbAvailable = false;
-      } else {
-        console.log('✅ Database test query successful:', res.rows[0].now);
-        dbAvailable = true;
-      }
-    });
+    return true;
+    
+  } catch (error) {
+    console.error('❌ Database connection failed:', error.message);
+    dbAvailable = false;
+    return false;
   }
-} catch (error) {
-  console.error('⚠️ Database initialization error:', error.message);
-  console.log('⚠️ Application will continue without database features');
 }
 
-// Safe query wrapper
+// Start connection immediately
+connectionPromise = connect();
+
 const query = async (text, params) => {
+  // Wait for connection to be ready
+  await connectionPromise;
+  
   if (!pool || !dbAvailable) {
     throw new Error('Database not available');
   }
@@ -53,7 +62,11 @@ const query = async (text, params) => {
 
 const isAvailable = () => dbAvailable;
 
+// Wait for connection to be ready
+const waitForConnection = () => connectionPromise;
+
 module.exports = {
   query,
-  isAvailable
+  isAvailable,
+  waitForConnection
 };

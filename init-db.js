@@ -2,12 +2,17 @@ const db = require('./db');
 
 async function initDatabase() {
   try {
-    if (!db.isAvailable || !db.isAvailable()) {
-      console.log('⚠️ Database not available, skipping initialization');
+    console.log('⏳ Waiting for database connection...');
+    
+    // Wait for connection to be ready
+    await db.waitForConnection();
+    
+    if (!db.isAvailable()) {
+      console.log('⚠️ Database connection failed, skipping table creation');
       return false;
     }
     
-    console.log('🔨 Initializing database tables...');
+    console.log('🔨 Creating database tables...');
     
     const createTableQuery = `
       CREATE TABLE IF NOT EXISTS verifications (
@@ -27,12 +32,17 @@ async function initDatabase() {
     `;
     
     await db.query(createTableQuery);
-    console.log('✅ Database tables created/verified');
+    console.log('✅ Database tables created successfully');
+    
+    // Verify tables exist
+    const checkQuery = "SELECT COUNT(*) FROM verifications";
+    const result = await db.query(checkQuery);
+    console.log('📊 Current verifications in database:', result.rows[0].count);
+    
     return true;
     
   } catch (error) {
-    console.error('⚠️ Database initialization failed:', error.message);
-    console.log('⚠️ App will continue without database');
+    console.error('❌ Database initialization failed:', error.message);
     return false;
   }
 }
