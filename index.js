@@ -204,8 +204,7 @@ app.post("/db-save-test", async (req, res) => {
     const { fingerprint, filename } = req.body;
     
     const result = await dbMin.query(
-      `INSERT INTO verifications (fingerprint, original_filename, file_size, media_kind) 
-       VALUES (app.get("/health", $2, $3, $4) RETURNING id, upload_date`,
+      'INSERT INTO verifications (fingerprint, original_filename, file_size, media_kind) VALUES ($1, $2, $3, $4) RETURNING id, upload_date',
       [fingerprint || 'test123', filename || 'test.txt', 100, 'test']
     );
     
@@ -222,6 +221,13 @@ app.post("/db-save-test", async (req, res) => {
     });
   }
 });
+  } catch (error) {
+    res.json({
+      success: false,
+      error: error.message
+    });
+  }
+});
 
 // Search database (test)
 app.get("/db-search-test/:fingerprint", async (req, res) => {
@@ -230,7 +236,7 @@ app.get("/db-search-test/:fingerprint", async (req, res) => {
     const { fingerprint } = req.params;
     
     const result = await dbMin.query(
-      'SELECT * FROM verifications WHERE fingerprint = app.get("/health" ORDER BY upload_date',
+      'SELECT * FROM verifications WHERE fingerprint = $1 ORDER BY upload_date',
       [fingerprint]
     );
     
@@ -240,6 +246,13 @@ app.get("/db-search-test/:fingerprint", async (req, res) => {
       count: result.rows.length,
       matches: result.rows
     });
+  } catch (error) {
+    res.json({
+      success: false,
+      error: error.message
+    });
+  }
+});
   } catch (error) {
     res.json({
       success: false,
