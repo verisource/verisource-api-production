@@ -1,48 +1,82 @@
 const { Pool } = require('pg');
 
-let pool = null;
-let isReady = false;
+// Global state
+const state = {
+  pool: null,
+  ready: false,
+  initializing: false,
+  initPromise: null
+};
 
 async function initialize() {
-  if (!process.env.DATABASE_URL) {
-    console.log('⚠️ DATABASE_URL not configured');
-    return false;
+  // Return existing promise if already initializing
+  if (state.initializing) {
+    return state.initPromise;
   }
-
-  try {
-    console.log('🔌 Initializing PostgreSQL...');
-    
-    pool = new Pool({
-      connectionString: process.env.DATABASE_URL,
-      ssl: { rejectUnauthorized: false },
-      connectionTimeoutMillis: 10000,
-      max: 10
-    });
-
-    const client = await pool.connect();
-    const result = await client.query('SELECT NOW()');
-    client.release();
-    
-    console.log('✅ PostgreSQL initialized:', result.rows[0].now);
-    isReady = true;
+  
+  // Already initialized
+  if (state.ready) {
     return true;
-    
-  } catch (error) {
-    console.error('❌ PostgreSQL initialization failed:', error.message);
-    isReady = false;
-    return false;
   }
+  
+  state.initializing = true;
+  state.initPromise = (async () => {
+    if (!process.env.DATABASE_URL) {
+      console.log('⚠️ DATABASE_URL not set - database disabled');
+      state.ready = false;
+      state.initializing = false;
+      return false;
+    }
+
+    try {
+      console.log('🔌 Connecting to PostgreSQL...');
+      
+      state.pool = new Pool({
+        connectionString: process.env.DATABASE_URL,
+        ssl: { rejectUnauthorized: false },
+        connectionTimeoutMillis: 10000,
+        max: 10
+      });
+
+      // Test connection
+      const client = await state.pool.connect();
+      const result = await client.query('SELECT NOW()');
+      client.release();
+      
+      console.log('✅ PostgreSQL connected:', result.rows[0].now);
+      state.ready = true;
+      state.initializing = false;
+      
+      return true;
+      
+    } catch (error) {
+      console.error('❌ PostgreSQL connection failed:', error.message);
+      state.ready = false;
+      state.initializing = false;
+      state.pool = null;
+      return false;
+    }
+  })();
+  
+  return state.initPromise;
 }
 
 async function query(text, params) {
-  if (!isReady || !pool) {
-    throw new Error('Database not initialized');
+  if (!state.ready) {
+    throw new Error('Database not ready');
   }
-  return pool.query(text, params);
+  return state.pool.query(text, params);
 }
 
 function isAvailable() {
-  return isReady;
+  return state.ready;
+}
+
+// Initialize immediately when module loads
+if (process.env.DATABASE_URL) {
+  initialize().catch(err => {
+    console.error('Database auto-init failed:', err);
+  });
 }
 
 module.exports = {

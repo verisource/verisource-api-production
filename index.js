@@ -43,19 +43,7 @@ const limiter = rateLimit({
 });
 app.use(limiter);
 
-// Initialize database immediately
-const db = require('./db');
-const { initDatabase } = require('./init-db');
 
-(async () => {
-  const dbConnected = await db.initialize();
-  if (dbConnected) {
-    console.log('✅ Database connected, initializing tables...');
-    await initDatabase();
-  } else {
-    console.log('⚠️ Database not connected');
-  }
-})();
 
 
 let canonicalizeImage, runVideoWorker, runAudioWorker;
@@ -184,4 +172,32 @@ app.post("/init-database", async (req, res) => {
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`✅ VeriSource API running on port ${PORT}`);
+});
+
+
+// Start server after database initializes
+async function startServer() {
+  const db = require('./db');
+  const { initDatabase } = require('./init-db');
+  
+  // Wait for database
+  const dbReady = await db.initialize();
+  if (dbReady) {
+    console.log('✅ Database ready, creating tables...');
+    await initDatabase();
+  } else {
+    console.log('⚠️ Database not available, continuing without it');
+  }
+  
+  // Start Express server
+  const PORT = process.env.PORT || 3000;
+  app.listen(PORT, () => {
+    console.log(`✅ VeriSource API running on port ${PORT}`);
+    console.log(`📊 Database available: ${db.isAvailable()}`);
+  });
+}
+
+startServer().catch(err => {
+  console.error('Failed to start server:', err);
+  process.exit(1);
 });
