@@ -43,6 +43,21 @@ const limiter = rateLimit({
 });
 app.use(limiter);
 
+// Initialize database immediately
+const db = require('./db');
+const { initDatabase } = require('./init-db');
+
+(async () => {
+  const dbConnected = await db.initialize();
+  if (dbConnected) {
+    console.log('✅ Database connected, initializing tables...');
+    await initDatabase();
+  } else {
+    console.log('⚠️ Database not connected');
+  }
+})();
+
+
 let canonicalizeImage, runVideoWorker, runAudioWorker;
 try { ({ canonicalizeImage } = require('./imageCanonicalize.cjs')); } catch(e) {}
 try { ({ runWorker: runVideoWorker } = require('./videoWorker.cjs')); } catch(e) {}
