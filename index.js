@@ -262,9 +262,39 @@ app.post("/verify", upload.single("file"), async (req, res) => {
     const fingerprint = r.canonical.fingerprint;
     const searchResults = await searchByFingerprint(fingerprint);
     
+    // Generate pHash for images (BEFORE saving to database)
+    if (r.kind === 'image' && req.file && req.file.path) {
+      try {
+        console.log('🔍 Generating pHash...');
+        const phashResult = await generatePHash(req.file.path);
+        if (phashResult.success) {
+          r.phash = phashResult.phash;
+          console.log('✅ pHash generated:', r.phash);
+        }
+      } catch (err) {
+        console.error('⚠️ pHash error:', err.message);
+      }
+    }
+    
     // Save this verification to database
     const ipAddress = req.ip || req.connection.remoteAddress;
     await saveVerification(fingerprint, req.file.originalname, req.file.size, r.kind, ipAddress, r.phash || null);
+    
+    // Search for similar images in database
+    if (r.phash && dbReady) {
+      try {
+        console.log('🔎 Searching for similar images...');
+        const similarImages = await searchSimilarImages(r.phash, db);
+        r.similar_images = {
+          found: similarImages.length > 0,
+          count: similarImages.length,
+          matches: similarImages.slice(0, 10)
+        };
+        console.log(`✅ Similar search: ${similarImages.length} matches`);
+      } catch (err) {
+        console.error('⚠️ Similar search error:', err.message);
+      }
+    }
     
     // Add verification history to response
     r.verification_history = { internal: searchResults };
@@ -277,39 +307,7 @@ app.post("/verify", upload.single("file"), async (req, res) => {
         console.log('✅ VirusTotal search complete:', r.external_search.found ? 'FOUND' : 'NOT FOUND');
     
     
-    // Generate perceptual hash for images (similar image detection)
-    if (r.kind === 'image' && req.file && req.file.path) {
-      try {
-        console.log('🔍 Generating pHash...');
-        const phashResult = await generatePHash(req.file.path);
-        if (phashResult.success) {
-          r.phash = phashResult.phash;
-          console.log('✅ pHash generated:', r.phash);
-          
-          // Search for similar images in database
-          if (dbReady) {
-            try {
-              console.log('🔎 Searching for similar images...');
-              const similarImages = await searchSimilarImages(r.phash, db);
-              r.similar_images = {
-                found: similarImages.length > 0,
-                count: similarImages.length,
-                matches: similarImages.slice(0, 10)
-              };
-              console.log(`✅ Similar image search: ${similarImages.length} matches`);
-            } catch (err) {
-              console.error('⚠️ Similar image search failed:', err.message);
-            }
-          }
-        } else {
-          console.log('⚠️ pHash generation failed:', phashResult.error);
-        }
-      } catch (err) {
-        console.error('⚠️ pHash error:', err.message);
-      }
-    }
-    
-    // Add Google Vision analysis for images
+        // Add Google Vision analysis for images
     if (r.kind === 'image' && req.file && req.file.path) {
       try {
         console.log('🔍 Analyzing with Google Vision...');
