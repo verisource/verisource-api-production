@@ -1,0 +1,150 @@
+require('dotenv').config();
+const express = require('express');
+const multer = require('multer');
+const rateLimit = require('express-rate-limit');
+const fs = require('fs');
+const path = require('path');
+const os = require('os');
+
+const app = express();
+
+app.use(express.json());
+app.set('trust proxy', true);
+
+// CORS configuration
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type');
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(200);
+  }
+  next();
+});
+
+
+const upload = multer({ 
+  dest: os.tmpdir(),
+  limits: { fileSize: 100 * 1024 * 1024 }
+});
+
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // limit each IP to 100 requests per windowMs
+  standardHeaders: true,
+  legacyHeaders: false,
+  // Fix for trust proxy warning
+  validate: { trustProxy: false }
+});
+app.use(limiter);
+
+let canonicalizeImage, runVideoWorker, runAudioWorker;
+try { ({ canonicalizeImage } = require('./imageCanonicalize.cjs')); } catch(e) {}
+try { ({ runWorker: runVideoWorker } = require('./videoWorker.cjs')); } catch(e) {}
+try { ({ runWorker: runAudioWorker } = require('./audioWorker.cjs')); } catch(e) {}
+
+app.post("/verify", upload.single("file"), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: "No file uploaded" });
+    
+    let wp = req.file.path;
+    const buf = fs.readFileSync(req.file.path);
+    const isImg = /^image\//i.test(req.file.mimetype);
+    const isVid = /^video\//i.test(req.file.mimetype);
+    const isAud = /^audio\//i.test(req.file.mimetype);
+    
+    if (isVid || isAud) {
+      wp = req.file.path + (path.extname(req.file.originalname) || (isVid?'.mp4':'.mp3'));
+      fs.copyFileSync(req.file.path, wp);
+    }
+    
+    let r = { 
+      kind: isImg ? 'image' : (isVid ? 'video' : 'audio'),
+      filename: req.file.originalname,
+      size_bytes: req.file.size
+    };
+    
+    
+    // Process file and generate fingerprint
+    let fingerprint = null;
+    
+    if (isImg && canonicalizeImage) {
+      try {
+        const canonBuf = await canonicalizeImage(buf);
+        const crypto = require('crypto');
+        const hash = crypto.createHash('sha256').update(canonBuf).digest('hex');
+        fingerprint = hash;
+        r.canonical = {
+          algorithm: 'sha256',
+          fingerprint: hash,
+          version: 'img:v2'
+        };
+      } catch (err) {
+        console.error('Image processing error:', err);
+      }
+    } else if (isVid && runVideoWorker) {
+      try {
+        const vidResult = runVideoWorker(wp);
+        r.canonical = vidResult.canonical;
+        fingerprint = vidResult.canonical?.fingerprint;
+      } catch (err) {
+        console.error('Video processing error:', err);
+      }
+    } else if (isAud && runAudioWorker) {
+      try {
+        const audResult = runAudioWorker(wp);
+        r.canonical = audResult.canonical;
+        fingerprint = audResult.canonical?.fingerprint;
+      } catch (err) {
+        console.error('Audio processing error:', err);
+      }
+    }
+    
+    // FALLBACK: If no specialized processing, just hash the raw file
+    if (!r.canonical) {
+      const crypto = require('crypto');
+      const hash = crypto.createHash('sha256').update(buf).digest('hex');
+      fingerprint = hash;
+      r.canonical = {
+        algorithm: 'sha256',
+        fingerprint: hash,
+        version: 'raw:v1'
+      };
+    }
+    
+    // Mock verification history (database being configured)
+    r.verification_history = {
+      internal: { 
+        found: false, 
+        is_first_verification: true,
+        message: 'Verification successful - database being configured'
+      }
+    };
+    
+    res.json(r);
+    
+  } catch (e) {
+    console.error('Verification error:', e);
+    res.status(500).json({ error: e.message });
+  } finally {
+    try {
+      if (req.file && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
+      if (wp && wp !== req.file.path && fs.existsSync(wp)) fs.unlinkSync(wp);
+    } catch(cleanupErr) {
+      console.error('Cleanup error:', cleanupErr);
+    }
+  }
+});
+
+app.get("/health", (req, res) => {
+  res.json({ status: "ok", uptime: process.uptime() });
+});
+
+app.get("/stats", (req, res) => {
+  res.json({ message: 'Database being configured', total_verifications: 0 });
+});
+
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`✅ VeriSource API running on port ${PORT}`);
+});

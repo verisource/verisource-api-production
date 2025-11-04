@@ -204,6 +204,21 @@ app.post("/verify", upload.single("file"), async (req, res) => {
     // Add verification history to response
     r.verification_history = { internal: searchResults };
     
+    // Add external search if we have a fingerprint
+    if (r.canonical && r.canonical.fingerprint) {
+      try {
+        console.log('🔍 Searching VirusTotal for:', r.canonical.fingerprint);
+        r.external_search = await searchVirusTotal(r.canonical.fingerprint);
+        console.log('✅ VirusTotal search complete:', r.external_search.found ? 'FOUND' : 'NOT FOUND');
+      } catch (err) {
+        console.error('❌ External search error:', err);
+        r.external_search = {
+          enabled: false,
+          error: 'External search failed: ' + err.message
+        };
+      }
+    }
+    
     res.json(r);
   } catch (e) {
     console.error('Verification error:', e);
@@ -312,6 +327,107 @@ app.get("/stats", async (req, res) => {
 });
 
 // --- Misc endpoints ---
+
+
+// ============================================================================
+// VIRUSTOTAL EXTERNAL SEARCH
+// ============================================================================
+
+/**
+ * Search for a file hash on VirusTotal
+ * @param {string} sha256 - SHA256 hash of the file
+ * @returns {Object} Search results
+ */
+async function searchVirusTotal(sha256) {
+  const apiKey = process.env.VIRUSTOTAL_API_KEY;
+  
+  if (!apiKey) {
+    return {
+      enabled: false,
+      service: 'VirusTotal',
+      error: 'API key not configured. Set VIRUSTOTAL_API_KEY environment variable.'
+    };
+  }
+
+  try {
+    const axios = require('axios');
+    const response = await axios.get(
+      `https://www.virustotal.com/api/v3/files/${sha256}`,
+      {
+        headers: { 'x-apikey': apiKey },
+        timeout: 5000
+      }
+    );
+    
+    const data = response.data.data;
+    const attrs = data.attributes;
+    
+    return {
+      enabled: true,
+      found: true,
+      service: 'VirusTotal',
+      results: {
+        sha256: sha256,
+        file_names: attrs.names || [],
+        file_type: attrs.type_description,
+        file_size: attrs.size,
+        first_seen: attrs.first_submission_date 
+          ? new Date(attrs.first_submission_date * 1000).toISOString() 
+          : null,
+        last_seen: attrs.last_submission_date 
+          ? new Date(attrs.last_submission_date * 1000).toISOString() 
+          : null,
+        times_submitted: attrs.times_submitted,
+        malware_detections: {
+          malicious: attrs.last_analysis_stats?.malicious || 0,
+          suspicious: attrs.last_analysis_stats?.suspicious || 0,
+          undetected: attrs.last_analysis_stats?.undetected || 0,
+          harmless: attrs.last_analysis_stats?.harmless || 0,
+          total_scanners: attrs.last_analysis_stats?.total || 0
+        },
+        view_url: `https://www.virustotal.com/gui/file/${sha256}`,
+        reputation: attrs.reputation || 0,
+        tags: attrs.tags || []
+      }
+    };
+    
+  } catch (error) {
+    if (error.response?.status === 404) {
+      return {
+        enabled: true,
+        found: false,
+        service: 'VirusTotal',
+        message: 'File hash not found in VirusTotal database'
+      };
+    }
+    
+    if (error.response?.status === 429) {
+      return {
+        enabled: true,
+        found: false,
+        service: 'VirusTotal',
+        error: 'Rate limit exceeded. Free tier: 500 requests/day, 4 requests/minute.'
+      };
+    }
+    
+    if (error.response?.status === 401 || error.response?.status === 403) {
+      return {
+        enabled: true,
+        found: false,
+        service: 'VirusTotal',
+        error: 'Invalid API key. Check your VIRUSTOTAL_API_KEY.'
+      };
+    }
+    
+    return {
+      enabled: true,
+      found: false,
+      service: 'VirusTotal',
+      error: error.message
+    };
+  }
+}
+
 app.get("/health", (req, res) => res.json({ status: "ok", uptime: process.uptime() }));
 
 app.get("/debug-env", (req, res) => res.json({
