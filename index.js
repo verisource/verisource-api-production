@@ -48,6 +48,7 @@ app.use(limiter);
 // Using db-minimal consistently throughout
 const db = require('./db-minimal');
 const { analyzeImage } = require('./google-vision-search');
+const { generatePHash, searchSimilarImages } = require('./phash-module');
 
 // Track database readiness
 let dbReady = false;
@@ -79,6 +80,23 @@ async function initializeDatabase() {
     `);
     
     console.log('🔨 Creating indexes...');
+    // Add pHash column if it doesn't exist (for similar image detection)
+    await db.query(`
+      ALTER TABLE verifications 
+      ADD COLUMN IF NOT EXISTS phash VARCHAR(64)
+    `);
+    
+    console.log('🔨 Creating pHash index...');
+    await db.query('CREATE INDEX IF NOT EXISTS idx_phash ON verifications(phash) WHERE phash IS NOT NULL');
+    // Add pHash column if it doesn't exist (for similar image detection)
+    await db.query(`
+      ALTER TABLE verifications 
+      ADD COLUMN IF NOT EXISTS phash VARCHAR(64)
+    `);
+    
+    console.log('🔨 Creating pHash index...');
+    await db.query('CREATE INDEX IF NOT EXISTS idx_phash ON verifications(phash) WHERE phash IS NOT NULL');
+    
     await db.query('CREATE INDEX IF NOT EXISTS idx_fingerprint ON verifications(fingerprint)');
     await db.query('CREATE INDEX IF NOT EXISTS idx_upload_date ON verifications(upload_date DESC)');
     
@@ -142,10 +160,10 @@ async function saveVerification(fingerprint, filename, fileSize, mediaKind, ipAd
   
   try {
     const result = await db.query(
-      `INSERT INTO verifications (fingerprint, original_filename, file_size, media_kind, ip_address)
-       VALUES ($1, $2, $3, $4, $5)
+      `INSERT INTO verifications (fingerprint, original_filename, file_size, media_kind, ip_address, phash)
+       VALUES ($1, $2, $3, $4, $5, $6)
        RETURNING id, upload_date`,
-      [fingerprint, filename, fileSize, mediaKind, ipAddress]
+      [fingerprint, filename, fileSize, mediaKind, ipAddress, r.phash || null]
     );
     
     console.log(`✅ Saved verification to database: ID ${result.rows[0].id}`);
@@ -193,6 +211,62 @@ app.post("/verify", upload.single("file"), async (req, res) => {
         fingerprint: crypto.createHash('sha256').update(canonBuf).digest('hex'), 
         version: 'img:v2' 
       };
+      
+      // Generate perceptual hash for similar image detection
+      try {
+        console.log('🔍 Generating pHash...');
+        const phashResult = await generatePHash(req.file.path);
+        if (phashResult.success) {
+          r.phash = phashResult.phash;
+          console.log('✅ pHash generated:', r.phash);
+        }
+      } catch (err) {
+        console.error('⚠️ pHash generation failed:', err.message);
+      }
+      
+      // Search for similar images in database
+      if (r.phash && dbReady) {
+        try {
+          console.log('🔎 Searching for similar images...');
+          const similarImages = await searchSimilarImages(r.phash, db);
+          r.similar_images = {
+            found: similarImages.length > 0,
+            count: similarImages.length,
+            matches: similarImages.slice(0, 10) // Limit to top 10
+          };
+          console.log(`✅ Similar image search complete: ${similarImages.length} matches found`);
+        } catch (err) {
+          console.error('⚠️ Similar image search failed:', err.message);
+        }
+      }
+      
+      // Generate perceptual hash for similar image detection
+      try {
+        console.log('🔍 Generating pHash...');
+        const phashResult = await generatePHash(req.file.path);
+        if (phashResult.success) {
+          r.phash = phashResult.phash;
+          console.log('✅ pHash generated:', r.phash);
+        }
+      } catch (err) {
+        console.error('⚠️ pHash generation failed:', err.message);
+      }
+      
+      // Search for similar images in database
+      if (r.phash && dbReady) {
+        try {
+          console.log('🔎 Searching for similar images...');
+          const similarImages = await searchSimilarImages(r.phash, db);
+          r.similar_images = {
+            found: similarImages.length > 0,
+            count: similarImages.length,
+            matches: similarImages.slice(0, 10) // Limit to top 10
+          };
+          console.log(`✅ Similar image search complete: ${similarImages.length} matches found`);
+        } catch (err) {
+          console.error('⚠️ Similar image search failed:', err.message);
+        }
+      }
     } else if (isVid && runVideoWorker) {
       const vidResult = runVideoWorker(wp);
       r.canonical = vidResult.canonical;
