@@ -152,7 +152,7 @@ async function searchByFingerprint(fingerprint) {
 }
 
 // --- Helper function to save verification ---
-async function saveVerification(fingerprint, filename, fileSize, mediaKind, ipAddress) {
+async function saveVerification(fingerprint, filename, fileSize, mediaKind, ipAddress, phash = null) {
   if (!dbReady) {
     console.log('⚠️ Skipping database save - database not ready');
     return null;
@@ -163,7 +163,7 @@ async function saveVerification(fingerprint, filename, fileSize, mediaKind, ipAd
       `INSERT INTO verifications (fingerprint, original_filename, file_size, media_kind, ip_address, phash)
        VALUES ($1, $2, $3, $4, $5, $6)
        RETURNING id, upload_date`,
-      [fingerprint, filename, fileSize, mediaKind, ipAddress, r.phash || null]
+      [fingerprint, filename, fileSize, mediaKind, ipAddress, phash]
     );
     
     console.log(`✅ Saved verification to database: ID ${result.rows[0].id}`);
@@ -264,7 +264,7 @@ app.post("/verify", upload.single("file"), async (req, res) => {
     
     // Save this verification to database
     const ipAddress = req.ip || req.connection.remoteAddress;
-    await saveVerification(fingerprint, req.file.originalname, req.file.size, r.kind, ipAddress);
+    await saveVerification(fingerprint, req.file.originalname, req.file.size, r.kind, ipAddress, r.phash || null);
     
     // Add verification history to response
     r.verification_history = { internal: searchResults };
