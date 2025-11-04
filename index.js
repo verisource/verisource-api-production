@@ -7,6 +7,18 @@ const path = require('path');
 const os = require('os');
 
 const app = express();
+
+// Configure trust proxy for Railway deployment
+// Only trust Railway's proxy, not arbitrary proxies
+if (process.env.RAILWAY_ENVIRONMENT) {
+  // Railway deployment - trust the Railway proxy
+  app.set('trust proxy', 1);
+} else {
+  // Local development - no proxy
+  app.set('trust proxy', false);
+}
+
+
 app.use(express.json());
 
 // --- CORS ---
@@ -18,11 +30,13 @@ app.use((req, res, next) => {
   next();
 });
 
-app.set('trust proxy', true);
+
 
 const upload = multer({ dest: os.tmpdir(), limits: { fileSize: 100 * 1024 * 1024 } });
 
 const limiter = rateLimit({
+  standardHeaders: true, // Return rate limit info in headers
+  legacyHeaders: false, // Disable X-RateLimit-* headers
   windowMs: 15 * 60 * 1000,
   max: 100,
   standardHeaders: true,
