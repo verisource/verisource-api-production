@@ -8,7 +8,7 @@
  * - Watermarked
  */
 
-const { imageHash } = require('imghash');
+const imghash = require('imghash');
 const sharp = require('sharp');
 const fs = require('fs');
 
@@ -19,8 +19,8 @@ const fs = require('fs');
  */
 async function generatePHash(input) {
     try {
-        // Generate pHash (16-bit by default)
-        const hash = await imageHash(input, 16, 'hex');
+        // imghash.hash() is the correct function
+        const hash = await imghash.hash(input, 16, 'hex');
         
         return {
             success: true,
@@ -113,15 +113,15 @@ async function searchSimilarImages(phash, db) {
         // Get all image verifications with pHash from database
         const allImages = await db.query(`
             SELECT 
-                verification_id,
-                filename,
+                id as verification_id,
+                original_filename as filename,
                 phash,
-                verified_at,
+                upload_date as verified_at,
                 file_size
             FROM verifications
-            WHERE kind = 'image'
+            WHERE media_kind = 'image'
             AND phash IS NOT NULL
-            ORDER BY verified_at DESC
+            ORDER BY upload_date DESC
             LIMIT 1000
         `);
         
