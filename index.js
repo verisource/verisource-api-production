@@ -7,165 +7,49 @@ const path = require('path');
 const os = require('os');
 
 const app = express();
-
 app.use(express.json());
 
-// CORS configuration - MUST be before other middleware
+// --- CORS ---
 app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');
   res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
   res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
-  
-  // Handle preflight requests
-  if (req.method === 'OPTIONS') {
-    res.sendStatus(200);
-  } else {
-    next();
-  }
+  if (req.method === 'OPTIONS') return res.sendStatus(200);
+  next();
 });
 
 app.set('trust proxy', true);
 
-const upload = multer({ 
-  dest: os.tmpdir(),
-  limits: { fileSize: 100 * 1024 * 1024 }
-});
+const upload = multer({ dest: os.tmpdir(), limits: { fileSize: 100 * 1024 * 1024 } });
 
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 100,
   standardHeaders: true,
-  legacyHeaders: false,
-  validate: {
-    trustProxy: false,
-    xForwardedForHeader: false
-  }
+  legacyHeaders: false
 });
 app.use(limiter);
 
-// Initialize database immediately
-const db = require('./db');
-const { initDatabase } = require('./init-db');
+// --- Database module ---
+// Using db-minimal consistently throughout
+const db = require('./db-minimal');
 
-(async () => {
-  const dbConnected = await db.initialize();
-  if (dbConnected) {
-    console.log('✅ Database connected, initializing tables...');
-    await initDatabase();
-  } else {
-    console.log('⚠️ Database not connected');
-  }
-})();
+// Track database readiness
+let dbReady = false;
 
-
-let canonicalizeImage, runVideoWorker, runAudioWorker;
-try { ({ canonicalizeImage } = require('./imageCanonicalize.cjs')); } catch(e) {}
-try { ({ runWorker: runVideoWorker } = require('./videoWorker.cjs')); } catch(e) {}
-try { ({ runWorker: runAudioWorker } = require('./audioWorker.cjs')); } catch(e) {}
-
-app.post("/verify", upload.single("file"), async (req, res) => {
-  let wp = req.file?.path;
+// --- Database initialization ---
+async function initializeDatabase() {
   try {
-    if (!req.file) return res.status(400).json({ error: "No file uploaded" });
+    console.log('🔌 Initializing database connection...');
     
-    let wp = req.file.path;
-    const buf = fs.readFileSync(req.file.path);
-    const isImg = /^image\//i.test(req.file.mimetype);
-    const isVid = /^video\//i.test(req.file.mimetype);
-    const isAud = /^audio\//i.test(req.file.mimetype);
+    // Test connection
+    const testResult = await db.query('SELECT NOW() as time, version() as version');
+    console.log('✅ Database connected:', testResult.rows[0].time);
+    console.log('📊 PostgreSQL version:', testResult.rows[0].version);
     
-    if (isVid || isAud) {
-      wp = req.file.path + (path.extname(req.file.originalname) || (isVid?'.mp4':'.mp3'));
-      fs.copyFileSync(req.file.path, wp);
-    }
-    
-    let r = { 
-      kind: isImg ? 'image' : (isVid ? 'video' : 'audio'),
-      filename: req.file.originalname,
-      size_bytes: req.file.size
-    };
-    
-    // Process file and generate fingerprint
-    if (isImg && canonicalizeImage) {
-      const canonBuf = await canonicalizeImage(buf);
-      const crypto = require('crypto');
-      const hash = crypto.createHash('sha256').update(canonBuf).digest('hex');
-      r.canonical = {
-        algorithm: 'sha256',
-        fingerprint: hash,
-        version: 'img:v2'
-      };
-    } else if (isVid && runVideoWorker) {
-      const vidResult = runVideoWorker(wp);
-      r.canonical = vidResult.canonical;
-    } else if (isAud && runAudioWorker) {
-      const audResult = runAudioWorker(wp);
-      r.canonical = audResult.canonical;
-    }
-    
-    
-    // FALLBACK: If no specialized processing, hash raw file
-    if (!r.canonical) {
-      const crypto = require('crypto');
-      const hash = crypto.createHash('sha256').update(buf).digest('hex');
-      r.canonical = {
-        algorithm: 'sha256',
-        fingerprint: hash,
-        version: 'raw:v1'
-      };
-      console.log('Generated fallback fingerprint');
-    }
-    
-    // Mock verification history (database being configured)
-    r.verification_history = {
-      internal: { 
-        found: false, 
-        is_first_verification: true,
-        message: 'Verification successful - database being configured'
-      }
-    };
-    
-    res.json(r);
-    
-  } catch (e) {
-    console.error('Verification error:', e);
-    res.status(500).json({ error: e.message });
-  } finally {
-    try {
-      if (req.file && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
-      if (wp && wp !== req.file.path && fs.existsSync(wp)) fs.unlinkSync(wp);
-    } catch(cleanupErr) {
-      console.error('Cleanup error:', cleanupErr);
-    }
-  }
-});
-
-// Test database connection
-app.get("/db-test", async (req, res) => {
-  try {
-    const dbMin = require('./db-minimal');
-    const result = await dbMin.query('SELECT NOW() as time, version() as version');
-    res.json({
-      success: true,
-      connected: true,
-      time: result.rows[0].time,
-      version: result.rows[0].version
-    });
-  } catch (error) {
-    res.json({
-      success: false,
-      connected: false,
-      error: error.message
-    });
-  }
-});
-
-// Create tables endpoint
-app.post("/db-create-tables", async (req, res) => {
-  try {
-    const dbMin = require('./db-minimal');
-    
-    await dbMin.query(`
+    // Create tables (split into separate queries)
+    console.log('🔨 Creating verifications table...');
+    await db.query(`
       CREATE TABLE IF NOT EXISTS verifications (
         id SERIAL PRIMARY KEY,
         fingerprint VARCHAR(64) NOT NULL,
@@ -176,121 +60,293 @@ app.post("/db-create-tables", async (req, res) => {
         media_kind VARCHAR(20),
         upload_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         ip_address VARCHAR(45)
-      );
-      
-      CREATE INDEX IF NOT EXISTS idx_fingerprint ON verifications(fingerprint);
-      CREATE INDEX IF NOT EXISTS idx_upload_date ON verifications(upload_date DESC);
+      )
     `);
     
-    const count = await dbMin.query('SELECT COUNT(*) FROM verifications');
+    console.log('🔨 Creating indexes...');
+    await db.query('CREATE INDEX IF NOT EXISTS idx_fingerprint ON verifications(fingerprint)');
+    await db.query('CREATE INDEX IF NOT EXISTS idx_upload_date ON verifications(upload_date DESC)');
     
-    res.json({
-      success: true,
-      message: 'Tables created',
-      records: count.rows[0].count
-    });
-  } catch (error) {
-    res.json({
-      success: false,
-      error: error.message
-    });
+    // Get record count
+    const countResult = await db.query('SELECT COUNT(*) as count FROM verifications');
+    console.log(`✅ Database initialized successfully. Current records: ${countResult.rows[0].count}`);
+    
+    dbReady = true;
+    return true;
+  } catch (err) {
+    console.error('❌ Database initialization error:', err.message);
+    console.error('⚠️ Application will continue without database features');
+    dbReady = false;
+    return false;
   }
-});
+}
 
-// Save verification to database (test)
-app.post("/db-save-test", async (req, res) => {
-  try {
-    const dbMin = require('./db-minimal');
-    const { fingerprint, filename } = req.body;
-    
-    const result = await dbMin.query(
-      `INSERT INTO verifications (fingerprint, original_filename, file_size, media_kind) 
-       VALUES (app.get("/health", $2, $3, $4) RETURNING id, upload_date`,
-      [fingerprint || 'test123', filename || 'test.txt', 100, 'test']
-    );
-    
-    res.json({
-      success: true,
-      saved: true,
-      id: result.rows[0].id,
-      date: result.rows[0].upload_date
-    });
-  } catch (error) {
-    res.json({
-      success: false,
-      error: error.message
-    });
+// --- Helper function to search database ---
+async function searchByFingerprint(fingerprint) {
+  if (!dbReady) {
+    return { found: false, is_first_verification: true, message: 'Database not available' };
   }
-});
-
-// Search database (test)
-app.get("/db-search-test/:fingerprint", async (req, res) => {
+  
   try {
-    const dbMin = require('./db-minimal');
-    const { fingerprint } = req.params;
-    
-    const result = await dbMin.query(
-      'SELECT * FROM verifications WHERE fingerprint = app.get("/health" ORDER BY upload_date',
+    const result = await db.query(
+      'SELECT * FROM verifications WHERE fingerprint = $1 ORDER BY upload_date',
       [fingerprint]
     );
     
-    res.json({
-      success: true,
-      found: result.rows.length > 0,
-      count: result.rows.length,
-      matches: result.rows
-    });
-  } catch (error) {
-    res.json({
-      success: false,
-      error: error.message
-    });
+    if (result.rows.length === 0) {
+      return { found: false, is_first_verification: true };
+    }
+    
+    const firstVerification = result.rows[0];
+    const allVerifications = result.rows.map(row => ({
+      date: row.upload_date,
+      filename: row.original_filename,
+      size: row.file_size,
+      ip: row.ip_address
+    }));
+    
+    return {
+      found: true,
+      is_first_verification: false,
+      first_seen: firstVerification.upload_date,
+      verification_count: result.rows.length,
+      verifications: allVerifications
+    };
+  } catch (err) {
+    console.error('Database search error:', err.message);
+    return { found: false, is_first_verification: true, message: 'Database search failed' };
+  }
+}
+
+// --- Helper function to save verification ---
+async function saveVerification(fingerprint, filename, fileSize, mediaKind, ipAddress) {
+  if (!dbReady) {
+    console.log('⚠️ Skipping database save - database not ready');
+    return null;
+  }
+  
+  try {
+    const result = await db.query(
+      `INSERT INTO verifications (fingerprint, original_filename, file_size, media_kind, ip_address)
+       VALUES ($1, $2, $3, $4, $5)
+       RETURNING id, upload_date`,
+      [fingerprint, filename, fileSize, mediaKind, ipAddress]
+    );
+    
+    console.log(`✅ Saved verification to database: ID ${result.rows[0].id}`);
+    return result.rows[0];
+  } catch (err) {
+    console.error('Database save error:', err.message);
+    return null;
+  }
+}
+
+// --- File verification endpoint ---
+let canonicalizeImage, runVideoWorker, runAudioWorker;
+try { ({ canonicalizeImage } = require('./imageCanonicalize.cjs')); } catch {}
+try { ({ runWorker: runVideoWorker } = require('./videoWorker.cjs')); } catch {}
+try { ({ runWorker: runAudioWorker } = require('./audioWorker.cjs')); } catch {}
+
+app.post("/verify", upload.single("file"), async (req, res) => {
+  let wp = req.file?.path;
+  try {
+    if (!req.file) return res.status(400).json({ error: "No file uploaded" });
+    
+    const buf = fs.readFileSync(req.file.path);
+    const isImg = /^image\//i.test(req.file.mimetype);
+    const isVid = /^video\//i.test(req.file.mimetype);
+    const isAud = /^audio\//i.test(req.file.mimetype);
+    
+    if (isVid || isAud) {
+      wp = req.file.path + (path.extname(req.file.originalname) || (isVid ? '.mp4' : '.mp3'));
+      fs.copyFileSync(req.file.path, wp);
+    }
+    
+    let r = { 
+      kind: isImg ? 'image' : (isVid ? 'video' : 'audio'), 
+      filename: req.file.originalname, 
+      size_bytes: req.file.size 
+    };
+    
+    const crypto = require('crypto');
+    
+    // Generate fingerprint
+    if (isImg && canonicalizeImage) {
+      const canonBuf = await canonicalizeImage(buf);
+      r.canonical = { 
+        algorithm: 'sha256', 
+        fingerprint: crypto.createHash('sha256').update(canonBuf).digest('hex'), 
+        version: 'img:v2' 
+      };
+    } else if (isVid && runVideoWorker) {
+      const vidResult = runVideoWorker(wp);
+      r.canonical = vidResult.canonical;
+    } else if (isAud && runAudioWorker) {
+      const audResult = runAudioWorker(wp);
+      r.canonical = audResult.canonical;
+    } else {
+      r.canonical = { 
+        algorithm: 'sha256', 
+        fingerprint: crypto.createHash('sha256').update(buf).digest('hex'), 
+        version: 'raw:v1' 
+      };
+      console.log('Generated fallback fingerprint');
+    }
+    
+    // Search database for existing verifications
+    const fingerprint = r.canonical.fingerprint;
+    const searchResults = await searchByFingerprint(fingerprint);
+    
+    // Save this verification to database
+    const ipAddress = req.ip || req.connection.remoteAddress;
+    await saveVerification(fingerprint, req.file.originalname, req.file.size, r.kind, ipAddress);
+    
+    // Add verification history to response
+    r.verification_history = { internal: searchResults };
+    
+    res.json(r);
+  } catch (e) {
+    console.error('Verification error:', e);
+    res.status(500).json({ error: e.message });
+  } finally {
+    try {
+      if (req.file && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
+      if (req.file && wp && wp !== req.file.path && fs.existsSync(wp)) fs.unlinkSync(wp);
+    } catch (cleanupErr) { console.error('Cleanup error:', cleanupErr); }
   }
 });
 
-
-app.get("/health", (req, res) => {
-  res.json({ status: "ok", uptime: process.uptime() });
+// --- Database test endpoints ---
+app.get("/db-test", async (req, res) => {
+  try {
+    const result = await db.query('SELECT NOW() as time, version() as version');
+    res.json({ 
+      success: true, 
+      connected: true, 
+      time: result.rows[0].time, 
+      version: result.rows[0].version 
+    });
+  } catch (error) {
+    res.json({ success: false, connected: false, error: error.message });
+  }
 });
 
-app.get("/stats", (req, res) => {
-  res.json({ message: 'Database being configured', total_verifications: 0 });
+app.post("/db-create-tables", async (req, res) => {
+  try {
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS verifications (
+        id SERIAL PRIMARY KEY,
+        fingerprint VARCHAR(64) NOT NULL,
+        fingerprint_algorithm VARCHAR(20) DEFAULT 'sha256',
+        original_filename VARCHAR(255),
+        file_size INTEGER,
+        file_type VARCHAR(50),
+        media_kind VARCHAR(20),
+        upload_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        ip_address VARCHAR(45)
+      )
+    `);
+    await db.query('CREATE INDEX IF NOT EXISTS idx_fingerprint ON verifications(fingerprint)');
+    await db.query('CREATE INDEX IF NOT EXISTS idx_upload_date ON verifications(upload_date DESC)');
+    
+    const count = await db.query('SELECT COUNT(*) as count FROM verifications');
+    res.json({ success: true, message: 'Tables created', records: count.rows[0].count });
+  } catch (error) {
+    res.json({ success: false, error: error.message });
+  }
 });
 
-
-// Debug endpoint to check DATABASE_URL
-app.get("/debug-env", (req, res) => {
-  res.json({
-    has_database_url: !!process.env.DATABASE_URL,
-    database_url_format: process.env.DATABASE_URL ? 
-      process.env.DATABASE_URL.substring(0, 20) + '...' : 
-      'NOT SET',
-    node_env: process.env.NODE_ENV,
-    port: process.env.PORT
-  });
+app.post("/db-save-test", async (req, res) => {
+  try {
+    const { fingerprint, filename } = req.body;
+    const result = await db.query(
+      `INSERT INTO verifications (fingerprint, original_filename, file_size, media_kind)
+       VALUES ($1, $2, $3, $4)
+       RETURNING id, upload_date`,
+      [fingerprint || 'test123', filename || 'test.txt', 100, 'test']
+    );
+    res.json({ 
+      success: true, 
+      saved: true, 
+      id: result.rows[0].id, 
+      date: result.rows[0].upload_date 
+    });
+  } catch (error) {
+    res.json({ success: false, error: error.message });
+  }
 });
 
-// Manual database initialization
+app.get("/db-search-test/:fingerprint", async (req, res) => {
+  try {
+    const { fingerprint } = req.params;
+    const result = await db.query(
+      'SELECT * FROM verifications WHERE fingerprint = $1 ORDER BY upload_date',
+      [fingerprint]
+    );
+    res.json({ 
+      success: true, 
+      found: result.rows.length > 0, 
+      count: result.rows.length, 
+      matches: result.rows 
+    });
+  } catch (error) {
+    res.json({ success: false, error: error.message });
+  }
+});
+
+// --- Stats endpoint ---
+app.get("/stats", async (req, res) => {
+  if (!dbReady) {
+    return res.json({ message: 'Database being configured', total_verifications: 0 });
+  }
+  
+  try {
+    const result = await db.query('SELECT COUNT(*) as count FROM verifications');
+    res.json({ 
+      total_verifications: parseInt(result.rows[0].count),
+      database_status: 'connected'
+    });
+  } catch (error) {
+    res.json({ message: 'Database error', total_verifications: 0, error: error.message });
+  }
+});
+
+// --- Misc endpoints ---
+app.get("/health", (req, res) => res.json({ status: "ok", uptime: process.uptime() }));
+
+app.get("/debug-env", (req, res) => res.json({
+  has_database_url: !!process.env.DATABASE_URL,
+  database_url_format: process.env.DATABASE_URL ? process.env.DATABASE_URL.substring(0, 20) + '...' : 'NOT SET',
+  node_env: process.env.NODE_ENV,
+  port: process.env.PORT,
+  database_ready: dbReady
+}));
+
 app.post("/init-database", async (req, res) => {
   try {
-    const { initDatabase } = require('./init-db');
-    const result = await initDatabase();
-    
+    const result = await initializeDatabase();
     res.json({ 
-      success: result,
-      message: result ? 'Database tables created successfully' : 'Database not available or initialization failed',
-      timestamp: new Date().toISOString()
+      success: result, 
+      message: result ? 'Database tables created successfully' : 'Database initialization failed', 
+      timestamp: new Date().toISOString() 
     });
   } catch (error) {
-    res.status(500).json({ 
-      success: false, 
-      error: error.message,
-      stack: error.stack
-    });
+    res.status(500).json({ success: false, error: error.message, stack: error.stack });
   }
 });
 
+// --- Start server with proper async initialization ---
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`✅ VeriSource API running on port ${PORT}`);
-});
+
+(async () => {
+  console.log('🚀 Starting VeriSource API...');
+  
+  // Initialize database before starting server
+  await initializeDatabase();
+  
+  // Start server
+  app.listen(PORT, () => {
+    console.log(`✅ VeriSource API running on port ${PORT}`);
+    console.log(`📊 Database status: ${dbReady ? 'READY' : 'NOT AVAILABLE'}`);
+  });
+})();
