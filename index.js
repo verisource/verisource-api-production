@@ -47,6 +47,7 @@ app.use(limiter);
 // --- Database module ---
 // Using db-minimal consistently throughout
 const db = require('./db-minimal');
+const { analyzeImage } = require('./google-vision-search');
 
 // Track database readiness
 let dbReady = false;
@@ -224,6 +225,23 @@ app.post("/verify", upload.single("file"), async (req, res) => {
         console.log('🔍 Searching VirusTotal for:', r.canonical.fingerprint);
         r.external_search = await searchVirusTotal(r.canonical.fingerprint);
         console.log('✅ VirusTotal search complete:', r.external_search.found ? 'FOUND' : 'NOT FOUND');
+    
+    // Add Google Vision analysis for images
+    if (r.kind === 'image' && req.file && req.file.path) {
+      try {
+        console.log('🔍 Analyzing with Google Vision...');
+        const fs = require('fs');
+        const imageBuffer = fs.readFileSync(req.file.path);
+        r.google_vision = await analyzeImage(imageBuffer);
+        console.log('✅ Google Vision analysis complete');
+      } catch (err) {
+        console.error('❌ Google Vision error:', err);
+        r.google_vision = {
+          enabled: false,
+          error: 'Google Vision analysis failed: ' + err.message
+        };
+      }
+    }
       } catch (err) {
         console.error('❌ External search error:', err);
         r.external_search = {
