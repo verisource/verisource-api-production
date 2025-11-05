@@ -7,6 +7,7 @@ const express = require('express');
 const router = express.Router();
 const multer = require('multer');
 const path = require('path');
+const os = require('os');
 const batchProcessor = require('../services/batchProcessor');
 const batchStore = require('../services/batchStore');
 
