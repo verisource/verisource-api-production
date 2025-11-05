@@ -49,6 +49,7 @@ app.use(limiter);
 const db = require('./db-minimal');
 const { analyzeImage } = require('./google-vision-search');
 const { generatePHash, searchSimilarImages } = require('./phash-module');
+const { detectAIGeneration } = require('./ai-image-detector');
 const { calculateConfidenceScore } = require('./confidence-scoring');
 
 // Track database readiness
@@ -334,11 +335,23 @@ app.post("/verify", upload.single("file"), async (req, res) => {
     }
     
 // Calculate confidence score
+    // Run AI detection for images
+    if (r.kind === 'image' && req.file && req.file.path) {
+      try {
+        console.log('🤖 Running AI detection...');
+        r.ai_detection = await detectAIGeneration(req.file.path);
+        console.log('✅ AI detection:', r.ai_detection.likely_ai_generated ? 'LIKELY AI' : 'LIKELY REAL');
+      } catch (err) {
+        console.error('⚠️ AI detection error:', err.message);
+      }
+    }
+    
     r.confidence = calculateConfidenceScore({
       kind: r.kind,
       google_vision: r.google_vision,
       phash: r.phash,
       verified_at: new Date(),
+      ai_detection: r.ai_detection,
       dispute_count: 0
     });
     

@@ -1,3 +1,4 @@
+const { detectAIGeneration } = require('./ai-image-detector');
 /**
  * Confidence Scoring System for VeriSource
  * 4 Clear Levels: HIGH, MEDIUM, LOW, DISPUTED
@@ -107,6 +108,21 @@ function analyzeExternalSearch(verification) {
 function analyzeForensics(verification) {
   let score = 20;
   const details = ['✅ No obvious manipulation detected'];
+  
+  // Check AI detection if available
+  if (verification.ai_detection) {
+    if (verification.ai_detection.likely_ai_generated) {
+      score = 0;
+      details.length = 0;
+      details.push('❌ AI-generated content detected (' + verification.ai_detection.ai_confidence + '% confidence)');
+      verification.ai_detection.indicators.forEach(function(ind) {
+        details.push('⚠️ ' + ind);
+      });
+    } else if (verification.ai_detection.ai_confidence > 30) {
+      score = 10;
+      details.push('⚠️ Possible AI generation (' + verification.ai_detection.ai_confidence + '% confidence)');
+    }
+  }
   
   return { score, details };
 }
