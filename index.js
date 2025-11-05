@@ -49,6 +49,7 @@ app.use(limiter);
 const db = require('./db-minimal');
 const { analyzeImage } = require('./google-vision-search');
 const { generatePHash, searchSimilarImages } = require('./phash-module');
+const { calculateConfidenceScore } = require('./confidence-scoring');
 
 // Track database readiness
 let dbReady = false;
@@ -332,7 +333,16 @@ app.post("/verify", upload.single("file"), async (req, res) => {
       }
     }
     
-    res.json(r);
+// Calculate confidence score
+    r.confidence = calculateConfidenceScore({
+      kind: r.kind,
+      google_vision: r.google_vision,
+      phash: r.phash,
+      verified_at: new Date(),
+      dispute_count: 0
+    });
+    
+        res.json(r);
   } catch (e) {
     console.error('Verification error:', e);
     res.status(500).json({ error: e.message });
