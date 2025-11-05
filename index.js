@@ -6,8 +6,13 @@ const rateLimit = require('express-rate-limit');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
-
+// View engine for batch dashboard
 const app = express();
+
+// View engine for batch dashboard
+app.set('view engine', 'ejs');
+app.set('views', path.join(__dirname, 'views'));
+app.use(express.static(path.join(__dirname, 'public')));
 
 // Configure trust proxy for Railway deployment
 // Only trust Railway's proxy, not arbitrary proxies
@@ -45,8 +50,11 @@ const limiter = rateLimit({
 });
 app.use(limiter);
 
-// --- Database module ---
-// Using db-minimal consistently throughout
+// Batch upload routes
+const batchRoutes = require('./routes/batch');
+app.use('/api', batchRoutes);
+app.use('/', batchRoutes);
+
 const { analyzeVideo } = require('./video-analyzer');
 const db = require('./db-minimal');
 const { analyzeImage } = require('./google-vision-search');

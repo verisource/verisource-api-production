@@ -38,3 +38,7 @@ temp/
 
 # Google Cloud credentials
 google-vision-key.json
+
+# Bulk upload temporary files
+uploads/temp/*
+*.upload
