@@ -1,6 +1,5 @@
 require('dotenv').config();
 const express = require('express');
-const mime = require('mime-types');
 const multer = require('multer');
 const rateLimit = require('express-rate-limit');
 const fs = require('fs');
@@ -47,12 +46,9 @@ app.use(limiter);
 
 // --- Database module ---
 // Using db-minimal consistently throughout
-const { analyzeVideo } = require('./video-analyzer');
 const db = require('./db-minimal');
 const { analyzeImage } = require('./google-vision-search');
 const { generatePHash, searchSimilarImages } = require('./phash-module');
-const { detectAIGeneration } = require('./ai-image-detector');
-const { calculateConfidenceScore } = require('./confidence-scoring');
 
 // Track database readiness
 let dbReady = false;
@@ -185,26 +181,22 @@ try { ({ runWorker: runVideoWorker } = require('./videoWorker.cjs')); } catch {}
 try { ({ runWorker: runAudioWorker } = require('./audioWorker.cjs')); } catch {}
 
 app.post("/verify", upload.single("file"), async (req, res) => {
-    let kind = "unknown";
-
   let wp = req.file?.path;
   try {
     if (!req.file) return res.status(400).json({ error: "No file uploaded" });
     
     const buf = fs.readFileSync(req.file.path);
-    const dm = req.file.mimetype === "application/octet-stream" ? (mime.lookup(req.file.originalname) || req.file.mimetype) : req.file.mimetype;
-    const isImg = /^image\//i.test(dm);
-    const isVid = dm.startsWith("video/") || ['.mp4','.mov','.avi','.webm'].some(e => req.file.originalname.toLowerCase().endsWith(e));
-    const isAud = /^audio\//i.test(dm);
-    kind = isImg ? "image" : (isVid ? "video" : (isAud ? "audio" : "unknown"));
-                
+    const isImg = /^image\//i.test(req.file.mimetype);
+    const isVid = /^video\//i.test(req.file.mimetype);
+    const isAud = /^audio\//i.test(req.file.mimetype);
+    
     if (isVid || isAud) {
       wp = req.file.path + (path.extname(req.file.originalname) || (isVid ? '.mp4' : '.mp3'));
       fs.copyFileSync(req.file.path, wp);
     }
     
     let r = { 
-      kind: kind, 
+      kind: isImg ? 'image' : (isVid ? 'video' : 'audio'), 
       filename: req.file.originalname, 
       size_bytes: req.file.size 
     };
@@ -269,26 +261,9 @@ app.post("/verify", upload.single("file"), async (req, res) => {
     // Search database for existing verifications
     const fingerprint = r.canonical.fingerprint;
     const searchResults = await searchByFingerprint(fingerprint);
-
-    // Analyze video if file is video
-    if (kind === 'video') {
-      try {
-        console.log('🎥 Analyzing video file...');
-        r.video_analysis = await analyzeVideo(req.file.path, {
-          fps: 1,
-          maxFrames: 30
-        });
-        console.log('✅ Video analysis complete:', r.video_analysis.analysis?.verdict);
-      } catch (err) {
-        console.error('⚠️ Video analysis error:', err.message);
-        r.video_analysis = {
-          success: false,
-          error: err.message
-        };
-      }
-    }
     
-    // Generate pHash for images (BEFORE saving to database)
+    
+    // Generate perceptual hash for images BEFORE saving to database
     if (r.kind === 'image' && req.file && req.file.path) {
       try {
         console.log('🔍 Generating pHash...');
@@ -296,6 +271,8 @@ app.post("/verify", upload.single("file"), async (req, res) => {
         if (phashResult.success) {
           r.phash = phashResult.phash;
           console.log('✅ pHash generated:', r.phash);
+        } else {
+          console.log('⚠️ pHash generation failed:', phashResult.error);
         }
       } catch (err) {
         console.error('⚠️ pHash error:', err.message);
@@ -306,7 +283,8 @@ app.post("/verify", upload.single("file"), async (req, res) => {
     const ipAddress = req.ip || req.connection.remoteAddress;
     await saveVerification(fingerprint, req.file.originalname, req.file.size, r.kind, ipAddress, r.phash || null);
     
-    // Search for similar images in database
+    
+    // Search for similar images in database (after current image is saved)
     if (r.phash && dbReady) {
       try {
         console.log('🔎 Searching for similar images...');
@@ -316,9 +294,9 @@ app.post("/verify", upload.single("file"), async (req, res) => {
           count: similarImages.length,
           matches: similarImages.slice(0, 10)
         };
-        console.log(`✅ Similar search: ${similarImages.length} matches`);
+        console.log(`✅ Similar image search: ${similarImages.length} matches`);
       } catch (err) {
-        console.error('⚠️ Similar search error:', err.message);
+        console.error('⚠️ Similar image search failed:', err.message);
       }
     }
     
@@ -330,10 +308,15 @@ app.post("/verify", upload.single("file"), async (req, res) => {
       try {
         console.log('🔍 Searching VirusTotal for:', r.canonical.fingerprint);
         r.external_search = await searchVirusTotal(r.canonical.fingerprint);
-        console.log('✅ VirusTotal search complete:', r.external_search.found ? 'FOUND' : 'NOT FOUND');
+        console.log('✅ VirusTotal search complete:', r.external_search.found ? 'FOUND' : 'NOT FOUND'); else {
+          console.log('⚠️ pHash generation failed:', phashResult.error);
+        }
+      } catch (err) {
+        console.error('⚠️ pHash error:', err.message);
+      }
+    }
     
-    
-        // Add Google Vision analysis for images
+    // Add Google Vision analysis for images
     if (r.kind === 'image' && req.file && req.file.path) {
       try {
         console.log('🔍 Analyzing with Google Vision...');
@@ -358,28 +341,7 @@ app.post("/verify", upload.single("file"), async (req, res) => {
       }
     }
     
-// Calculate confidence score
-    // Run AI detection for images
-    if (r.kind === 'image' && req.file && req.file.path) {
-      try {
-        console.log('🤖 Running AI detection...');
-        r.ai_detection = await detectAIGeneration(req.file.path);
-        console.log('✅ AI detection:', r.ai_detection.likely_ai_generated ? 'LIKELY AI' : 'LIKELY REAL');
-      } catch (err) {
-        console.error('⚠️ AI detection error:', err.message);
-      }
-    }
-    
-    r.confidence = calculateConfidenceScore({
-      kind: r.kind,
-      google_vision: r.google_vision,
-      phash: r.phash,
-      verified_at: new Date(),
-      ai_detection: r.ai_detection,
-      dispute_count: 0
-    });
-    
-        res.json(r);
+    res.json(r);
   } catch (e) {
     console.error('Verification error:', e);
     res.status(500).json({ error: e.message });

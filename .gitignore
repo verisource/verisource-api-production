@@ -35,3 +35,6 @@ test-*.wav
 tmp/
 temp/
 *.tmp
+
+# Google Cloud credentials
+google-vision-key.json

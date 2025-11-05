@@ -1,0 +1,124 @@
+const ffmpeg = require('fluent-ffmpeg');
+const path = require('path');
+const fs = require('fs');
+const { generatePHash, searchSimilarImages } = require('./phash-module');
+const { detectAIGeneration } = require('./ai-image-detector');
+
+async function extractFrames(videoPath, fps = 1) {
+  return new Promise((resolve, reject) => {
+    const outputDir = path.join(path.dirname(videoPath), 'frames');
+    if (!fs.existsSync(outputDir)) {
+      fs.mkdirSync(outputDir, { recursive: true });
+    }
+    const outputPattern = path.join(outputDir, 'frame_%04d.jpg');
+    console.log('Extracting frames from video at', fps, 'fps...');
+    ffmpeg(videoPath)
+      .on('end', () => {
+        const frames = fs.readdirSync(outputDir)
+          .filter(f => f.startsWith('frame_') && f.endsWith('.jpg'))
+          .map(f => path.join(outputDir, f));
+        console.log('Extracted', frames.length, 'frames');
+        resolve({ success: true, frameCount: frames.length, frames: frames, outputDir: outputDir });
+      })
+      .on('error', (err) => {
+        console.error('FFmpeg error:', err.message);
+        reject(err);
+      })
+      .outputOptions(['-vf', 'fps=' + fps, '-q:v', '2'])
+      .output(outputPattern)
+      .run();
+  });
+}
+
+async function getVideoMetadata(videoPath) {
+  return new Promise((resolve, reject) => {
+    ffmpeg.ffprobe(videoPath, (err, metadata) => {
+      if (err) {
+        reject(err);
+      } else {
+        const videoStream = metadata.streams.find(s => s.codec_type === 'video');
+        resolve({
+          duration: metadata.format.duration,
+          format: metadata.format.format_name,
+          size: metadata.format.size,
+          width: videoStream?.width,
+          height: videoStream?.height,
+          codec: videoStream?.codec_name
+        });
+      }
+    });
+  });
+}
+
+async function analyzeVideo(videoPath, options = {}) {
+  const fps = options.fps || 1;
+  const maxFrames = options.maxFrames || 30;
+  try {
+    console.log('Starting video analysis...');
+    const metadata = await getVideoMetadata(videoPath);
+    const extraction = await extractFrames(videoPath, fps);
+    const framesToAnalyze = extraction.frames.slice(0, maxFrames);
+    console.log('Analyzing', framesToAnalyze.length, 'frames...');
+    const frameResults = [];
+    let suspiciousFrames = 0;
+    let aiGeneratedFrames = 0;
+    for (let i = 0; i < framesToAnalyze.length; i++) {
+      const framePath = framesToAnalyze[i];
+      const frameNumber = i + 1;
+      try {
+        const phashResult = await generatePHash(framePath);
+        const aiDetection = await detectAIGeneration(framePath);
+        const frameAnalysis = {
+          frameNumber: frameNumber,
+          timestamp: (frameNumber - 1) / fps,
+          phash: phashResult.success ? phashResult.phash : null,
+          aiDetection: aiDetection,
+          suspicious: aiDetection.likely_ai_generated || aiDetection.ai_confidence > 50
+        };
+        if (frameAnalysis.suspicious) suspiciousFrames++;
+        if (aiDetection.likely_ai_generated) aiGeneratedFrames++;
+        frameResults.push(frameAnalysis);
+      } catch (err) {
+        console.error('Error analyzing frame', frameNumber, ':', err.message);
+      }
+    }
+    const analyzedFrames = frameResults.filter(f => !f.error).length;
+    const suspiciousPercentage = (suspiciousFrames / analyzedFrames) * 100;
+    const aiPercentage = (aiGeneratedFrames / analyzedFrames) * 100;
+    let videoConfidence = 100;
+    let verdict = 'AUTHENTIC';
+    if (aiPercentage > 50) {
+      videoConfidence = 20;
+      verdict = 'LIKELY_AI_GENERATED';
+    } else if (suspiciousPercentage > 30) {
+      videoConfidence = 40;
+      verdict = 'SUSPICIOUS';
+    } else if (suspiciousPercentage > 10) {
+      videoConfidence = 70;
+      verdict = 'POSSIBLY_MANIPULATED';
+    }
+    try {
+      fs.rmSync(extraction.outputDir, { recursive: true, force: true });
+    } catch (err) {}
+    return {
+      success: true,
+      metadata: metadata,
+      analysis: {
+        framesAnalyzed: analyzedFrames,
+        totalFrames: extraction.frameCount,
+        suspiciousFrames: suspiciousFrames,
+        aiGeneratedFrames: aiGeneratedFrames,
+        suspiciousPercentage: Math.round(suspiciousPercentage),
+        aiPercentage: Math.round(aiPercentage),
+        videoConfidence: videoConfidence,
+        verdict: verdict
+      },
+      frames: frameResults.slice(0, 10)
+    };
+  } catch (error) {
+    console.error('Video analysis error:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+module.exports = { analyzeVideo, getVideoMetadata, extractFrames };

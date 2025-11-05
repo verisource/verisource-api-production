@@ -1,0 +1,11 @@
+    // Run AI detection for images
+    if (r.kind === 'image' && req.file && req.file.path) {
+      try {
+        console.log('🤖 Running AI detection...');
+        r.ai_detection = await detectAIGeneration(req.file.path);
+        console.log('✅ AI detection:', r.ai_detection.likely_ai_generated ? 'LIKELY AI' : 'LIKELY REAL');
+      } catch (err) {
+        console.error('⚠️ AI detection error:', err.message);
+      }
+    }
+    
