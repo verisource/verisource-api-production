@@ -73,20 +73,40 @@ class ChromaprintService {
       
       console.log('[Chromaprint] Processing:', inputFile);
       
-      // Try the original file first (often works better than conversion)
+      // Try without format specification first
       let stdout, result;
-      try {
-        console.log('[Chromaprint] Trying original file first...');
-        const origResult = await execAsync(`${fpcalc} -json "${audioPath}"`);
-        stdout = origResult.stdout;
-        console.log('[Chromaprint] Original file worked!');
-      } catch (origError) {
-        console.log('[Chromaprint] Original failed, trying converted WAV...');
-        const wavResult = await execAsync(`${fpcalc} -json "${inputFile}"`);
-        stdout = wavResult.stdout;
+      const filesToTry = [audioPath, inputFile];
+      let lastError;
+      
+      for (const tryFile of filesToTry) {
+        try {
+          console.log(`[Chromaprint] Trying: ${tryFile}`);
+          // Try without -json flag first (simpler parsing)
+          const rawResult = await execAsync(`${fpcalc} -raw "${tryFile}"`);
+          console.log(`[Chromaprint] Raw output:`, rawResult.stdout.substring(0, 200));
+          
+          // Parse the raw output (format: DURATION=X\nFINGERPRINT=...)
+          const lines = rawResult.stdout.trim().split('\n');
+          const durationLine = lines.find(l => l.startsWith('DURATION='));
+          const fingerprintLine = lines.find(l => l.startsWith('FINGERPRINT='));
+          
+          if (fingerprintLine) {
+            result = {
+              duration: durationLine ? parseFloat(durationLine.split('=')[1]) : 0,
+              fingerprint: fingerprintLine.split('=')[1]
+            };
+            console.log('[Chromaprint] SUCCESS with raw format!');
+            break;
+          }
+        } catch (error) {
+          console.log(`[Chromaprint] Failed on ${tryFile}:`, error.message);
+          lastError = error;
+        }
       }
       
-      result = JSON.parse(stdout);
+      if (!result || !result.fingerprint) {
+        throw lastError || new Error('Could not generate fingerprint');
+      }
       
       if (!result.fingerprint) {
         throw new Error('Failed to generate audio fingerprint');
