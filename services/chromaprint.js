@@ -72,8 +72,21 @@ class ChromaprintService {
       const inputFile = convertedPath && fs.existsSync(convertedPath) ? convertedPath : audioPath;
       
       console.log('[Chromaprint] Processing:', inputFile);
-      const { stdout } = await execAsync(`${fpcalc} -json "${inputFile}"`);
-      const result = JSON.parse(stdout);
+      
+      // Try the original file first (often works better than conversion)
+      let stdout, result;
+      try {
+        console.log('[Chromaprint] Trying original file first...');
+        const origResult = await execAsync(`${fpcalc} -json "${audioPath}"`);
+        stdout = origResult.stdout;
+        console.log('[Chromaprint] Original file worked!');
+      } catch (origError) {
+        console.log('[Chromaprint] Original failed, trying converted WAV...');
+        const wavResult = await execAsync(`${fpcalc} -json "${inputFile}"`);
+        stdout = wavResult.stdout;
+      }
+      
+      result = JSON.parse(stdout);
       
       if (!result.fingerprint) {
         throw new Error('Failed to generate audio fingerprint');
