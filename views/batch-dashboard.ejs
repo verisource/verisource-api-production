@@ -568,13 +568,13 @@
         </h1>
         <div class="batch-meta">
           <div class="batch-meta-item">
-            <strong>Batch ID:</strong> batch_20241105_a3f2d1
+            <strong>Batch ID:</strong> <%= batch.batchId %>
           </div>
           <div class="batch-meta-item">
-            <strong>Completed:</strong> Nov 5, 2024 at 6:32 PM
+            <strong>Completed:</strong> <%= formatDate(batch.timing.completedAt) %>
           </div>
           <div class="batch-meta-item">
-            <strong>Processing Time:</strong> 4.52 seconds
+            <strong>Processing Time:</strong> <%= (batch.timing.processingTime / 1000).toFixed(2) %> seconds
           </div>
         </div>
       </div>
@@ -595,7 +595,7 @@
     <div class="progress-container">
       <div class="progress-label">
         <span>Processing Status</span>
-        <span>23 of 25 files processed (92%)</span>
+        <span><%= batch.summary.successful %> of <%= batch.summary.total %> files processed (<%= Math.round(batch.summary.successful / batch.summary.total * 100) %>%)</span>
       </div>
       <div class="progress-bar">
         <div class="progress-fill" style="width: 92%"></div>
