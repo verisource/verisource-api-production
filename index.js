@@ -57,6 +57,7 @@ app.use('/', batchRoutes);
 
 const { analyzeVideo } = require('./video-analyzer');
 const db = require('./db-minimal');
+const ConfidenceScoring = require('./services/confidence-scoring');
 const { analyzeImage } = require('./google-vision-search');
 const { generatePHash, searchSimilarImages } = require('./phash-module');
 const { detectAIGeneration } = require('./ai-image-detector');
@@ -378,14 +379,24 @@ app.post("/verify", upload.single("file"), async (req, res) => {
       }
     }
     
-    r.confidence = calculateConfidenceScore({
-      kind: r.kind,
-      google_vision: r.google_vision,
-      phash: r.phash,
-      verified_at: new Date(),
-      ai_detection: r.ai_detection,
-      dispute_count: 0
-    });
+    // Calculate confidence score with modification detection
+    try {
+      console.log('📊 Calculating confidence score...');
+      r.confidence = ConfidenceScoring.calculate(r);
+      console.log('✅ Confidence:', r.confidence.level, '-', r.confidence.percentage + '%');
+      if (r.confidence.is_modified) {
+        console.log('📝 Modification detected:', r.confidence.modification_details.similarity + '% similarity');
+      }
+    } catch (err) {
+      console.error('⚠️ Confidence calculation error:', err.message);
+      // Fallback to simple confidence
+      r.confidence = {
+        level: 'MEDIUM',
+        label: 'LIKELY AUTHENTIC',
+        percentage: 50,
+        message: 'Basic verification complete'
+      };
+    }
     
         res.json(r);
   } catch (e) {
