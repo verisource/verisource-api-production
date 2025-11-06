@@ -315,7 +315,9 @@ app.post("/verify", upload.single("file"), async (req, res) => {
     // Generate Chromaprint for audio (BEFORE saving to database)
     if (r.kind === 'audio' && req.file && req.file.path) {
       try {
-        console.log('🎵 Generating Chromaprint...');
+        console.log('🎵 DEBUG: Audio detected, attempting Chromaprint...');
+        console.log('🎵 DEBUG: wp =', wp);
+        console.log('🎵 DEBUG: req.file.path =', req.file.path);
         const chromaprintResult = await ChromaprintService.generateFingerprint(wp);
         if (chromaprintResult.success) {
           r.chromaprint = chromaprintResult.fingerprint;
