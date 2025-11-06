@@ -58,6 +58,7 @@ app.use('/', batchRoutes);
 const { analyzeVideo } = require('./video-analyzer');
 const db = require('./db-minimal');
 const ConfidenceScoring = require('./services/confidence-scoring');
+const ChromaprintService = require('./services/chromaprint');
 const { analyzeImage } = require('./google-vision-search');
 const { generatePHash, searchSimilarImages } = require('./phash-module');
 const { detectAIGeneration } = require('./ai-image-detector');
@@ -311,9 +312,24 @@ app.post("/verify", upload.single("file"), async (req, res) => {
       }
     }
     
+    // Generate Chromaprint for audio (BEFORE saving to database)
+    if (r.kind === 'audio' && req.file && req.file.path) {
+      try {
+        console.log('🎵 Generating Chromaprint...');
+        const chromaprintResult = await ChromaprintService.generateFingerprint(wp);
+        if (chromaprintResult.success) {
+          r.chromaprint = chromaprintResult.fingerprint;
+          r.audio_duration = chromaprintResult.duration;
+          console.log('✅ Chromaprint generated:', r.chromaprint.substring(0, 20) + '...');
+        }
+      } catch (err) {
+        console.error('⚠️ Chromaprint error:', err.message);
+      }
+    }
+    
     // Save this verification to database
     const ipAddress = req.ip || req.connection.remoteAddress;
-    await saveVerification(fingerprint, req.file.originalname, req.file.size, r.kind, ipAddress, r.phash || null);
+    await saveVerification(fingerprint, req.file.originalname, req.file.size, r.kind, ipAddress, r.phash || null, r.chromaprint || null);
     
     // Search for similar images in database
     if (r.phash && dbReady) {
@@ -328,6 +344,22 @@ app.post("/verify", upload.single("file"), async (req, res) => {
         console.log(`✅ Similar search: ${similarImages.length} matches`);
       } catch (err) {
         console.error('⚠️ Similar search error:', err.message);
+      }
+    }
+    
+    // Search for similar audio in database
+    if (r.chromaprint && dbReady) {
+      try {
+        console.log('🎵 Searching for similar audio...');
+        const similarAudio = await ChromaprintService.searchSimilarAudio(r.chromaprint, db);
+        r.similar_audio = {
+          found: similarAudio.length > 0,
+          count: similarAudio.length,
+          matches: similarAudio.slice(0, 10)
+        };
+        console.log(`✅ Similar audio search: ${similarAudio.length} matches`);
+      } catch (err) {
+        console.error('⚠️ Similar audio search error:', err.message);
       }
     }
     
