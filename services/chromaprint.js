@@ -48,7 +48,7 @@ class ChromaprintService {
       
       try {
         // Convert to 16kHz mono WAV
-        await execAsync(`ffmpeg -i "${audioPath}" -ar 16000 -ac 1 -f wav "${convertedPath}" -y 2>&1`);
+        await execAsync(`ffmpeg -i "${audioPath}" -acodec pcm_s16le -ar 16000 -ac 1 "${convertedPath}" -y 2>&1`);
         console.log('[Chromaprint] Audio converted successfully');
       } catch (convError) {
         console.warn('[Chromaprint] Conversion failed:', convError.message);
