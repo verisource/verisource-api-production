@@ -649,6 +649,41 @@
       </div>
 
       <div class="results-grid">
+      <div class="results-grid">
+        <% batch.results.forEach((result, index) => { %>
+        <div class="result-card <%= result.status %>">
+          <div class="result-header">
+            <h3>
+              <span class="file-icon">🖼️</span>
+              <%= result.filename %>
+            </h3>
+            <span class="status-badge <%= result.status %>">
+              <%= result.status === 'success' ? '✓ Verified' : '✗ Failed' %>
+            </span>
+          </div>
+          <div class="result-body">
+            <div class="meta-grid">
+              <div class="meta-item">
+                <div class="meta-label">File ID</div>
+                <div class="meta-value"><code><%= result.fileId %></code></div>
+              </div>
+              <div class="meta-item">
+                <div class="meta-label">Size</div>
+                <div class="meta-value"><%= formatFileSize(result.metadata.size) %></div>
+              </div>
+              <div class="meta-item">
+                <div class="meta-label">Format</div>
+                <div class="meta-value"><%= result.metadata.format.toUpperCase() %></div>
+              </div>
+              <div class="meta-item">
+                <div class="meta-label">Confidence</div>
+                <div class="meta-value"><%= result.verification.confidence %></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <% }) %>
+      </div>  <!-- End results-grid -->
 
         <!-- Success Card 1 -->
         <div class="result-card success">
