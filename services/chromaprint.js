@@ -48,10 +48,23 @@ class ChromaprintService {
       
       try {
         // Convert to 16kHz mono WAV
-        await execAsync(`ffmpeg -i "${audioPath}" -acodec pcm_s16le -ar 16000 -ac 1 "${convertedPath}" -y 2>&1`);
+        const convCmd = `ffmpeg -i "${audioPath}" -acodec pcm_s16le -ar 16000 -ac 1 "${convertedPath}" -y 2>&1`;
+        console.log('[Chromaprint] Running conversion:', convCmd);
+        const convResult = await execAsync(convCmd);
+        console.log('[Chromaprint] FFmpeg output:', convResult.stdout || convResult.stderr);
+        
+        // Check if file was created and has content
+        const stats = fs.statSync(convertedPath);
+        console.log('[Chromaprint] Converted file size:', stats.size, 'bytes');
+        
+        if (stats.size === 0) {
+          throw new Error('Converted file is empty');
+        }
+        
         console.log('[Chromaprint] Audio converted successfully');
       } catch (convError) {
-        console.warn('[Chromaprint] Conversion failed:', convError.message);
+        console.error('[Chromaprint] Conversion failed:', convError.message);
+        console.error('[Chromaprint] Full error:', convError.stdout || convError.stderr || convError);
         // Try original file
         convertedPath = null;
       }
