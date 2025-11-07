@@ -166,7 +166,7 @@ async function searchByFingerprint(fingerprint) {
 }
 
 // --- Helper function to save verification ---
-async function saveVerification(fingerprint, filename, fileSize, mediaKind, ipAddress, phash = null) {
+async function saveVerification(fingerprint, filename, fileSize, mediaKind, ipAddress, phash = null, audioFingerprint = null) {
   if (!dbReady) {
     console.log('⚠️ Skipping database save - database not ready');
     return null;
@@ -174,10 +174,10 @@ async function saveVerification(fingerprint, filename, fileSize, mediaKind, ipAd
   
   try {
     const result = await db.query(
-      `INSERT INTO verifications (fingerprint, original_filename, file_size, media_kind, ip_address, phash)
-       VALUES ($1, $2, $3, $4, $5, $6)
+      `INSERT INTO verifications (fingerprint, original_filename, file_size, media_kind, ip_address, phash, audio_fingerprint)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
        RETURNING id, upload_date`,
-      [fingerprint, filename, fileSize, mediaKind, ipAddress, phash]
+      [fingerprint, filename, fileSize, mediaKind, ipAddress, phash, audioFingerprint]
     );
     
     console.log(`✅ Saved verification to database: ID ${result.rows[0].id}`);
