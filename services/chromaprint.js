@@ -24,14 +24,16 @@ class ChromaprintService {
     
     for (const path of possiblePaths) {
       try {
-        await execAsync(`${path} -version`);
+        const versionResult = await execAsync(`${path} -version`);
+        console.log('[Chromaprint] Found fpcalc at:', path);
+        console.log('[Chromaprint] Version:', versionResult.stdout.split('\n')[0]);
         return path;
       } catch (e) {
         // Try next
       }
     }
     
-    throw new Error('fpcalc not found');
+    throw new Error('fpcalc not found - chromaprint not installed');
   }
   
   /**
