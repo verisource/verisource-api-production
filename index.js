@@ -310,6 +310,35 @@ app.post('/verify', upload.single('file'), async (req, res) => {
       }
     }
     
+    // Generate pHash for images
+    let phash = null;
+    let similarImages = null;
+    if (kind === 'image') {
+      try {
+        console.log('🔍 Generating pHash for image...');
+        const phashResult = await generatePHash(req.file.path);
+        if (phashResult.success) {
+          phash = phashResult.phash;
+          console.log('✅ pHash generated:', phash);
+          
+          // Search for similar images
+          if (dbReady) {
+            const similar = await searchSimilarImages(phash, db);
+            if (similar.length > 0) {
+              similarImages = {
+                found: true,
+                count: similar.length,
+                matches: similar.slice(0, 5)  // Top 5 matches
+              };
+              console.log(`✅ Found ${similar.length} similar images`);
+            }
+          }
+        }
+      } catch (err) {
+        console.error('⚠️ pHash error:', err.message);
+      }
+    }
+    
     // Save this verification to database
     try {
       const ipAddress = req.ip || req.connection.remoteAddress;
@@ -345,6 +374,10 @@ app.post('/verify', upload.single('file'), async (req, res) => {
       ...(kind === 'audio' && chromaprint && {
         chromaprint: chromaprint,
         audio_duration: audioDuration
+      }),
+      ...(kind === 'image' && phash && {
+        phash: phash,
+        similar_images: similarImages
       })
     });
     
