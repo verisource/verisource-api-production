@@ -87,10 +87,10 @@ class ChromaprintService {
       if (!db) return [];
       
       const query = `
-        SELECT id as verification_id, filename, verified_at, file_size, audio_fingerprint
+        SELECT id as verification_id, original_filename as filename, upload_date as verified_at, file_size, audio_fingerprint
         FROM verifications
         WHERE audio_fingerprint IS NOT NULL
-        ORDER BY verified_at DESC
+        ORDER BY upload_date DESC
         LIMIT 100
       `;
       
