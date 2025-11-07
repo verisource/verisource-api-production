@@ -54,6 +54,51 @@ app.use(limiter);
 
 // Batch upload routes
 const batchRoutes = require('./routes/batch');
+
+// ============================================
+// SESSION & AUTHENTICATION
+// ============================================
+app.use(session({
+  secret: process.env.SESSION_SECRET || 'verisource-beta-secret-change-in-production',
+  resave: false,
+  saveUninitialized: false,
+  cookie: {
+    maxAge: 24 * 60 * 60 * 1000,
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production'
+  }
+}));
+
+// Login routes
+app.get('/login', (req, res) => {
+  res.render('login');
+});
+
+app.post('/login', (req, res) => {
+  const { password } = req.body;
+  if (password === BETA_PASSWORD) {
+    req.session.authenticated = true;
+    res.redirect('/');
+  } else {
+    res.render('login', { error: 'Incorrect password. Please try again.' });
+  }
+});
+
+app.get('/logout', (req, res) => {
+  req.session.destroy();
+  res.redirect('/login');
+});
+
+// Password protection (skip API endpoints)
+app.use((req, res, next) => {
+  if (req.path === '/login' || req.path === '/logout' || req.path === '/verify' || 
+      req.path === '/health' || req.path.startsWith('/admin/')) {
+    return next();
+  }
+  return requirePassword(req, res, next);
+});
+// ============================================
+
 app.use('/api', batchRoutes);
 app.use('/', batchRoutes);
 
