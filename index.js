@@ -370,7 +370,7 @@ app.post('/verify', upload.single('file'), async (req, res) => {
         try {
           console.log('🤖 Running AI generation detection...');
           aiDetection = await detectAIGeneration(req.file.path);
-          console.log(`✅ AI detection complete: ${aiDetection.isAIGenerated ? 'LIKELY AI' : 'LIKELY AUTHENTIC'} (${aiDetection.confidence}%)`);
+          console.log(`✅ AI detection complete: ${aiDetection.likely_ai_generated ? 'LIKELY AI' : 'LIKELY AUTHENTIC'} (${aiDetection.ai_confidence}%)`);
         } catch (err) {
           console.error('⚠️ AI detection error:', err.message);
           aiDetection = { error: err.message };
