@@ -1,5 +1,7 @@
 require('dotenv').config();
 const express = require('express');
+const session = require('express-session');
+const { requirePassword, BETA_PASSWORD } = require('./password-protection');
 const mime = require('mime-types');
 const multer = require('multer');
 const rateLimit = require('express-rate-limit');
