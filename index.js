@@ -294,6 +294,10 @@ app.post('/verify', upload.single('file'), async (req, res) => {
   } finally {
     try {
       if (fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
+    } catch(e) {}
+  }
+});
+
 app.get('/admin/migrate-audio', async (req, res) => {
   try {
     console.log('🔄 Running audio_fingerprint migration...');
