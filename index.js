@@ -7,6 +7,11 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const db = require('./db-minimal');
+// Worker functions for canonicalization
+let canonicalizeImage, runVideoWorker, runAudioWorker;
+try { ({ canonicalizeImage } = require('./canonicalization')); } catch {}
+try { ({ runWorker: runVideoWorker } = require('./worker/video-worker')); } catch {}
+try { ({ runWorker: runAudioWorker } = require('./worker/audio-worker')); } catch {}
 // View engine for batch dashboard
 const app = express();
 
