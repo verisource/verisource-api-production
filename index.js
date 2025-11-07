@@ -252,6 +252,8 @@ async function initializeDatabase() {
 // SINGLE FILE VERIFY ENDPOINT
 // ============================================
 app.post('/verify', upload.single('file'), async (req, res) => {
+  const processingStart = Date.now();
+  
   if (!req.file) {
     return res.status(400).json({ error: 'No file uploaded' });
   }
@@ -438,7 +440,74 @@ app.post('/verify', upload.single('file'), async (req, res) => {
       };
     }
     
-    res.json(r);
+    // Build comprehensive response
+    const response = {
+      // File basics
+      kind: r.kind,
+      filename: r.filename,
+      size_bytes: r.size_bytes,
+      
+      // SHA-256 fingerprint details
+      fingerprint: {
+        algorithm: r.canonical?.algorithm || 'sha256',
+        hash: r.canonical?.fingerprint || fingerprint,
+        version: r.canonical?.version || 'v1'
+      },
+      
+      // Verification status
+      verification: {
+        status: searchResults.found ? 'PREVIOUSLY_VERIFIED' : 'NEW_UPLOAD',
+        first_seen: searchResults.found ? searchResults.data.verified_at : new Date().toISOString(),
+        times_verified: searchResults.found ? searchResults.count : 1
+      },
+      
+      // Confidence scoring (enhanced display)
+      confidence: r.confidence ? {
+        score: r.confidence.percentage,
+        level: r.confidence.level,
+        label: r.confidence.label,
+        color: r.confidence.color,
+        icon: r.confidence.icon,
+        message: r.confidence.message,
+        is_modified: r.confidence.is_modified || false,
+        modification_details: r.confidence.modification_details || null,
+        factors: r.confidence.factors || [],
+        warnings: r.confidence.warnings || [],
+        recommendations: r.confidence.recommendations || []
+      } : null,
+      
+      // Image-specific data
+      ...(r.kind === 'image' && {
+        phash: r.phash || null,
+        similar_images: r.similar_images || null,
+        google_vision: r.google_vision || null,
+        ai_detection: r.ai_detection || null
+      }),
+      
+      // Audio-specific data
+      ...(r.kind === 'audio' && {
+        chromaprint: r.chromaprint || null,
+        audio_duration: r.audio_duration || null,
+        similar_audio: r.similar_audio || null
+      }),
+      
+      // Video-specific data
+      ...(r.kind === 'video' && {
+        video_analysis: r.video_analysis || null
+      }),
+      
+      // External verification
+      virustotal: r.virustotal || null,
+      
+      // Metadata
+      metadata: {
+        upload_time: new Date().toISOString(),
+        api_version: '1.0',
+        processing_time_ms: Date.now() - processingStart
+      }
+    };
+    
+    res.json(response);
     
   } catch (e) {
     console.error('❌ Verify error:', e);
