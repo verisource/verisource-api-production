@@ -52,6 +52,32 @@ async function detectAIGeneration(imagePath) {
     if (metadata.format === 'png' && !metadata.exif) {
       suspicionScore += 10;
       indicators.push('PNG without metadata (common for AI)');
+    
+    // Check 6: JPEG quality analysis
+    if (metadata.format === 'jpeg' || metadata.format === 'jpg') {
+      // AI images often have suspiciously high or uniform quality
+      // Sharp provides quality info for JPEG images
+      const buffer = await sharp(imagePath).jpeg({ quality: 100 }).toBuffer();
+      const originalSize = (await sharp(imagePath).toBuffer()).length;
+      
+      // Calculate compression ratio
+      const ratio = originalSize / buffer.length;
+      
+      // AI images typically have unusual compression ratios
+      if (ratio > 0.95) {
+        suspicionScore += 20;
+        indicators.push('Unusually high JPEG quality (typical of AI generation)');
+      } else if (ratio < 0.3) {
+        suspicionScore += 10;
+        indicators.push('Suspiciously low compression (may indicate re-encoding)');
+      }
+      
+      // Check if quality is too perfect (less variation than real photos)
+      if (!metadata.exif && ratio > 0.85) {
+        suspicionScore += 15;
+        indicators.push('Perfect quality without camera data (AI signature)');
+      }
+    }
     }
     
     return {
