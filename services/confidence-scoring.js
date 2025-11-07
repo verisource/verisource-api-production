@@ -15,7 +15,7 @@ class ConfidenceScoring {
       this.scoreMetadataQuality(verification),
       this.scoreExternalVerification(verification),
       this.scoreForensicAnalysis(verification),
-      this.scoreTemporalTrust(verification)
+      this.scoreTemporalTrust(verification),
       this.scoreAIAuthenticity(verification),
     ];
     
