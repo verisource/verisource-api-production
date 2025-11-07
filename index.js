@@ -679,3 +679,27 @@ const PORT = process.env.PORT || 3000;
     console.log(`📊 Database status: ${dbReady ? 'READY' : 'NOT AVAILABLE'}`);
   });
 })();
+// Temporary migration endpoint (remove after use)
+app.get('/admin/migrate-audio', async (req, res) => {
+  try {
+    console.log('🔄 Running audio_fingerprint migration...');
+    
+    await db.query(`
+      ALTER TABLE verifications 
+      ADD COLUMN IF NOT EXISTS audio_fingerprint TEXT
+    `);
+    console.log('✅ Column added');
+    
+    await db.query(`
+      CREATE INDEX IF NOT EXISTS idx_audio_fingerprint 
+      ON verifications(audio_fingerprint) 
+      WHERE audio_fingerprint IS NOT NULL
+    `);
+    console.log('✅ Index created');
+    
+    res.json({ success: true, message: 'Migration complete!' });
+  } catch (err) {
+    console.error('❌ Migration failed:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
