@@ -178,6 +178,62 @@ app.post("/init-database", async (req, res) => {
 // --- Start server with proper async initialization ---
 const PORT = process.env.PORT || 3000;
 
+
+// --- Database initialization ---
+async function initializeDatabase() {
+  if (!db) {
+    console.log('⚠️ Database not configured - skipping initialization');
+    return;
+  }
+  
+  try {
+    console.log('🔌 Initializing database connection...');
+    
+    // Test connection
+    const result = await db.query('SELECT NOW() as current_time, version() as pg_version');
+    console.log('✅ Database connected:', result.rows[0].current_time);
+    console.log('📊 PostgreSQL version:', result.rows[0].pg_version);
+    
+    // Create tables
+    console.log('🔨 Creating verifications table...');
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS verifications (
+        id SERIAL PRIMARY KEY,
+        fingerprint VARCHAR(64) NOT NULL,
+        original_filename TEXT,
+        file_size INTEGER,
+        media_kind VARCHAR(20),
+        ip_address VARCHAR(45),
+        phash VARCHAR(16),
+        audio_fingerprint TEXT,
+        upload_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    
+    // Create indexes
+    console.log('🔨 Creating indexes...');
+    await db.query('CREATE INDEX IF NOT EXISTS idx_fingerprint ON verifications(fingerprint)');
+    await db.query('CREATE INDEX IF NOT EXISTS idx_upload_date ON verifications(upload_date)');
+    
+    console.log('🔨 Creating pHash index...');
+    await db.query('CREATE INDEX IF NOT EXISTS idx_phash ON verifications(phash) WHERE phash IS NOT NULL');
+    
+    console.log('🔨 Creating audio fingerprint index...');
+    await db.query('CREATE INDEX IF NOT EXISTS idx_audio_fingerprint ON verifications(audio_fingerprint) WHERE audio_fingerprint IS NOT NULL');
+    
+    // Get record count
+    const countResult = await db.query('SELECT COUNT(*) as count FROM verifications');
+    const recordCount = countResult.rows[0].count;
+    
+    dbReady = true;
+    console.log(`✅ Database initialized successfully. Current records: ${recordCount}`);
+    
+  } catch (err) {
+    console.error('❌ Database initialization failed:', err.message);
+    dbReady = false;
+  }
+}
+
 (async () => {
   console.log('🚀 Starting VeriSource API...');
   
