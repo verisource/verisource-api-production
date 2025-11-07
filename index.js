@@ -278,8 +278,15 @@ app.post('/verify', upload.single('file'), async (req, res) => {
     const crypto = require('crypto');
     const fingerprint = crypto.createHash('sha256').update(buf).digest('hex');
     
+    // Detect file type
+    const dm = req.file.mimetype || mime.lookup(req.file.originalname) || 'application/octet-stream';
+    const isImg = /^image\//i.test(dm) || /\.(png|jpe?g|gif|webp)$/i.test(req.file.originalname);
+    const isVid = /^video\//i.test(dm) || /\.(mp4|mov|avi|mkv)$/i.test(req.file.originalname);
+    const isAud = /^audio\//i.test(dm) || /\.(mp3|wav|m4a|flac)$/i.test(req.file.originalname);
+    const kind = isImg ? 'image' : (isVid ? 'video' : (isAud ? 'audio' : 'unknown'));
+    
     res.json({
-      kind: 'file',
+      kind: kind,
       filename: req.file.originalname,
       size_bytes: req.file.size,
       fingerprint: {
