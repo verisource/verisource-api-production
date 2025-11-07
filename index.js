@@ -247,6 +247,214 @@ async function initializeDatabase() {
     console.log(`📊 Database status: ${dbReady ? 'READY' : 'NOT AVAILABLE'}`);
   });
 })();
+
+// ============================================
+// SINGLE FILE VERIFY ENDPOINT
+// ============================================
+app.post('/verify', upload.single('file'), async (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({ error: 'No file uploaded' });
+  }
+
+  let wp = req.file.path;
+  
+  try {
+    const buf = fs.readFileSync(req.file.path);
+    const dm = req.file.mimetype || mime.lookup(req.file.originalname) || 'application/octet-stream';
+    
+    // Detect file kind
+    const isImg = /^image\//i.test(dm) || /\.(png|jpe?g|gif|webp)$/i.test(req.file.originalname);
+    const isVid = /^video\//i.test(dm) || /\.(mp4|mov|avi|mkv)$/i.test(req.file.originalname);
+    const isAud = /^audio\//i.test(dm) || /\.(mp3|wav|m4a|flac)$/i.test(req.file.originalname);
+    const kind = isImg ? 'image' : (isVid ? 'video' : (isAud ? 'audio' : 'unknown'));
+    
+    // For video/audio, copy with proper extension
+    if (isVid || isAud) {
+      wp = req.file.path + (path.extname(req.file.originalname) || (isVid ? '.mp4' : '.mp3'));
+      fs.copyFileSync(req.file.path, wp);
+    }
+    
+    let r = { 
+      kind: kind, 
+      filename: req.file.originalname, 
+      size_bytes: req.file.size 
+    };
+    
+    const crypto = require('crypto');
+    
+    // Generate fingerprint
+    if (isImg && canonicalizeImage) {
+      const canonBuf = await canonicalizeImage(buf);
+      r.canonical = { 
+        algorithm: 'sha256', 
+        fingerprint: crypto.createHash('sha256').update(canonBuf).digest('hex'), 
+        version: 'img:v2' 
+      };
+    } else if (isVid && runVideoWorker) {
+      const vidResult = runVideoWorker(wp);
+      r.canonical = vidResult.canonical;
+    } else if (isAud && runAudioWorker) {
+      const audResult = runAudioWorker(wp);
+      r.canonical = audResult.canonical;
+    } else {
+      r.canonical = { 
+        algorithm: 'sha256', 
+        fingerprint: crypto.createHash('sha256').update(buf).digest('hex'), 
+        version: 'raw:v1' 
+      };
+      console.log('Generated fallback fingerprint');
+    }
+    
+    // Search database for existing verifications
+    const fingerprint = r.canonical.fingerprint;
+    const searchResults = await searchByFingerprint(fingerprint);
+    
+    // Analyze video if applicable
+    if (kind === 'video') {
+      try {
+        console.log('🎥 Analyzing video file...');
+        r.video_analysis = await analyzeVideo(req.file.path, {
+          fps: 1,
+          maxFrames: 30
+        });
+        console.log('✅ Video analysis complete:', r.video_analysis.analysis?.verdict);
+      } catch (err) {
+        console.error('⚠️ Video analysis error:', err.message);
+        r.video_analysis = {
+          success: false,
+          error: err.message
+        };
+      }
+    }
+    
+    // Generate pHash for images (BEFORE saving to database)
+    if (r.kind === 'image' && req.file && req.file.path) {
+      try {
+        console.log('🔍 Generating pHash...');
+        const phashResult = await generatePHash(req.file.path);
+        if (phashResult.success) {
+          r.phash = phashResult.phash;
+          console.log('✅ pHash generated:', r.phash);
+        }
+      } catch (err) {
+        console.error('⚠️ pHash error:', err.message);
+      }
+    }
+    
+    // Generate Chromaprint for audio (BEFORE saving to database)
+    if (r.kind === 'audio' && req.file && req.file.path) {
+      try {
+        console.log('🎵 DEBUG: Audio detected, attempting Chromaprint...');
+        console.log('🎵 DEBUG: wp =', wp);
+        console.log('🎵 DEBUG: req.file.path =', req.file.path);
+        const chromaprintResult = await ChromaprintService.generateFingerprint(wp);
+        if (chromaprintResult.success) {
+          r.chromaprint = chromaprintResult.fingerprint;
+          r.audio_duration = chromaprintResult.duration;
+          console.log('✅ Chromaprint generated:', r.chromaprint.substring(0, 20) + '...');
+        }
+      } catch (err) {
+        console.error('⚠️ Chromaprint error:', err.message);
+      }
+    }
+    
+    // Save this verification to database
+    const ipAddress = req.ip || req.connection.remoteAddress;
+    await saveVerification(fingerprint, req.file.originalname, req.file.size, r.kind, ipAddress, r.phash || null, r.chromaprint || null);
+    
+    // Search for similar images in database
+    if (r.phash && dbReady) {
+      try {
+        console.log('🔎 Searching for similar images...');
+        const similarImages = await searchSimilarImages(r.phash, db);
+        r.similar_images = {
+          found: similarImages.length > 0,
+          count: similarImages.length,
+          matches: similarImages.slice(0, 10)
+        };
+        console.log(`✅ Similar search: ${similarImages.length} matches`);
+      } catch (err) {
+        console.error('⚠️ Similar search error:', err.message);
+      }
+    }
+    
+    // Search for similar audio in database
+    if (r.chromaprint && dbReady) {
+      try {
+        console.log('🎵 Searching for similar audio...');
+        const similarAudio = await ChromaprintService.searchSimilarAudio(r.chromaprint, db);
+        r.similar_audio = {
+          found: similarAudio.length > 0,
+          count: similarAudio.length,
+          matches: similarAudio.slice(0, 10)
+        };
+        console.log(`✅ Similar audio search: ${similarAudio.length} matches`);
+      } catch (err) {
+        console.error('⚠️ Similar audio search error:', err.message);
+      }
+    }
+    
+    // External search (VirusTotal)
+    try {
+      console.log('🔍 Searching VirusTotal for:', fingerprint);
+      const vtResult = await searchVirusTotal(fingerprint);
+      r.virustotal = vtResult;
+      console.log('✅ VirusTotal search complete:', vtResult.found ? 'FOUND' : 'NOT FOUND');
+    } catch (err) {
+      console.error('⚠️ VirusTotal error:', err.message);
+    }
+    
+    // Google Vision for images
+    if (kind === 'image') {
+      try {
+        const visionResult = await analyzeImage(req.file.path);
+        r.google_vision = visionResult;
+      } catch (err) {
+        console.error('⚠️ Google Vision error:', err.message);
+      }
+    }
+    
+    // AI detection for images
+    if (kind === 'image') {
+      try {
+        const aiResult = await detectAIGeneration(req.file.path);
+        r.ai_detection = aiResult;
+      } catch (err) {
+        console.error('⚠️ AI detection error:', err.message);
+      }
+    }
+    
+    // Calculate confidence score
+    try {
+      console.log('📊 Calculating confidence score...');
+      r.confidence = ConfidenceScoring.calculate(r);
+      console.log(`✅ Confidence: ${r.confidence.level} - ${r.confidence.percentage}%`);
+    } catch (err) {
+      console.error('⚠️ Confidence calculation error:', err.message);
+      r.confidence = {
+        level: 'UNKNOWN',
+        percentage: 0,
+        label: 'Unable to calculate'
+      };
+    }
+    
+    res.json(r);
+    
+  } catch (e) {
+    console.error('❌ Verify error:', e);
+    res.status(500).json({ error: e.message });
+  } finally {
+    // Cleanup
+    try {
+      if (fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
+      if (wp !== req.file.path && fs.existsSync(wp)) fs.unlinkSync(wp);
+    } catch(e) {
+      console.error('Cleanup error:', e.message);
+    }
+  }
+});
+
+
 // Temporary migration endpoint (remove after use)
 app.get('/admin/migrate-audio', async (req, res) => {
   try {
