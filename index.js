@@ -12,6 +12,14 @@ let canonicalizeImage, runVideoWorker, runAudioWorker;
 try { ({ canonicalizeImage } = require('./canonicalization')); } catch {}
 try { ({ runWorker: runVideoWorker } = require('./worker/video-worker')); } catch {}
 try { ({ runWorker: runAudioWorker } = require('./worker/audio-worker')); } catch {}
+
+// Import analysis and detection services
+const { analyzeVideo } = require('./video-analyzer');
+const { analyzeImage } = require('./google-vision-search');
+const { detectAIGeneration } = require('./ai-image-detector');
+const { generatePHash, searchSimilarImages } = require('./phash-module');
+const ConfidenceScoring = require('./services/confidence-scoring');
+const ChromaprintService = require('./services/chromaprint');
 // View engine for batch dashboard
 const app = express();
 
