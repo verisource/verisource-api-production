@@ -285,6 +285,30 @@ app.post('/verify', upload.single('file'), async (req, res) => {
     const isAud = /^audio\//i.test(dm) || /\.(mp3|wav|m4a|flac)$/i.test(req.file.originalname);
     const kind = isImg ? 'image' : (isVid ? 'video' : (isAud ? 'audio' : 'unknown'));
     
+    // Search database for existing verifications
+    let searchResults = { found: false, is_first_verification: true };
+    try {
+      searchResults = await searchByFingerprint(fingerprint);
+    } catch (err) {
+      console.error('⚠️ Database search error:', err.message);
+    }
+    
+    // Save this verification to database
+    try {
+      const ipAddress = req.ip || req.connection.remoteAddress;
+      await saveVerification({
+        fingerprint: fingerprint,
+        algorithm: 'sha256',
+        filename: req.file.originalname,
+        file_size: req.file.size,
+        file_type: req.file.mimetype,
+        media_kind: kind,
+        ip_address: ipAddress
+      });
+    } catch (err) {
+      console.error('⚠️ Database save error:', err.message);
+    }
+    
     res.json({
       kind: kind,
       filename: req.file.originalname,
@@ -293,6 +317,13 @@ app.post('/verify', upload.single('file'), async (req, res) => {
         algorithm: 'sha256',
         hash: fingerprint,
         version: 'v1'
+      },
+      verification: {
+        status: searchResults.found ? 'PREVIOUSLY_VERIFIED' : 'NEW_UPLOAD',
+        is_first: searchResults.is_first_verification,
+        first_seen: searchResults.found ? searchResults.first_seen : new Date().toISOString(),
+        times_verified: searchResults.found ? searchResults.total_verifications : 1,
+        previous_uploads: searchResults.found ? searchResults.matches : []
       }
     });
     
