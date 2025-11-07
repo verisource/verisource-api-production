@@ -7,6 +7,7 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const db = require('./db-minimal');
+const { searchByFingerprint, saveVerification } = require('./search');
 // Worker functions for canonicalization
 let canonicalizeImage, runVideoWorker, runAudioWorker;
 try { ({ canonicalizeImage } = require('./canonicalization')); } catch {}
