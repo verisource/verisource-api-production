@@ -379,6 +379,17 @@ app.post('/verify', upload.single('file'), async (req, res) => {
         phash: phash,
         similar_images: similarImages
       }),
+      ...(kind === 'image' && await (async () => {
+        try {
+          console.log('👁️ Running Google Vision analysis...');
+          const visionResult = await analyzeImage(req.file.path);
+          console.log('✅ Google Vision analysis complete');
+          return { google_vision: visionResult };
+        } catch (err) {
+          console.error('⚠️ Google Vision error:', err.message);
+          return { google_vision: { error: err.message } };
+        }
+      })()),
       virustotal: await (async () => {
         try {
           console.log('🔍 Checking VirusTotal...');
