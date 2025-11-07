@@ -293,6 +293,23 @@ app.post('/verify', upload.single('file'), async (req, res) => {
       console.error('⚠️ Database search error:', err.message);
     }
     
+    // Generate Chromaprint for audio files
+    let chromaprint = null;
+    let audioDuration = null;
+    if (kind === 'audio') {
+      try {
+        console.log('🎵 Generating Chromaprint for audio...');
+        const chromaprintResult = await ChromaprintService.generateFingerprint(req.file.path);
+        if (chromaprintResult.success) {
+          chromaprint = chromaprintResult.fingerprint;
+          audioDuration = chromaprintResult.duration;
+          console.log('✅ Chromaprint generated');
+        }
+      } catch (err) {
+        console.error('⚠️ Chromaprint error:', err.message);
+      }
+    }
+    
     // Save this verification to database
     try {
       const ipAddress = req.ip || req.connection.remoteAddress;
@@ -324,7 +341,11 @@ app.post('/verify', upload.single('file'), async (req, res) => {
         first_seen: searchResults.found ? searchResults.first_seen : new Date().toISOString(),
         times_verified: searchResults.found ? searchResults.total_verifications : 1,
         previous_uploads: searchResults.found ? searchResults.matches : []
-      }
+      },
+      ...(kind === 'audio' && chromaprint && {
+        chromaprint: chromaprint,
+        audio_duration: audioDuration
+      })
     });
     
   } catch (e) {
