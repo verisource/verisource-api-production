@@ -28,6 +28,7 @@ if (process.env.RAILWAY_ENVIRONMENT) {
 
 
 app.use(express.json());
+app.use(express.urlencoded({ extended: true })); // For parsing form data
 
 // --- CORS ---
 app.use((req, res, next) => {
