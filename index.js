@@ -363,6 +363,19 @@ app.post('/verify', upload.single('file'), async (req, res) => {
       }
     }
     
+
+      // Detect AI-generated images
+      let aiDetection = null;
+      if (kind === 'image') {
+        try {
+          console.log('🤖 Running AI generation detection...');
+          aiDetection = await detectAIGeneration(req.file.path);
+          console.log(`✅ AI detection complete: ${aiDetection.isAIGenerated ? 'LIKELY AI' : 'LIKELY AUTHENTIC'} (${aiDetection.confidence}%)`);
+        } catch (err) {
+          console.error('⚠️ AI detection error:', err.message);
+          aiDetection = { error: err.message };
+        }
+      }
     // Save this verification to database
     try {
       const ipAddress = req.ip || req.connection.remoteAddress;
@@ -402,7 +415,8 @@ app.post('/verify', upload.single('file'), async (req, res) => {
       }),
       ...(kind === 'image' && phash && {
         phash: phash,
-        similar_images: similarImages
+        similar_images: similarImages,
+          ...(aiDetection && { ai_detection: aiDetection }),
       }),
       ...(kind === 'image' && await (async () => {
         try {
