@@ -379,6 +379,17 @@ app.post('/verify', upload.single('file'), async (req, res) => {
         phash: phash,
         similar_images: similarImages
       }),
+      virustotal: await (async () => {
+        try {
+          console.log('🔍 Checking VirusTotal...');
+          const vtResult = await searchVirusTotal(fingerprint);
+          console.log('✅ VirusTotal check complete:', vtResult.found ? 'FOUND' : 'NOT FOUND');
+          return vtResult;
+        } catch (err) {
+          console.error('⚠️ VirusTotal error:', err.message);
+          return { found: false, error: err.message };
+        }
+      })(),
       confidence: (() => {
         try {
           // Build data object for confidence calculation
