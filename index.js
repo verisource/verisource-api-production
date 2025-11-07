@@ -8,11 +8,14 @@ const path = require('path');
 const os = require('os');
 const db = require('./db-minimal');
 const { searchByFingerprint, saveVerification } = require('./search');
-// Worker functions for canonicalization
-let canonicalizeImage, runVideoWorker, runAudioWorker;
-try { ({ canonicalizeImage } = require('./canonicalization')); } catch {}
-try { ({ runWorker: runVideoWorker } = require('./worker/video-worker')); } catch {}
-try { ({ runWorker: runAudioWorker } = require('./worker/audio-worker')); } catch {}
+// Import canonicalization only (workers not needed for minimal endpoint)
+let canonicalizeImage;
+try { 
+  const canon = require('./canonicalization');
+  canonicalizeImage = canon.canonicalizeImage;
+} catch(e) {
+  console.log('⚠️ Canonicalization not available:', e.message);
+}
 
 // Import analysis and detection services
 const { analyzeVideo } = require('./video-analyzer');
