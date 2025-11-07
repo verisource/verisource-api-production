@@ -378,7 +378,33 @@ app.post('/verify', upload.single('file'), async (req, res) => {
       ...(kind === 'image' && phash && {
         phash: phash,
         similar_images: similarImages
-      })
+      }),
+      confidence: (() => {
+        try {
+          // Build data object for confidence calculation
+          const confidenceData = {
+            kind: kind,
+            fingerprint: { hash: fingerprint },
+            verification: searchResults,
+            ...(chromaprint && { chromaprint }),
+            ...(phash && { phash }),
+            ...(similarImages && { similar_images: similarImages })
+          };
+          
+          console.log('📊 Calculating confidence score...');
+          const score = ConfidenceScoring.calculate(confidenceData);
+          console.log(`✅ Confidence: ${score.level} (${score.percentage}%)`);
+          return score;
+        } catch (err) {
+          console.error('⚠️ Confidence calculation error:', err.message);
+          return {
+            level: 'UNKNOWN',
+            percentage: 0,
+            label: 'Unable to calculate',
+            message: 'Confidence scoring temporarily unavailable'
+          };
+        }
+      })()
     });
     
   } catch (e) {
