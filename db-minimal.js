@@ -60,8 +60,18 @@ async function close() {
   }
 }
 
+
+/**
+ * Check if database is available
+ * @returns {boolean}
+ */
+function isAvailable() {
+  return pool !== null;
+}
+
 module.exports = {
   query,
   getClient,
-  close
+  close,
+  isAvailable
 };
