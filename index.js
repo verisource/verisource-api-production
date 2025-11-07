@@ -24,6 +24,7 @@ const { detectAIGeneration } = require('./ai-image-detector');
 const { generatePHash, searchSimilarImages } = require('./phash-module');
 const ConfidenceScoring = require('./services/confidence-scoring');
 const ChromaprintService = require('./services/chromaprint');
+const acoustid = require('./acoustid-integration');
 // View engine for batch dashboard
 const app = express();
 
@@ -309,6 +310,29 @@ app.post('/verify', upload.single('file'), async (req, res) => {
         console.error('⚠️ Chromaprint error:', err.message);
       }
     }
+
+      // Identify music with AcoustID/MusicBrainz (if audio and configured)
+      let musicIdentification = null;
+      if (kind === 'audio' && chromaprint && acoustid.isConfigured()) {
+        try {
+          console.log('🎵 Attempting music identification...');
+          musicIdentification = await acoustid.identifyAudio(req.file.path);
+          
+          if (musicIdentification.identified) {
+            console.log(`✅ Identified: ${musicIdentification.recording.title} - ${musicIdentification.recording.artist}`);
+          } else {
+            console.log('ℹ️ Music not identified in database');
+          }
+        } catch (err) {
+          console.error('⚠️ Music identification error:', err.message);
+          musicIdentification = {
+            identified: false,
+            error: err.message
+          };
+        }
+      } else if (kind === 'audio' && !acoustid.isConfigured()) {
+        console.log('⚠️ AcoustID not configured - skipping music identification');
+      }
     
     // Generate pHash for images
     let phash = null;
@@ -371,9 +395,10 @@ app.post('/verify', upload.single('file'), async (req, res) => {
         times_verified: searchResults.found ? searchResults.total_verifications : 1,
         previous_uploads: searchResults.found ? searchResults.matches : []
       },
-      ...(kind === 'audio' && chromaprint && {
-        chromaprint: chromaprint,
-        audio_duration: audioDuration
+        ...(kind === 'audio' && chromaprint && {
+          chromaprint: chromaprint,
+          audio_duration: audioDuration,
+          ...(musicIdentification && { music_identification: musicIdentification })
       }),
       ...(kind === 'image' && phash && {
         phash: phash,
