@@ -1,0 +1,24 @@
+--- a/index.js
++++ b/index.js
+@@ -audio-processing
+     if (isVid || isAud) {
+-      wp = req.file.path + (path.extname(req.file.originalname) || (isVid ? '.mp4' : '.mp3'));
+-      fs.copyFileSync(req.file.path, wp);
++      const ext = path.extname(req.file.originalname) || (isVid ? '.mp4' : '.mp3');
++      wp = req.file.path + ext;
++      // For audio, ensure it's properly encoded for chromaprint
++      if (isAud) {
++        const tempOutput = wp + '.converted.mp3';
++        try {
++          const { execSync } = require('child_process');
++          execSync(`ffmpeg -i "${req.file.path}" -acodec libmp3lame -ar 44100 -ac 2 "${tempOutput}" -y 2>/dev/null`);
++          fs.copyFileSync(tempOutput, wp);
++          fs.unlinkSync(tempOutput);
++        } catch (e) {
++          // Fallback to direct copy
++          fs.copyFileSync(req.file.path, wp);
++        }
++      } else {
++        fs.copyFileSync(req.file.path, wp);
++      }
+     }
