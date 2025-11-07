@@ -1,11 +1,8 @@
 [phases.setup]
-nixPkgs = ["nodejs", "ffmpeg"]
+nixPkgs = ["nodejs", "ffmpeg", "chromaprint"]
 
 [phases.install]
-cmds = [
-  "npm ci",
-  "./install-chromaprint.sh"
-]
+cmds = ["npm ci"]
 
 [start]
 cmd = "node index.js"
