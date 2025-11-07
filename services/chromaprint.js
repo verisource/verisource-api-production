@@ -18,14 +18,13 @@ class ChromaprintService {
       console.log('[Chromaprint] Using FFmpeg chromaprint filter');
       
       // Use FFmpeg's chromaprint filter to generate fingerprint
-      const cmd = `ffmpeg -i "${audioPath}" -f chromaprint -fp_format raw - 2>&1`;
+      // Output to a temp file to separate stderr from fingerprint data
+      const tempFp = audioPath + '.chromaprint.txt';
+      const cmd = `ffmpeg -i "${audioPath}" -f chromaprint -fp_format raw "${tempFp}" -y 2>&1`;
       const { stdout, stderr } = await execAsync(cmd);
       
-      // FFmpeg outputs to stderr, fingerprint data to stdout
-      const output = stderr + stdout;
-      console.log('[Chromaprint] FFmpeg output sample:', output.substring(0, 200));
-      
-      // Parse duration from FFmpeg output
+      // Parse duration from FFmpeg stderr
+      const output = stdout + stderr;
       const durationMatch = output.match(/Duration: (\d+):(\d+):(\d+\.\d+)/);
       let duration = 0;
       if (durationMatch) {
@@ -35,9 +34,9 @@ class ChromaprintService {
         duration = hours * 3600 + minutes * 60 + seconds;
       }
       
-      // Parse fingerprint from output
-      const fpMatch = output.match(/fingerprint=([A-Za-z0-9+\/=]+)/);
-      const fingerprint = fpMatch ? fpMatch[1] : stdout.trim();
+      // Read fingerprint from temp file
+      const fingerprint = fs.readFileSync(tempFp, 'base64');
+      fs.unlinkSync(tempFp);
       
       if (!fingerprint || fingerprint.length < 10) {
         throw new Error('No fingerprint generated');
