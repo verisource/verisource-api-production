@@ -16,6 +16,7 @@ class ConfidenceScoring {
       this.scoreExternalVerification(verification),
       this.scoreForensicAnalysis(verification),
       this.scoreTemporalTrust(verification)
+      this.scoreAIAuthenticity(verification),
     ];
     
     const totalScore = factors.reduce((sum, f) => sum + f.score, 0);
@@ -392,6 +393,45 @@ class ConfidenceScoring {
     }
     
     return recommendations;
+  }
+
+  /**
+   * Score AI authenticity (max 30 points)
+   * Heavily penalizes AI-generated content
+   */
+  static scoreAIAuthenticity(data) {
+    let score = 0;
+    const details = [];
+    const max = 30;
+    
+    if (!data.ai_detection) {
+      score = 15;
+      details.push('⚠️ AI detection not available');
+      return { name: 'AI Authenticity', score, max, details };
+    }
+    
+    const ai = data.ai_detection;
+    
+    if (ai.likely_ai_generated) {
+      score = 0;
+      details.push(`❌ AI-generated content detected (${ai.ai_confidence}% confidence)`);
+      
+      if (ai.indicators && ai.indicators.length > 0) {
+        ai.indicators.forEach(indicator => {
+          details.push(`  - ${indicator}`);
+        });
+      }
+    } else {
+      score = 30;
+      details.push('✅ Content appears authentic');
+      details.push(`  - AI suspicion score: ${ai.ai_confidence}%`);
+      
+      if (ai.metadata_check?.has_camera_exif) {
+        details.push('  - Camera metadata present');
+      }
+    }
+    
+    return { name: 'AI Authenticity', score, max, details };
   }
 }
 

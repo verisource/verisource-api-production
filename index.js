@@ -449,7 +449,8 @@ app.post('/verify', upload.single('file'), async (req, res) => {
             verification: searchResults,
             ...(chromaprint && { chromaprint }),
             ...(phash && { phash }),
-            ...(similarImages && { similar_images: similarImages })
+            ...(similarImages && { similar_images: similarImages }),
+              ...(aiDetection && { ai_detection: aiDetection }),
           };
           
           console.log('📊 Calculating confidence score...');
