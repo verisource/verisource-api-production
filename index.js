@@ -269,73 +269,35 @@ async function initializeDatabase() {
 // SINGLE FILE VERIFY ENDPOINT
 // ============================================
 app.post('/verify', upload.single('file'), async (req, res) => {
-  const processingStart = Date.now();
-  
   if (!req.file) {
     return res.status(400).json({ error: 'No file uploaded' });
   }
 
-  let wp = req.file.path;
-  
   try {
     const buf = fs.readFileSync(req.file.path);
-    const dm = req.file.mimetype || mime.lookup(req.file.originalname) || 'application/octet-stream';
-    
-    // Detect file kind
-    const isImg = /^image\//i.test(dm) || /\.(png|jpe?g|gif|webp)$/i.test(req.file.originalname);
-    const isVid = /^video\//i.test(dm) || /\.(mp4|mov|avi|mkv)$/i.test(req.file.originalname);
-    const isAud = /^audio\//i.test(dm) || /\.(mp3|wav|m4a|flac)$/i.test(req.file.originalname);
-    const kind = isImg ? 'image' : (isVid ? 'video' : (isAud ? 'audio' : 'unknown'));
-    
-    // For video/audio, copy with proper extension
-    if (isVid || isAud) {
-      wp = req.file.path + (path.extname(req.file.originalname) || (isVid ? '.mp4' : '.mp3'));
-      fs.copyFileSync(req.file.path, wp);
-    }
-    
-    let r = { 
-      kind: kind, 
-      filename: req.file.originalname, 
-      size_bytes: req.file.size 
-    };
-    
     const crypto = require('crypto');
+    const fingerprint = crypto.createHash('sha256').update(buf).digest('hex');
     
-    // Generate fingerprint
-    if (isImg && canonicalizeImage) {
-      const canonBuf = await canonicalizeImage(buf);
-      r.canonical = { 
-        algorithm: 'sha256', 
-        fingerprint: crypto.createHash('sha256').update(canonBuf).digest('hex'), 
-        version: 'img:v2' 
-      };
-    } else if (isVid && runVideoWorker) {
-      const vidResult = runVideoWorker(wp);
-      r.canonical = vidResult.canonical;
-    } else if (isAud && runAudioWorker) {
-      const audResult = runAudioWorker(wp);
-      r.canonical = audResult.canonical;
-    } else {
-      r.canonical = { 
-        algorithm: 'sha256', 
-        fingerprint: crypto.createHash('sha256').update(buf).digest('hex'), 
-        version: 'raw:v1' 
-      };
-      console.log('Generated fallback fingerprint');
-    }
+    res.json({
+      kind: 'file',
+      filename: req.file.originalname,
+      size_bytes: req.file.size,
+      fingerprint: {
+        algorithm: 'sha256',
+        hash: fingerprint,
+        version: 'v1'
+      }
+    });
     
-    // Search database for existing verifications
-    const fingerprint = r.canonical.fingerprint;
-    const searchResults = await searchByFingerprint(fingerprint);
-    
-    // Analyze video if applicable
-    if (kind === 'video') {
-      try {
-        console.log('🎥 Analyzing video file...');
-        r.video_analysis = await analyzeVideo(req.file.path, {
-          fps: 1,
-          maxFrames: 30
-        });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  } finally {
+    try {
+      if (fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
+    } catch(e) {}
+  }
+});
+
         console.log('✅ Video analysis complete:', r.video_analysis.analysis?.verdict);
       } catch (err) {
         console.error('⚠️ Video analysis error:', err.message);
