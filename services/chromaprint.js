@@ -1,6 +1,6 @@
 /**
  * Chromaprint Audio Fingerprinting Service
- * Enhanced with audio conversion for Railway deployment
+ * Uses FFmpeg's built-in chromaprint filter instead of fpcalc
  */
 
 const { exec } = require('child_process');
@@ -11,114 +11,45 @@ const fs = require('fs');
 class ChromaprintService {
   
   /**
-   * Find fpcalc binary location
-   */
-  static async findFpcalc() {
-    const possiblePaths = [
-      'fpcalc',
-      '/usr/local/bin/fpcalc',
-      '/usr/bin/fpcalc',
-      './bin/fpcalc',
-      process.cwd() + '/bin/fpcalc'
-    ];
-    
-    for (const path of possiblePaths) {
-      try {
-        const versionResult = await execAsync(`${path} -version`);
-        console.log('[Chromaprint] Found fpcalc at:', path);
-        console.log('[Chromaprint] Version:', versionResult.stdout.split('\n')[0]);
-        return path;
-      } catch (e) {
-        // Try next
-      }
-    }
-    
-    throw new Error('fpcalc not found - chromaprint not installed');
-  }
-  
-  /**
-   * Generate Chromaprint fingerprint for an audio file
+   * Generate Chromaprint fingerprint using FFmpeg
    */
   static async generateFingerprint(audioPath) {
-    let convertedPath = null;
-    
     try {
-      const fpcalc = await this.findFpcalc();
+      console.log('[Chromaprint] Using FFmpeg chromaprint filter');
       
-      // Convert audio to WAV format for better compatibility
-      convertedPath = audioPath + '.chromaprint.wav';
+      // Use FFmpeg's chromaprint filter to generate fingerprint
+      const cmd = `ffmpeg -i "${audioPath}" -f chromaprint -fp_format raw - 2>&1`;
+      const { stdout, stderr } = await execAsync(cmd);
       
-      try {
-        // Convert to 16kHz mono WAV
-        const convCmd = `ffmpeg -i "${audioPath}" -acodec pcm_s16le -ar 16000 -ac 1 "${convertedPath}" -y 2>&1`;
-        console.log('[Chromaprint] Running conversion:', convCmd);
-        const convResult = await execAsync(convCmd);
-        console.log('[Chromaprint] FFmpeg output:', convResult.stdout || convResult.stderr);
-        
-        // Check if file was created and has content
-        const stats = fs.statSync(convertedPath);
-        console.log('[Chromaprint] Converted file size:', stats.size, 'bytes');
-        
-        if (stats.size === 0) {
-          throw new Error('Converted file is empty');
-        }
-        
-        console.log('[Chromaprint] Audio converted successfully');
-      } catch (convError) {
-        console.error('[Chromaprint] Conversion failed:', convError.message);
-        console.error('[Chromaprint] Full error:', convError.stdout || convError.stderr || convError);
-        // Try original file
-        convertedPath = null;
+      // FFmpeg outputs to stderr, fingerprint data to stdout
+      const output = stderr + stdout;
+      console.log('[Chromaprint] FFmpeg output sample:', output.substring(0, 200));
+      
+      // Parse duration from FFmpeg output
+      const durationMatch = output.match(/Duration: (\d+):(\d+):(\d+\.\d+)/);
+      let duration = 0;
+      if (durationMatch) {
+        const hours = parseInt(durationMatch[1]);
+        const minutes = parseInt(durationMatch[2]);
+        const seconds = parseFloat(durationMatch[3]);
+        duration = hours * 3600 + minutes * 60 + seconds;
       }
       
-      const inputFile = convertedPath && fs.existsSync(convertedPath) ? convertedPath : audioPath;
+      // Parse fingerprint from output
+      const fpMatch = output.match(/fingerprint=([A-Za-z0-9+\/=]+)/);
+      const fingerprint = fpMatch ? fpMatch[1] : stdout.trim();
       
-      console.log('[Chromaprint] Processing:', inputFile);
-      
-      // Try without format specification first
-      let stdout, result;
-      const filesToTry = [audioPath, inputFile];
-      let lastError;
-      
-      for (const tryFile of filesToTry) {
-        try {
-          console.log(`[Chromaprint] Trying: ${tryFile}`);
-          // Try without -json flag first (simpler parsing)
-          const rawResult = await execAsync(`${fpcalc} -raw "${tryFile}"`);
-          console.log(`[Chromaprint] Raw output:`, rawResult.stdout.substring(0, 200));
-          
-          // Parse the raw output (format: DURATION=X\nFINGERPRINT=...)
-          const lines = rawResult.stdout.trim().split('\n');
-          const durationLine = lines.find(l => l.startsWith('DURATION='));
-          const fingerprintLine = lines.find(l => l.startsWith('FINGERPRINT='));
-          
-          if (fingerprintLine) {
-            result = {
-              duration: durationLine ? parseFloat(durationLine.split('=')[1]) : 0,
-              fingerprint: fingerprintLine.split('=')[1]
-            };
-            console.log('[Chromaprint] SUCCESS with raw format!');
-            break;
-          }
-        } catch (error) {
-          console.log(`[Chromaprint] Failed on ${tryFile}:`, error.message);
-          lastError = error;
-        }
+      if (!fingerprint || fingerprint.length < 10) {
+        throw new Error('No fingerprint generated');
       }
       
-      if (!result || !result.fingerprint) {
-        throw lastError || new Error('Could not generate fingerprint');
-      }
-      
-      if (!result.fingerprint) {
-        throw new Error('Failed to generate audio fingerprint');
-      }
+      console.log('[Chromaprint] SUCCESS! Fingerprint length:', fingerprint.length);
       
       return {
         success: true,
-        duration: result.duration,
-        fingerprint: result.fingerprint,
-        raw_fingerprint: result.fingerprint
+        duration: duration,
+        fingerprint: fingerprint,
+        raw_fingerprint: fingerprint
       };
       
     } catch (error) {
@@ -127,15 +58,6 @@ class ChromaprintService {
         success: false,
         error: error.message
       };
-    } finally {
-      // Clean up converted file
-      if (convertedPath && fs.existsSync(convertedPath)) {
-        try {
-          fs.unlinkSync(convertedPath);
-        } catch (e) {
-          // Ignore cleanup errors
-        }
-      }
     }
   }
   
