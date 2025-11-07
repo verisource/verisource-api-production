@@ -6,6 +6,7 @@ const rateLimit = require('express-rate-limit');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
+const db = require('./db-minimal');
 // View engine for batch dashboard
 const app = express();
 
