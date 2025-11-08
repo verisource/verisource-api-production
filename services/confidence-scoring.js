@@ -411,24 +411,41 @@ class ConfidenceScoring {
     }
     
     const ai = data.ai_detection;
+    const confidence = ai.ai_confidence || 0;
     
-    if (ai.likely_ai_generated) {
-      score = 0;
-      details.push(`❌ AI-generated content detected (${ai.ai_confidence}% confidence)`);
-      
-      if (ai.indicators && ai.indicators.length > 0) {
-        ai.indicators.forEach(indicator => {
-          details.push(`  - ${indicator}`);
-        });
-      }
-    } else {
+    // Graduated scoring based on AI confidence level
+    if (confidence <= 20) {
       score = 30;
-      details.push('✅ Content appears authentic');
-      details.push(`  - AI suspicion score: ${ai.ai_confidence}%`);
-      
-      if (ai.metadata_check?.has_camera_exif) {
-        details.push('  - Camera metadata present');
+      details.push(`✅ Very low AI suspicion (${confidence}% - likely authentic)`);
+    } else if (confidence <= 40) {
+      score = 20;
+      details.push(`✅ Low AI suspicion (${confidence}% - probably authentic)`);
+    } else if (confidence <= 60) {
+      score = 10;
+      details.push(`⚠️ Moderate AI suspicion (${confidence}% - uncertain)`);
+    } else if (confidence <= 80) {
+      score = 5;
+      details.push(`⚠️ High AI suspicion (${confidence}% - probably AI)`);
+    } else {
+      score = 0;
+      details.push(`❌ Very high AI suspicion (${confidence}% - likely AI)`);
+    }
+    
+    // Add key indicators if present
+    if (ai.indicators && ai.indicators.length > 0) {
+      const topIndicators = ai.indicators.slice(0, 3);
+      topIndicators.forEach(indicator => {
+        details.push(`  - ${indicator}`);
+      });
+      if (ai.indicators.length > 3) {
+        details.push(`  - ...and ${ai.indicators.length - 3} more indicators`);
       }
+    }
+    
+    // Bonus for camera metadata
+    if (ai.metadata_check?.has_camera_exif && confidence <= 40) {
+      score = Math.min(score + 5, max);
+      details.push('✅ Bonus: Camera metadata present');
     }
     
     return { name: 'AI Authenticity', score, max, details };
