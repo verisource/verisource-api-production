@@ -27,7 +27,7 @@ async function detectAIGeneration(imagePath) {
     
     // // Check 2: No EXIF camera data (but reduce weight - could be professional CGI)
     if (!metadata.exif || Object.keys(metadata.exif).length < 5) {
-      suspicionScore += 10;  // Reduced from 30
+      suspicionScore += 5;  // Further reduced for images (Wikipedia strips EXIF)
       indicators.push('Missing camera metadata');
     }
     
@@ -105,7 +105,8 @@ async function detectAIGeneration(imagePath) {
         suspicionScore += 15;
         indicators.push(`Unnaturally low noise (${Math.round(noiseStats.avgVariance)})`);
       } else if (noiseStats.avgVariance > 800) {
-        suspicionScore += 15;
+        // High noise is MORE authentic for real photos - skip this check for now
+        // suspicionScore += 15;
         indicators.push(`Excessive noise (${Math.round(noiseStats.avgVariance)})`);
       } else if (noiseStats.avgVariance >= 100 && noiseStats.avgVariance <= 500 && suspicionScore > 20) {
         suspicionScore -= 10;
@@ -167,8 +168,8 @@ async function detectAIGeneration(imagePath) {
       }
     })();
     if (colorStats.valid) {
-      if (colorStats.extremeRatio > 0.15) {  // Raised threshold from 0.1
-        suspicionScore += 10;  // Reduced from 15
+      if (colorStats.extremeRatio > 0.25) {  // Even higher threshold - natural photos can have varied colors
+        suspicionScore += 8;  // Reduced penalty
         indicators.push(`Unusual color distribution (${Math.round(colorStats.extremeRatio * 100)}%)`);
       }
       if (colorStats.saturationRatio > 0.85) {
@@ -181,7 +182,7 @@ async function detectAIGeneration(imagePath) {
       }
     }
     return {
-      likely_ai_generated: suspicionScore >= 80,
+      likely_ai_generated: suspicionScore >= 90,
       ai_confidence: Math.min(suspicionScore, 100),
       indicators: indicators,
       metadata_check: {
