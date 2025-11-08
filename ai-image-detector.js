@@ -143,6 +143,43 @@ async function detectAIGeneration(imagePath) {
         indicators.push('Lack of texture detail');
       }
     }
+    
+    // Check 9: Color space anomalies
+    const colorStats = await (async () => {
+      try {
+        const labImage = await sharp(imagePath).toColourspace('lab').raw().toBuffer({ resolveWithObject: true });
+        const { data, info } = labImage;
+        const pixels = new Uint8Array(data);
+        const channels = info.channels;
+        let extremeColors = 0, unnaturalSaturation = 0;
+        const sampleSize = Math.min(5000, pixels.length / channels);
+        for (let i = 0; i < sampleSize * channels; i += channels) {
+          const L = pixels[i];
+          const A = pixels[i + 1] - 128;
+          const B = pixels[i + 2] - 128;
+          const saturation = Math.sqrt(A * A + B * B);
+          if (saturation > 100) unnaturalSaturation++;
+          if (Math.abs(A) > 100 || Math.abs(B) > 100) extremeColors++;
+        }
+        return { extremeRatio: extremeColors / sampleSize, saturationRatio: unnaturalSaturation / sampleSize, valid: true };
+      } catch (err) {
+        return { extremeRatio: 0, saturationRatio: 0, valid: false };
+      }
+    })();
+    if (colorStats.valid) {
+      if (colorStats.extremeRatio > 0.1) {
+        suspicionScore += 15;
+        indicators.push(`Unusual color distribution (${Math.round(colorStats.extremeRatio * 100)}%)`);
+      }
+      if (colorStats.saturationRatio > 0.2) {
+        suspicionScore += 10;
+        indicators.push(`Excessive saturation (${Math.round(colorStats.saturationRatio * 100)}%)`);
+      }
+      if (colorStats.extremeRatio < 0.01 && colorStats.saturationRatio < 0.05) {
+        suspicionScore += 10;
+        indicators.push('Unnaturally uniform colors');
+      }
+    }
     return {
       likely_ai_generated: suspicionScore >= 50,
       ai_confidence: Math.min(suspicionScore, 100),
