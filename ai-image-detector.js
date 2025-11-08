@@ -76,6 +76,56 @@ async function detectAIGeneration(imagePath) {
       if (!metadata.exif && ratio > 0.85) {
         suspicionScore += 15;
         indicators.push('Perfect quality without camera data (AI signature)');
+    }
+    
+    // Check 7: Noise pattern analysis
+    // Real cameras have consistent sensor noise, AI images lack this
+    const noiseStats = await (async () => {
+      try {
+        // Extract luminance channel for noise analysis
+        const grayImage = await sharp(imagePath)
+          .greyscale()
+          .raw()
+          .toBuffer({ resolveWithObject: true });
+        
+        const { data, info } = grayImage;
+        const pixels = new Uint8Array(data);
+        
+        // Calculate local variance (noise indicator)
+        let totalVariance = 0;
+        const sampleSize = Math.min(10000, pixels.length - 100);
+        
+        for (let i = 0; i < sampleSize; i += 100) {
+          const window = pixels.slice(i, i + 100);
+          const mean = window.reduce((a, b) => a + b, 0) / window.length;
+          const variance = window.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / window.length;
+          totalVariance += variance;
+        }
+        
+        const avgVariance = totalVariance / (sampleSize / 100);
+        return { avgVariance, valid: true };
+      } catch (err) {
+        return { avgVariance: 0, valid: false };
+      }
+    })();
+    
+    if (noiseStats.valid) {
+      // Real photos typically have variance between 100-500
+      // AI images often have very low variance (<50) or very high (>800)
+      if (noiseStats.avgVariance < 50) {
+        suspicionScore += 25;
+        indicators.push(`Unnaturally low noise (${Math.round(noiseStats.avgVariance)} - typical AI smoothness)`);
+      } else if (noiseStats.avgVariance > 800) {
+        suspicionScore += 15;
+        indicators.push(`Excessive noise variation (${Math.round(noiseStats.avgVariance)} - may indicate artificial noise)`);
+      } else if (noiseStats.avgVariance >= 100 && noiseStats.avgVariance <= 500) {
+        // This is good - natural camera noise range
+        // Don't add suspicion, this actually reduces AI likelihood
+        if (suspicionScore > 20) {
+          suspicionScore -= 10; // Bonus for natural noise
+          indicators.push(`Natural camera noise detected (${Math.round(noiseStats.avgVariance)})`);
+        }
+      }
       }
     }
     }
