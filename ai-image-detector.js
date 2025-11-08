@@ -182,7 +182,7 @@ async function detectAIGeneration(imagePath) {
       }
     }
     return {
-      likely_ai_generated: suspicionScore >= 90,
+      likely_ai_generated: suspicionScore >= 45,
       ai_confidence: Math.min(suspicionScore, 100),
       indicators: indicators,
       metadata_check: {
