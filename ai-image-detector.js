@@ -124,6 +124,64 @@ async function detectAIGeneration(imagePath) {
         if (suspicionScore > 20) {
           suspicionScore -= 10; // Bonus for natural noise
           indicators.push(`Natural camera noise detected (${Math.round(noiseStats.avgVariance)})`);
+      }
+    }
+    
+    // Check 8: Frequency domain analysis (simplified)
+    // AI images often lack high-frequency detail (texture)
+    const frequencyStats = await (async () => {
+      try {
+        // Get edge detection to approximate high-frequency content
+        const edges = await sharp(imagePath)
+          .greyscale()
+          .convolve({
+            width: 3,
+            height: 3,
+            kernel: [-1, -1, -1, -1, 8, -1, -1, -1, -1] // Laplacian edge detection
+          })
+          .raw()
+          .toBuffer({ resolveWithObject: true });
+        
+        const { data } = edges;
+        const pixels = new Uint8Array(data);
+        
+        // Calculate edge intensity (high frequency measure)
+        let edgeSum = 0;
+        let strongEdges = 0;
+        
+        for (let i = 0; i < pixels.length; i++) {
+          edgeSum += pixels[i];
+          if (pixels[i] > 100) strongEdges++;
+        }
+        
+        const avgEdgeIntensity = edgeSum / pixels.length;
+        const strongEdgeRatio = strongEdges / pixels.length;
+        
+        return { avgEdgeIntensity, strongEdgeRatio, valid: true };
+      } catch (err) {
+        return { avgEdgeIntensity: 0, strongEdgeRatio: 0, valid: false };
+      }
+    })();
+    
+    if (frequencyStats.valid) {
+      // AI images often have unnaturally low edge intensity (too smooth)
+      // Real photos typically have avgEdgeIntensity > 20
+      if (frequencyStats.avgEdgeIntensity < 15) {
+        suspicionScore += 20;
+        indicators.push(`Unnaturally smooth (low edge detail: ${Math.round(frequencyStats.avgEdgeIntensity)} - typical AI artifact)`);
+      }
+      
+      // Very high edge intensity can also indicate artificial sharpening
+      if (frequencyStats.avgEdgeIntensity > 60) {
+        suspicionScore += 10;
+        indicators.push(`Excessive edge enhancement (${Math.round(frequencyStats.avgEdgeIntensity)} - may indicate post-processing)`);
+      }
+      
+      // Check strong edge ratio
+      if (frequencyStats.strongEdgeRatio < 0.05 && frequencyStats.avgEdgeIntensity < 20) {
+        suspicionScore += 15;
+        indicators.push('Lack of texture detail (GAN/diffusion artifact)');
+      }
         }
       }
       }
