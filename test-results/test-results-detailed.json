@@ -1,0 +1,525 @@
+{
+  "startTime": "2025-11-08T20:07:26.457Z",
+  "total": 23,
+  "correct": 10,
+  "incorrect": 13,
+  "errors": 2,
+  "byCategory": {
+    "authentic": {
+      "total": 10,
+      "correct": 10,
+      "incorrect": 0,
+      "errors": 0,
+      "details": [
+        {
+          "category": "authentic",
+          "url": "http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
+          "videoName": "video_1.mp4",
+          "expected": "AUTHENTIC",
+          "actual": "AUTHENTIC",
+          "confidence": 50,
+          "correct": true,
+          "verdict": "AUTHENTIC"
+        },
+        {
+          "category": "authentic",
+          "url": "http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4",
+          "videoName": "video_2.mp4",
+          "expected": "AUTHENTIC",
+          "actual": "AUTHENTIC",
+          "confidence": 50,
+          "correct": true,
+          "verdict": "AUTHENTIC"
+        },
+        {
+          "category": "authentic",
+          "url": "http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4",
+          "videoName": "video_3.mp4",
+          "expected": "AUTHENTIC",
+          "actual": "AUTHENTIC",
+          "confidence": 50,
+          "correct": true,
+          "verdict": "AUTHENTIC"
+        },
+        {
+          "category": "authentic",
+          "url": "http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4",
+          "videoName": "video_4.mp4",
+          "expected": "AUTHENTIC",
+          "actual": "AUTHENTIC",
+          "confidence": 50,
+          "correct": true,
+          "verdict": "AUTHENTIC"
+        },
+        {
+          "category": "authentic",
+          "url": "http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerFun.mp4",
+          "videoName": "video_5.mp4",
+          "expected": "AUTHENTIC",
+          "actual": "AUTHENTIC",
+          "confidence": 50,
+          "correct": true,
+          "verdict": "AUTHENTIC"
+        },
+        {
+          "category": "authentic",
+          "url": "https://download.blender.org/demo/movies/BBB/bbb_sunflower_1080p_30fps_normal.mp4.zip",
+          "videoName": "video_6.mp4",
+          "expected": "AUTHENTIC",
+          "actual": "AUTHENTIC",
+          "confidence": 50,
+          "correct": true,
+          "verdict": "AUTHENTIC"
+        },
+        {
+          "category": "authentic",
+          "url": "https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/360/Big_Buck_Bunny_360_10s_1MB.mp4",
+          "videoName": "video_7.mp4",
+          "expected": "AUTHENTIC",
+          "actual": "AUTHENTIC",
+          "confidence": 50,
+          "correct": true,
+          "verdict": "AUTHENTIC"
+        },
+        {
+          "category": "authentic",
+          "url": "https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/720/Big_Buck_Bunny_720_10s_5MB.mp4",
+          "videoName": "video_8.mp4",
+          "expected": "AUTHENTIC",
+          "actual": "AUTHENTIC",
+          "confidence": 50,
+          "correct": true,
+          "verdict": "AUTHENTIC"
+        },
+        {
+          "category": "authentic",
+          "url": "https://test-videos.co.uk/vids/jellyfish/mp4/h264/360/Jellyfish_360_10s_1MB.mp4",
+          "videoName": "video_9.mp4",
+          "expected": "AUTHENTIC",
+          "actual": "AUTHENTIC",
+          "confidence": 50,
+          "correct": true,
+          "verdict": "AUTHENTIC"
+        },
+        {
+          "category": "authentic",
+          "url": "https://test-videos.co.uk/vids/jellyfish/mp4/h264/720/Jellyfish_720_10s_5MB.mp4",
+          "videoName": "video_10.mp4",
+          "expected": "AUTHENTIC",
+          "actual": "AUTHENTIC",
+          "confidence": 50,
+          "correct": true,
+          "verdict": "AUTHENTIC"
+        }
+      ]
+    },
+    "deepfakes": {
+      "total": 5,
+      "correct": 0,
+      "incorrect": 5,
+      "errors": 0,
+      "details": [
+        {
+          "category": "deepfakes",
+          "url": "https://github.com/ondyari/FaceForensics/raw/master/dataset/videos/original_videos/000.mp4",
+          "videoName": "video_1.mp4",
+          "expected": "LIKELY_MANIPULATED",
+          "actual": "AUTHENTIC",
+          "confidence": 50,
+          "correct": false,
+          "verdict": "AUTHENTIC"
+        },
+        {
+          "category": "deepfakes",
+          "url": "https://github.com/ondyari/FaceForensics/raw/master/dataset/videos/original_videos/001.mp4",
+          "videoName": "video_2.mp4",
+          "expected": "LIKELY_MANIPULATED",
+          "actual": "AUTHENTIC",
+          "confidence": 50,
+          "correct": false,
+          "verdict": "AUTHENTIC"
+        },
+        {
+          "category": "deepfakes",
+          "url": "https://github.com/ondyari/FaceForensics/raw/master/dataset/videos/original_videos/002.mp4",
+          "videoName": "video_3.mp4",
+          "expected": "LIKELY_MANIPULATED",
+          "actual": "AUTHENTIC",
+          "confidence": 50,
+          "correct": false,
+          "verdict": "AUTHENTIC"
+        },
+        {
+          "category": "deepfakes",
+          "url": "https://github.com/ondyari/FaceForensics/raw/master/dataset/videos/original_videos/003.mp4",
+          "videoName": "video_4.mp4",
+          "expected": "LIKELY_MANIPULATED",
+          "actual": "AUTHENTIC",
+          "confidence": 50,
+          "correct": false,
+          "verdict": "AUTHENTIC"
+        },
+        {
+          "category": "deepfakes",
+          "url": "https://github.com/ondyari/FaceForensics/raw/master/dataset/videos/original_videos/004.mp4",
+          "videoName": "video_5.mp4",
+          "expected": "LIKELY_MANIPULATED",
+          "actual": "AUTHENTIC",
+          "confidence": 50,
+          "correct": false,
+          "verdict": "AUTHENTIC"
+        }
+      ]
+    },
+    "ai-generated": {
+      "total": 5,
+      "correct": 0,
+      "incorrect": 3,
+      "errors": 2,
+      "details": [
+        {
+          "category": "ai-generated",
+          "url": "https://file-examples.com/wp-content/uploads/2017/04/file_example_MP4_480_1_5MG.mp4",
+          "videoName": "video_3.mp4",
+          "expected": "LIKELY_MANIPULATED",
+          "actual": "AUTHENTIC",
+          "confidence": 50,
+          "correct": false,
+          "verdict": "AUTHENTIC"
+        },
+        {
+          "category": "ai-generated",
+          "url": "https://file-examples.com/wp-content/uploads/2017/04/file_example_MP4_640_3MG.mp4",
+          "videoName": "video_4.mp4",
+          "expected": "LIKELY_MANIPULATED",
+          "actual": "AUTHENTIC",
+          "confidence": 50,
+          "correct": false,
+          "verdict": "AUTHENTIC"
+        },
+        {
+          "category": "ai-generated",
+          "url": "https://file-examples.com/wp-content/uploads/2017/04/file_example_MP4_1280_10MG.mp4",
+          "videoName": "video_5.mp4",
+          "expected": "LIKELY_MANIPULATED",
+          "actual": "AUTHENTIC",
+          "confidence": 50,
+          "correct": false,
+          "verdict": "AUTHENTIC"
+        }
+      ]
+    },
+    "manipulated": {
+      "total": 5,
+      "correct": 0,
+      "incorrect": 5,
+      "errors": 0,
+      "details": [
+        {
+          "category": "manipulated",
+          "url": "http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4",
+          "videoName": "video_1.mp4",
+          "expected": "QUESTIONABLE",
+          "actual": "AUTHENTIC",
+          "confidence": 50,
+          "correct": false,
+          "verdict": "AUTHENTIC"
+        },
+        {
+          "category": "manipulated",
+          "url": "http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4",
+          "videoName": "video_2.mp4",
+          "expected": "QUESTIONABLE",
+          "actual": "AUTHENTIC",
+          "confidence": 50,
+          "correct": false,
+          "verdict": "AUTHENTIC"
+        },
+        {
+          "category": "manipulated",
+          "url": "http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/VolkswagenGTIReview.mp4",
+          "videoName": "video_3.mp4",
+          "expected": "QUESTIONABLE",
+          "actual": "AUTHENTIC",
+          "confidence": 50,
+          "correct": false,
+          "verdict": "AUTHENTIC"
+        },
+        {
+          "category": "manipulated",
+          "url": "http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/WeAreGoingOnBullrun.mp4",
+          "videoName": "video_4.mp4",
+          "expected": "QUESTIONABLE",
+          "actual": "AUTHENTIC",
+          "confidence": 50,
+          "correct": false,
+          "verdict": "AUTHENTIC"
+        },
+        {
+          "category": "manipulated",
+          "url": "http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/WhatCarCanYouGetForAGrand.mp4",
+          "videoName": "video_5.mp4",
+          "expected": "QUESTIONABLE",
+          "actual": "AUTHENTIC",
+          "confidence": 50,
+          "correct": false,
+          "verdict": "AUTHENTIC"
+        }
+      ]
+    }
+  },
+  "confusionMatrix": {
+    "truePositive": 0,
+    "trueNegative": 10,
+    "falsePositive": 0,
+    "falseNegative": 13
+  },
+  "detailedResults": [
+    {
+      "category": "authentic",
+      "url": "http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
+      "videoName": "video_1.mp4",
+      "expected": "AUTHENTIC",
+      "actual": "AUTHENTIC",
+      "confidence": 50,
+      "correct": true,
+      "verdict": "AUTHENTIC"
+    },
+    {
+      "category": "authentic",
+      "url": "http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4",
+      "videoName": "video_2.mp4",
+      "expected": "AUTHENTIC",
+      "actual": "AUTHENTIC",
+      "confidence": 50,
+      "correct": true,
+      "verdict": "AUTHENTIC"
+    },
+    {
+      "category": "authentic",
+      "url": "http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4",
+      "videoName": "video_3.mp4",
+      "expected": "AUTHENTIC",
+      "actual": "AUTHENTIC",
+      "confidence": 50,
+      "correct": true,
+      "verdict": "AUTHENTIC"
+    },
+    {
+      "category": "authentic",
+      "url": "http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4",
+      "videoName": "video_4.mp4",
+      "expected": "AUTHENTIC",
+      "actual": "AUTHENTIC",
+      "confidence": 50,
+      "correct": true,
+      "verdict": "AUTHENTIC"
+    },
+    {
+      "category": "authentic",
+      "url": "http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerFun.mp4",
+      "videoName": "video_5.mp4",
+      "expected": "AUTHENTIC",
+      "actual": "AUTHENTIC",
+      "confidence": 50,
+      "correct": true,
+      "verdict": "AUTHENTIC"
+    },
+    {
+      "category": "authentic",
+      "url": "https://download.blender.org/demo/movies/BBB/bbb_sunflower_1080p_30fps_normal.mp4.zip",
+      "videoName": "video_6.mp4",
+      "expected": "AUTHENTIC",
+      "actual": "AUTHENTIC",
+      "confidence": 50,
+      "correct": true,
+      "verdict": "AUTHENTIC"
+    },
+    {
+      "category": "authentic",
+      "url": "https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/360/Big_Buck_Bunny_360_10s_1MB.mp4",
+      "videoName": "video_7.mp4",
+      "expected": "AUTHENTIC",
+      "actual": "AUTHENTIC",
+      "confidence": 50,
+      "correct": true,
+      "verdict": "AUTHENTIC"
+    },
+    {
+      "category": "authentic",
+      "url": "https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/720/Big_Buck_Bunny_720_10s_5MB.mp4",
+      "videoName": "video_8.mp4",
+      "expected": "AUTHENTIC",
+      "actual": "AUTHENTIC",
+      "confidence": 50,
+      "correct": true,
+      "verdict": "AUTHENTIC"
+    },
+    {
+      "category": "authentic",
+      "url": "https://test-videos.co.uk/vids/jellyfish/mp4/h264/360/Jellyfish_360_10s_1MB.mp4",
+      "videoName": "video_9.mp4",
+      "expected": "AUTHENTIC",
+      "actual": "AUTHENTIC",
+      "confidence": 50,
+      "correct": true,
+      "verdict": "AUTHENTIC"
+    },
+    {
+      "category": "authentic",
+      "url": "https://test-videos.co.uk/vids/jellyfish/mp4/h264/720/Jellyfish_720_10s_5MB.mp4",
+      "videoName": "video_10.mp4",
+      "expected": "AUTHENTIC",
+      "actual": "AUTHENTIC",
+      "confidence": 50,
+      "correct": true,
+      "verdict": "AUTHENTIC"
+    },
+    {
+      "category": "deepfakes",
+      "url": "https://github.com/ondyari/FaceForensics/raw/master/dataset/videos/original_videos/000.mp4",
+      "videoName": "video_1.mp4",
+      "expected": "LIKELY_MANIPULATED",
+      "actual": "AUTHENTIC",
+      "confidence": 50,
+      "correct": false,
+      "verdict": "AUTHENTIC"
+    },
+    {
+      "category": "deepfakes",
+      "url": "https://github.com/ondyari/FaceForensics/raw/master/dataset/videos/original_videos/001.mp4",
+      "videoName": "video_2.mp4",
+      "expected": "LIKELY_MANIPULATED",
+      "actual": "AUTHENTIC",
+      "confidence": 50,
+      "correct": false,
+      "verdict": "AUTHENTIC"
+    },
+    {
+      "category": "deepfakes",
+      "url": "https://github.com/ondyari/FaceForensics/raw/master/dataset/videos/original_videos/002.mp4",
+      "videoName": "video_3.mp4",
+      "expected": "LIKELY_MANIPULATED",
+      "actual": "AUTHENTIC",
+      "confidence": 50,
+      "correct": false,
+      "verdict": "AUTHENTIC"
+    },
+    {
+      "category": "deepfakes",
+      "url": "https://github.com/ondyari/FaceForensics/raw/master/dataset/videos/original_videos/003.mp4",
+      "videoName": "video_4.mp4",
+      "expected": "LIKELY_MANIPULATED",
+      "actual": "AUTHENTIC",
+      "confidence": 50,
+      "correct": false,
+      "verdict": "AUTHENTIC"
+    },
+    {
+      "category": "deepfakes",
+      "url": "https://github.com/ondyari/FaceForensics/raw/master/dataset/videos/original_videos/004.mp4",
+      "videoName": "video_5.mp4",
+      "expected": "LIKELY_MANIPULATED",
+      "actual": "AUTHENTIC",
+      "confidence": 50,
+      "correct": false,
+      "verdict": "AUTHENTIC"
+    },
+    {
+      "category": "ai-generated",
+      "url": "https://sample-videos.com/video321/mp4/240/big_buck_bunny_240p_1mb.mp4",
+      "videoName": "video_1.mp4",
+      "error": "Download failed"
+    },
+    {
+      "category": "ai-generated",
+      "url": "https://sample-videos.com/video321/mp4/480/big_buck_bunny_480p_1mb.mp4",
+      "videoName": "video_2.mp4",
+      "error": "Download failed"
+    },
+    {
+      "category": "ai-generated",
+      "url": "https://file-examples.com/wp-content/uploads/2017/04/file_example_MP4_480_1_5MG.mp4",
+      "videoName": "video_3.mp4",
+      "expected": "LIKELY_MANIPULATED",
+      "actual": "AUTHENTIC",
+      "confidence": 50,
+      "correct": false,
+      "verdict": "AUTHENTIC"
+    },
+    {
+      "category": "ai-generated",
+      "url": "https://file-examples.com/wp-content/uploads/2017/04/file_example_MP4_640_3MG.mp4",
+      "videoName": "video_4.mp4",
+      "expected": "LIKELY_MANIPULATED",
+      "actual": "AUTHENTIC",
+      "confidence": 50,
+      "correct": false,
+      "verdict": "AUTHENTIC"
+    },
+    {
+      "category": "ai-generated",
+      "url": "https://file-examples.com/wp-content/uploads/2017/04/file_example_MP4_1280_10MG.mp4",
+      "videoName": "video_5.mp4",
+      "expected": "LIKELY_MANIPULATED",
+      "actual": "AUTHENTIC",
+      "confidence": 50,
+      "correct": false,
+      "verdict": "AUTHENTIC"
+    },
+    {
+      "category": "manipulated",
+      "url": "http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4",
+      "videoName": "video_1.mp4",
+      "expected": "QUESTIONABLE",
+      "actual": "AUTHENTIC",
+      "confidence": 50,
+      "correct": false,
+      "verdict": "AUTHENTIC"
+    },
+    {
+      "category": "manipulated",
+      "url": "http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4",
+      "videoName": "video_2.mp4",
+      "expected": "QUESTIONABLE",
+      "actual": "AUTHENTIC",
+      "confidence": 50,
+      "correct": false,
+      "verdict": "AUTHENTIC"
+    },
+    {
+      "category": "manipulated",
+      "url": "http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/VolkswagenGTIReview.mp4",
+      "videoName": "video_3.mp4",
+      "expected": "QUESTIONABLE",
+      "actual": "AUTHENTIC",
+      "confidence": 50,
+      "correct": false,
+      "verdict": "AUTHENTIC"
+    },
+    {
+      "category": "manipulated",
+      "url": "http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/WeAreGoingOnBullrun.mp4",
+      "videoName": "video_4.mp4",
+      "expected": "QUESTIONABLE",
+      "actual": "AUTHENTIC",
+      "confidence": 50,
+      "correct": false,
+      "verdict": "AUTHENTIC"
+    },
+    {
+      "category": "manipulated",
+      "url": "http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/WhatCarCanYouGetForAGrand.mp4",
+      "videoName": "video_5.mp4",
+      "expected": "QUESTIONABLE",
+      "actual": "AUTHENTIC",
+      "confidence": 50,
+      "correct": false,
+      "verdict": "AUTHENTIC"
+    }
+  ],
+  "accuracy": "47.62",
+  "precision": 0,
+  "recall": "0.00",
+  "f1Score": 0
+}

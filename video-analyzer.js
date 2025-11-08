@@ -87,14 +87,23 @@ async function analyzeVideo(videoPath, options = {}) {
     const aiPercentage = (aiGeneratedFrames / analyzedFrames) * 100;
     let videoConfidence = 100;
     let verdict = 'AUTHENTIC';
-    if (aiPercentage > 50) {
-      videoConfidence = 20;
+    if (aiPercentage > 70) {
+      videoConfidence = 90;
       verdict = 'LIKELY_AI_GENERATED';
-    } else if (suspiciousPercentage > 30) {
-      videoConfidence = 40;
+    } else if (aiPercentage > 50) {
+      videoConfidence = 75;
+      verdict = 'LIKELY_AI_GENERATED';
+    } else if (aiPercentage > 30) {
+      videoConfidence = 60;
       verdict = 'SUSPICIOUS';
-    } else if (suspiciousPercentage > 10) {
+    } else if (suspiciousPercentage > 50) {
+      videoConfidence = 50;
+      verdict = 'SUSPICIOUS';
+    } else if (suspiciousPercentage > 30) {
       videoConfidence = 70;
+      verdict = 'POSSIBLY_MANIPULATED';
+    } else if (suspiciousPercentage > 10) {
+      videoConfidence = 85;
       verdict = 'POSSIBLY_MANIPULATED';
     }
     try {

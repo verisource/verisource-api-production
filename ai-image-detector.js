@@ -25,9 +25,9 @@ async function detectAIGeneration(imagePath) {
       indicators.push('Common AI generation dimensions');
     }
     
-    // Check 2: No EXIF camera data
+    // // Check 2: No EXIF camera data (but reduce weight - could be professional CGI)
     if (!metadata.exif || Object.keys(metadata.exif).length < 5) {
-      suspicionScore += 30;
+      suspicionScore += 10;  // Reduced from 30
       indicators.push('Missing camera metadata');
     }
     
@@ -101,8 +101,8 @@ async function detectAIGeneration(imagePath) {
       }
     })();
     if (noiseStats.valid) {
-      if (noiseStats.avgVariance < 50) {
-        suspicionScore += 25;
+      if (noiseStats.avgVariance < 20) {
+        suspicionScore += 15;
         indicators.push(`Unnaturally low noise (${Math.round(noiseStats.avgVariance)})`);
       } else if (noiseStats.avgVariance > 800) {
         suspicionScore += 15;
@@ -131,15 +131,15 @@ async function detectAIGeneration(imagePath) {
     })();
     if (frequencyStats.valid) {
       if (frequencyStats.avgEdgeIntensity < 15) {
-        suspicionScore += 20;
+        suspicionScore += 10;  // Reduced from 20
         indicators.push(`Unnaturally smooth (${Math.round(frequencyStats.avgEdgeIntensity)})`);
       }
       if (frequencyStats.avgEdgeIntensity > 60) {
         suspicionScore += 10;
         indicators.push(`Excessive edge enhancement (${Math.round(frequencyStats.avgEdgeIntensity)})`);
       }
-      if (frequencyStats.strongEdgeRatio < 0.05 && frequencyStats.avgEdgeIntensity < 20) {
-        suspicionScore += 15;
+      if (frequencyStats.strongEdgeRatio < 0.02 && frequencyStats.avgEdgeIntensity < 20) {
+        suspicionScore += 10;
         indicators.push('Lack of texture detail');
       }
     }
@@ -167,12 +167,12 @@ async function detectAIGeneration(imagePath) {
       }
     })();
     if (colorStats.valid) {
-      if (colorStats.extremeRatio > 0.1) {
-        suspicionScore += 15;
+      if (colorStats.extremeRatio > 0.15) {  // Raised threshold from 0.1
+        suspicionScore += 10;  // Reduced from 15
         indicators.push(`Unusual color distribution (${Math.round(colorStats.extremeRatio * 100)}%)`);
       }
-      if (colorStats.saturationRatio > 0.2) {
-        suspicionScore += 10;
+      if (colorStats.saturationRatio > 0.85) {
+        suspicionScore += 5;
         indicators.push(`Excessive saturation (${Math.round(colorStats.saturationRatio * 100)}%)`);
       }
       if (colorStats.extremeRatio < 0.01 && colorStats.saturationRatio < 0.05) {
@@ -181,7 +181,7 @@ async function detectAIGeneration(imagePath) {
       }
     }
     return {
-      likely_ai_generated: suspicionScore >= 50,
+      likely_ai_generated: suspicionScore >= 80,
       ai_confidence: Math.min(suspicionScore, 100),
       indicators: indicators,
       metadata_check: {
