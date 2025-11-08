@@ -1,5 +1,5 @@
-https://sample-videos.com/video321/mp4/240/big_buck_bunny_240p_1mb.mp4
-https://sample-videos.com/video321/mp4/480/big_buck_bunny_480p_1mb.mp4
-https://file-examples.com/wp-content/uploads/2017/04/file_example_MP4_480_1_5MG.mp4
-https://file-examples.com/wp-content/uploads/2017/04/file_example_MP4_640_3MG.mp4
-https://file-examples.com/wp-content/uploads/2017/04/file_example_MP4_1280_10MG.mp4
+https://thispersondoesnotexist.com/
+https://fakeface.rest/face/image?gender=male
+https://fakeface.rest/face/image?gender=female
+https://this-person-does-not-exist.com/img
+https://fakeface.rest/face/image
