@@ -211,7 +211,7 @@ class ConfidenceScoring {
       details.push('✅ Valid image file');
     }
     
-    if (data.canonical?.fingerprint) {
+    if (data.canonical?.fingerprint || data.fingerprint) {
       score += 10;
       details.push('✅ Cryptographic fingerprint generated');
     }
