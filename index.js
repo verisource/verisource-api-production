@@ -376,6 +376,22 @@ app.post('/verify', upload.single('file'), async (req, res) => {
           aiDetection = { error: err.message };
         }
       }
+
+      // Analyze video frames for AI detection
+      let videoAnalysis = null;
+      if (kind === 'video') {
+        try {
+          console.log('🎥 Analyzing video frames...');
+          videoAnalysis = await analyzeVideo(req.file.path, {
+            fps: 1,
+            maxFrames: 30
+          });
+          console.log(`✅ Video analysis complete: ${videoAnalysis.frames_analyzed} frames, ${videoAnalysis.suspicious_percentage.toFixed(1)}% suspicious`);
+        } catch (err) {
+          console.error('⚠️ Video analysis error:', err.message);
+          videoAnalysis = { error: err.message };
+        }
+      }
     // Save this verification to database
     try {
       const ipAddress = req.ip || req.connection.remoteAddress;
@@ -417,6 +433,9 @@ app.post('/verify', upload.single('file'), async (req, res) => {
         phash: phash,
         similar_images: similarImages,
           ...(aiDetection && { ai_detection: aiDetection }),
+      }),
+      ...(kind === 'video' && videoAnalysis && {
+        video_analysis: videoAnalysis
       }),
       ...(kind === 'image' && await (async () => {
         try {
