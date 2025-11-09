@@ -377,6 +377,19 @@ app.post('/verify', upload.single('file'), async (req, res) => {
         }
       }
 
+      // Get Google Vision results for confidence scoring
+      let googleVisionResult = null;
+      if (kind === 'image') {
+        try {
+          console.log('👁️ Running Google Vision analysis...');
+          googleVisionResult = await analyzeImage(req.file.path);
+          console.log('✅ Google Vision analysis complete');
+        } catch (err) {
+          console.error('⚠️ Google Vision error:', err.message);
+          googleVisionResult = { error: err.message };
+        }
+      }
+
       // Analyze video frames for AI detection
       let videoAnalysis = null;
       if (kind === 'video') {
@@ -437,17 +450,7 @@ app.post('/verify', upload.single('file'), async (req, res) => {
       ...(kind === 'video' && videoAnalysis && {
         video_analysis: videoAnalysis
       }),
-      ...(kind === 'image' && await (async () => {
-        try {
-          console.log('👁️ Running Google Vision analysis...');
-          const visionResult = await analyzeImage(req.file.path);
-          console.log('✅ Google Vision analysis complete');
-          return { google_vision: visionResult };
-        } catch (err) {
-          console.error('⚠️ Google Vision error:', err.message);
-          return { google_vision: { error: err.message } };
-        }
-      })()),
+      ...(kind === 'image' && googleVisionResult && { google_vision: googleVisionResult }),
       virustotal: await (async () => {
         try {
           console.log('🔍 Checking VirusTotal...');
@@ -471,13 +474,10 @@ app.post('/verify', upload.single('file'), async (req, res) => {
             ...(phash && { phash }),
             ...(similarImages && { similar_images: similarImages }),
               ...(aiDetection && { ai_detection: aiDetection }),
+              ...(googleVisionResult && { google_vision: googleVisionResult }),
           };
           
-          // Add google_vision after it's been fetched
-          if (r.google_vision) {
-            confidenceData.google_vision = r.google_vision;
-          }
-          
+
           console.log('📊 Calculating confidence score...');
           const score = ConfidenceScoring.calculate(confidenceData);
           console.log(`✅ Confidence: ${score.level} (${score.percentage}%)`);
