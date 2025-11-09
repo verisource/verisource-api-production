@@ -386,7 +386,7 @@ app.post('/verify', upload.single('file'), async (req, res) => {
             fps: 1,
             maxFrames: 30
           });
-          console.log(`✅ Video analysis complete: ${videoAnalysis.frames_analyzed} frames, ${videoAnalysis.suspicious_percentage.toFixed(1)}% suspicious`);
+          console.log('✅ Video analysis complete:', videoAnalysis.frames_analyzed, 'frames analyzed');
         } catch (err) {
           console.error('⚠️ Video analysis error:', err.message);
           videoAnalysis = { error: err.message };
