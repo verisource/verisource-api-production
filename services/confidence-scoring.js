@@ -15,8 +15,7 @@ class ConfidenceScoring {
       this.scoreMetadataQuality(verification),
       this.scoreExternalVerification(verification),
       this.scoreForensicAnalysis(verification),
-      this.scoreTemporalTrust(verification),
-      this.scoreAIAuthenticity(verification),
+      this.scoreTemporalTrust(verification)
     ];
     
     const totalScore = factors.reduce((sum, f) => sum + f.score, 0);
@@ -207,37 +206,24 @@ class ConfidenceScoring {
     let score = 0;
     const details = [];
     
-    // Base: Valid file type (15 points)
     if (data.kind === 'image') {
-      score += 15;
-      details.push('✅ Valid image file');
-    } else if (data.kind === 'video') {
-      score += 15;
-      details.push('✅ Valid video file');
-    } else if (data.kind === 'audio') {
-      score += 15;
-      details.push('✅ Valid audio file');
-    }
-    
-    // Has fingerprint (10 points)
-    if (data.canonical?.fingerprint || data.fingerprint) {
       score += 10;
-      details.push('✅ Has cryptographic fingerprint');
+      details.push('✅ Valid image file');
     }
     
-    // Has metadata/format info (5 points)
-    if (data.metadata?.format || data.size_bytes) {
-      score += 5;
-      details.push('✅ Format metadata present');
+    if (data.canonical?.fingerprint) {
+      score += 10;
+      details.push('✅ Cryptographic fingerprint generated');
+    }
+    
+    if (data.size_bytes > 1000) {
+      score += 10;
+      details.push('✅ Reasonable file size');
     }
     
     return {
       name: 'Metadata Quality',
-      score: Math.min(score, 30),
-      max: 30,
-      details
-    };
-  }
+      score,
       max: 30,
       details
     };
@@ -407,64 +393,6 @@ class ConfidenceScoring {
     
     return recommendations;
   }
-
-  /**
-   * Score AI authenticity (max 30 points)
-   * Heavily penalizes AI-generated content
-   */
-  static scoreAIAuthenticity(data) {
-    let score = 0;
-    const details = [];
-    const max = 30;
-    
-    if (!data.ai_detection) {
-      score = 15;
-      details.push('⚠️ AI detection not available');
-      return { name: 'AI Authenticity', score, max, details };
-    }
-    
-    const ai = data.ai_detection;
-    const confidence = ai.ai_confidence || 0;
-    
-    // Graduated scoring based on AI confidence level
-    if (confidence <= 20) {
-      score = 30;
-      details.push(`✅ Very low AI suspicion (${confidence}% - likely authentic)`);
-    } else if (confidence <= 40) {
-      score = 20;
-      details.push(`✅ Low AI suspicion (${confidence}% - probably authentic)`);
-    } else if (confidence <= 60) {
-      score = 10;
-      details.push(`⚠️ Moderate AI suspicion (${confidence}% - uncertain)`);
-    } else if (confidence <= 80) {
-      score = 5;
-      details.push(`⚠️ High AI suspicion (${confidence}% - probably AI)`);
-    } else {
-      score = 0;
-      details.push(`❌ Very high AI suspicion (${confidence}% - likely AI)`);
-    }
-    
-    // Add key indicators if present
-    if (ai.indicators && ai.indicators.length > 0) {
-      const topIndicators = ai.indicators.slice(0, 3);
-      topIndicators.forEach(indicator => {
-        details.push(`  - ${indicator}`);
-      });
-      if (ai.indicators.length > 3) {
-        details.push(`  - ...and ${ai.indicators.length - 3} more indicators`);
-      }
-    }
-    
-    // Bonus for camera metadata
-    if (ai.metadata_check?.has_camera_exif && confidence <= 40) {
-      score = Math.min(score + 5, max);
-      details.push('✅ Bonus: Camera metadata present');
-    }
-    
-    return { name: 'AI Authenticity', score, max, details };
-  }
 }
 
-
 module.exports = ConfidenceScoring;
-// Updated Sun Nov  9 15:14:57 UTC 2025
