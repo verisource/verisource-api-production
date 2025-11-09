@@ -207,24 +207,37 @@ class ConfidenceScoring {
     let score = 0;
     const details = [];
     
+    // Base: Valid file type (15 points)
     if (data.kind === 'image') {
-      score += 10;
+      score += 15;
       details.push('✅ Valid image file');
+    } else if (data.kind === 'video') {
+      score += 15;
+      details.push('✅ Valid video file');
+    } else if (data.kind === 'audio') {
+      score += 15;
+      details.push('✅ Valid audio file');
     }
     
-    if (data.canonical?.fingerprint) {
+    // Has fingerprint (10 points)
+    if (data.canonical?.fingerprint || data.fingerprint) {
       score += 10;
-      details.push('✅ Cryptographic fingerprint generated');
+      details.push('✅ Has cryptographic fingerprint');
     }
     
-    if (data.size_bytes > 1000) {
-      score += 10;
-      details.push('✅ Reasonable file size');
+    // Has metadata/format info (5 points)
+    if (data.metadata?.format || data.size_bytes) {
+      score += 5;
+      details.push('✅ Format metadata present');
     }
     
     return {
       name: 'Metadata Quality',
-      score,
+      score: Math.min(score, 30),
+      max: 30,
+      details
+    };
+  }
       max: 30,
       details
     };
