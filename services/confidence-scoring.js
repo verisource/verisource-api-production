@@ -207,7 +207,7 @@ class ConfidenceScoring {
     const details = [];
     
     if (data.kind === 'image') {
-      score += 10;
+      score += 15;
       details.push('✅ Valid image file');
     }
     
@@ -217,7 +217,7 @@ class ConfidenceScoring {
     }
     
     if (data.size_bytes > 1000) {
-      score += 10;
+      score += 5;
       details.push('✅ Reasonable file size');
     }
     
