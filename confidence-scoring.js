@@ -74,15 +74,39 @@ function analyzeMetadata(verification) {
   let score = 0;
   const details = [];
   
+  // Base: Valid file type (15 points - more generous)
   if (verification.kind === 'image') {
-    score += 10;
-    details.push('✅ Image file type');
+    score += 15;
+    details.push('✅ Valid image file');
+  } else if (verification.kind === 'video') {
+    score += 15;
+    details.push('✅ Valid video file');
+  } else if (verification.kind === 'audio') {
+    score += 15;
+    details.push('✅ Valid audio file');
   }
   
-  score += 20;
-  details.push('✅ File structure intact');
+  // Has basic metadata (10 points)
+  if (verification.metadata || verification.fingerprint) {
+    score += 10;
+    details.push('✅ Has file metadata');
+  }
   
-  return { score, details };
+  // Has dimensions/format info (5 points)
+  if (verification.metadata?.format || verification.metadata?.width) {
+    score += 5;
+    details.push('✅ Format metadata present');
+  }
+  
+  // Bonus: Has camera EXIF (rare for web images, but nice to have)
+  // Don't penalize if missing!
+  if (verification.metadata?.exif && Object.keys(verification.metadata.exif).length > 5) {
+    score += 5;
+    details.push('✅ Rich camera metadata');
+  }
+  
+  return { score: Math.min(score, 30), details };
+};
 }
 
 function analyzeExternalSearch(verification) {
