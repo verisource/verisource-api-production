@@ -473,6 +473,11 @@ app.post('/verify', upload.single('file'), async (req, res) => {
               ...(aiDetection && { ai_detection: aiDetection }),
           };
           
+          // Add google_vision after it's been fetched
+          if (r.google_vision) {
+            confidenceData.google_vision = r.google_vision;
+          }
+          
           console.log('📊 Calculating confidence score...');
           const score = ConfidenceScoring.calculate(confidenceData);
           console.log(`✅ Confidence: ${score.level} (${score.percentage}%)`);
