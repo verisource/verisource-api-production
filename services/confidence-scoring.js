@@ -209,6 +209,12 @@ class ConfidenceScoring {
     if (data.kind === 'image') {
       score += 15;
       details.push('✅ Valid image file');
+    } else if (data.kind === 'video') {
+      score += 15;
+      details.push('✅ Valid video file');
+    } else if (data.kind === 'audio') {
+      score += 15;
+      details.push('✅ Valid audio file');
     }
     
     if (data.canonical?.fingerprint || data.fingerprint) {
