@@ -283,15 +283,36 @@ class ConfidenceScoring {
       details.push('✅ Not found in external databases (likely original)');
     }
     
-    // Check Google Vision
-    if (data.google_vision?.found) {
-      score += 5;
-      details.push('✅ Google Vision analysis available');
+    // Check Google Vision web detection
+    if (data.google_vision?.results?.web_detection) {
+      const webDetection = data.google_vision.results.web_detection;
+      const fullMatches = webDetection.full_matching_images?.length || 0;
+      const partialMatches = webDetection.partial_matching_images?.length || 0;
+      
+      if (fullMatches === 0 && partialMatches === 0) {
+        score += 10;
+        details.push('✅ No online matches found (original content)');
+      } else if (fullMatches > 0) {
+        score += 3;
+        details.push(`⚠️ ${fullMatches} exact online match(es) found`);
+      } else if (partialMatches > 0) {
+        score += 7;
+        details.push(`⚠️ ${partialMatches} similar online match(es) found`);
+      }
+      
+      // Bonus: Rich web entity data
+      if (webDetection.web_entities?.length > 5) {
+        score += 2;
+        details.push('✅ Rich web analysis available');
+      }
+    } else if (data.google_vision?.enabled && !data.google_vision?.found) {
+      score += 10;
+      details.push('✅ Google Vision found no matches (original)');
     }
     
     return {
       name: 'External Verification',
-      score,
+      score: Math.min(score, 30),
       max: 30,
       details
     };
@@ -317,6 +338,18 @@ class ConfidenceScoring {
     if (data.google_vision?.results?.safe_search?.is_safe) {
       score += 5;
       details.push('✅ Safe content verified');
+    }
+    
+    // Use Google Vision labels (rich content analysis)
+    if (data.google_vision?.results?.labels?.length > 5) {
+      score += 3;
+      details.push(`✅ Detailed content analysis (${data.google_vision.results.labels.length} labels)`);
+    }
+    
+    // Face detection
+    if (data.google_vision?.results?.faces?.count > 0) {
+      score += 2;
+      details.push(`✅ ${data.google_vision.results.faces.count} face(s) detected`);
     }
     
     if (data.similar_images?.found && data.similar_images.count > 0) {
