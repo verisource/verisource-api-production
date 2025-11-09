@@ -445,6 +445,7 @@ app.post('/verify', upload.single('file'), async (req, res) => {
           // Build data object for confidence calculation
           const confidenceData = {
             kind: kind,
+            size_bytes: req.file.size,
             fingerprint: { hash: fingerprint },
             verification: searchResults,
             ...(chromaprint && { chromaprint }),
