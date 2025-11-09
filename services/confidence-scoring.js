@@ -266,8 +266,15 @@ class ConfidenceScoring {
         details.push('✅ Positive reputation');
       }
     } else {
-      score += 15;
-      details.push('✅ Not found in external databases');
+      // Not found = GOOD (original content)
+      score += 20;
+      details.push('✅ Not found in external databases (likely original)');
+    }
+    
+    // Check Google Vision
+    if (data.google_vision?.found) {
+      score += 5;
+      details.push('✅ Google Vision analysis available');
     }
     
     return {
