@@ -25,7 +25,7 @@ class ConfidenceScoring {
     // Check for modifications using pHash similarity
     const isModified = this.detectModification(verification);
     
-    const level = this.getLevel(percentage, isModified, verification.ai_detection);
+    const level = this.getLevel(percentage, isModified, verification.ai_detection, verification.kind, verification.video_analysis);
     
     return {
       score: totalScore,
@@ -140,74 +140,215 @@ class ConfidenceScoring {
    * @param {Object} isModified - Modification detection result
    * @returns {Object} Level details
    */
-  static getLevel(percentage, isModified, aiDetection) {
-    // AI DETECTION OVERRIDE - Check AI first
-    if (aiDetection?.likely_ai_generated) {
+  static getLevel(percentage, isModified, aiDetection, mediaType, mediaAnalysis) {
+    // AI detection override for images
+    if (mediaType === 'image' && aiDetection?.likely_ai_generated) {
       return {
         name: 'LOW',
-        label: 'AI-GENERATED CONTENT',
+        label: 'AI-GENERATED IMAGE',
         color: '#9333EA',
         icon: 'cpu',
         iconSvg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#9333EA" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><path d="M9 1v3M15 1v3M9 20v3M15 20v3M20 9h3M20 14h3M1 9h3M1 14h3"/></svg>',
-        message: `AI-generated content detected (${aiDetection.ai_confidence}% confidence)`
+        message: `AI generation detected (${aiDetection.ai_confidence}% confidence)`
       };
     }
     
-    // HIGH: 75-100% - Original or identical match
-    if (percentage >= 75) {
-      return {
-        name: 'HIGH',
-        label: 'VERIFIED AUTHENTIC',
-        color: '#10B981',
-        icon: 'shield',
-        iconSvg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#10B981"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-1 17.93c-3.95-.9-7-4.24-7-8.43V6.3l7-3.11v16.74zm2-16.74l7 3.11v4.2c0 4.19-3.05 7.53-7 8.43V2.19z"/></svg>',
-        message: 'Content verified as authentic with high confidence'
-      };
-    } 
-    
-    // MEDIUM: 50-74% - Modified version detected OR likely authentic
-    if (percentage >= 50) {
-      if (isModified.detected) {
+    // Video-specific labeling
+    if (mediaType === 'video' && mediaAnalysis?.analysis) {
+      const aiPct = mediaAnalysis.analysis.aiPercentage || 0;
+      const hasFaces = mediaAnalysis.frames?.some(f => 
+        f.aiDetection?.indicators?.some(i => i.toLowerCase().includes('face'))
+      );
+      
+      if (hasFaces && aiPct > 30) {
         return {
-          name: 'MEDIUM',
-          label: 'AUTHENTIC BUT MODIFIED',
-          color: '#F59E0B',
-          icon: 'edit',
-          iconSvg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#F59E0B" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>',
-          message: `Authentic content that has been modified (${isModified.details.similarity}% match to original)`
+          name: 'LOW',
+          label: 'DEEPFAKE INDICATORS DETECTED',
+          color: '#DC3545',
+          icon: 'alert-octagon',
+          iconSvg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#DC3545" stroke-width="2"><polygon points="7.86 2 16.14 2 22 7.86 22 16.14 16.14 22 7.86 22 2 16.14 2 7.86 7.86 2"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>',
+          message: `AI-manipulated faces present (${aiPct}% AI content)`
         };
-      } else {
+      }
+      
+      if (aiPct >= 70) {
+        return {
+          name: 'LOW',
+          label: 'PRIMARILY AI-GENERATED VIDEO',
+          color: '#DC3545',
+          icon: 'film',
+          iconSvg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#DC3545" stroke-width="2"><rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18"/><line x1="7" y1="2" x2="7" y2="22"/><line x1="17" y1="2" x2="17" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/></svg>',
+          message: `${aiPct}% of frames appear synthetic`
+        };
+      }
+      
+      if (aiPct >= 30) {
         return {
           name: 'MEDIUM',
-          label: 'LIKELY AUTHENTIC',
+          label: 'SIGNIFICANT MIX OF VIDEO AND AI CONTENT',
+          color: '#F97316',
+          icon: 'layers',
+          iconSvg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#F97316" stroke-width="2"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>',
+          message: `${aiPct}% AI-generated, ${100-aiPct}% camera-captured`
+        };
+      }
+      
+      if (aiPct >= 5) {
+        return {
+          name: 'MEDIUM',
+          label: 'AI-GENERATED CONTENT DETECTED',
           color: '#F59E0B',
           icon: 'alert-triangle',
           iconSvg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#F59E0B" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>',
-          message: 'Content appears authentic but has minor concerns'
+          message: `${aiPct}% AI content mixed with camera footage`
         };
       }
-    }
-    
-    // LOW: 25-49% - Questionable
-    if (percentage >= 25) {
+      
       return {
-        name: 'LOW',
-        label: 'QUESTIONABLE',
-        color: '#F97316',
-        icon: 'alert-circle',
-        iconSvg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#F97316" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>',
-        message: 'Multiple red flags detected - verify carefully'
+        name: 'HIGH',
+        label: 'VERIFIED VIDEO',
+        color: '#10B981',
+        icon: 'shield',
+        iconSvg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#10B981"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z"/></svg>',
+        message: 'Minimal to no AI content detected'
       };
     }
     
-    // VERY LOW: 0-24% - Likely manipulated
+    // Audio-specific labeling
+    if (mediaType === 'audio') {
+      const voiceIsAI = mediaAnalysis?.voice_synthesis_detected || false;
+      const backgroundIsAI = mediaAnalysis?.background_ai_detected || false;
+      const overallAiPct = mediaAnalysis?.ai_percentage || 0;
+      
+      if (overallAiPct >= 90) {
+        return {
+          name: 'LOW',
+          label: 'FULLY AI-GENERATED AUDIO',
+          color: '#DC3545',
+          icon: 'volume-x',
+          iconSvg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#DC3545" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg>',
+          message: 'Entirely synthetic audio detected'
+        };
+      }
+      
+      if (voiceIsAI) {
+        return {
+          name: 'LOW',
+          label: 'SYNTHETIC VOICE DETECTED',
+          color: '#DC3545',
+          icon: 'mic-off',
+          iconSvg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#DC3545" stroke-width="2"><line x1="1" y1="1" x2="23" y2="23"/><path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"/></svg>',
+          message: 'AI-generated voice synthesis detected'
+        };
+      }
+      
+      if (backgroundIsAI) {
+        return {
+          name: 'MEDIUM',
+          label: 'NATURAL VOICE WITH AI AUDIO',
+          color: '#F59E0B',
+          icon: 'music',
+          iconSvg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#F59E0B" stroke-width="2"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>',
+          message: 'Authentic voice with AI-generated background/music'
+        };
+      }
+      
+      return {
+        name: 'HIGH',
+        label: 'VERIFIED AUDIO RECORDING',
+        color: '#10B981',
+        icon: 'mic',
+        iconSvg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#10B981" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>',
+        message: 'Natural audio recording detected'
+      };
+    }
+    
+    // Image-specific labeling
+    if (mediaType === 'image') {
+      if (percentage >= 75) {
+        return {
+          name: 'HIGH',
+          label: 'VERIFIED PHOTOGRAPH',
+          color: '#10B981',
+          icon: 'shield',
+          iconSvg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#10B981"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z"/></svg>',
+          message: 'Strong indicators of camera-captured image'
+        };
+      }
+      
+      if (percentage >= 50) {
+        if (isModified.detected) {
+          return {
+            name: 'MEDIUM',
+            label: 'MODIFIED VERSION DETECTED',
+            color: '#F59E0B',
+            icon: 'edit',
+            iconSvg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#F59E0B" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>',
+            message: `Authentic photograph with alterations (${isModified.details.similarity}% similarity)`
+          };
+        }
+        
+        return {
+          name: 'MEDIUM',
+          label: 'LIKELY CAMERA-CAPTURED',
+          color: '#F59E0B',
+          icon: 'alert-triangle',
+          iconSvg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#F59E0B" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>',
+          message: 'Image appears authentic but has minor concerns'
+        };
+      }
+      
+      if (percentage >= 25) {
+        return {
+          name: 'LOW',
+          label: 'MANIPULATION DETECTED',
+          color: '#F97316',
+          icon: 'alert-circle',
+          iconSvg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#F97316" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>',
+          message: 'Evidence of significant alterations or synthetic content'
+        };
+      }
+      
+      return {
+        name: 'VERY_LOW',
+        label: 'HEAVILY MANIPULATED',
+        color: '#DC3545',
+        icon: 'x-circle',
+        iconSvg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#DC3545" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>',
+        message: 'Extensive manipulation or fabrication detected'
+      };
+    }
+    
+    // Fallback for unknown media types
+    if (percentage >= 75) {
+      return {
+        name: 'HIGH',
+        label: 'HIGH INTEGRITY',
+        color: '#10B981',
+        icon: 'shield',
+        iconSvg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#10B981"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z"/></svg>',
+        message: 'Content shows strong integrity indicators'
+      };
+    }
+    
+    if (percentage >= 50) {
+      return {
+        name: 'MEDIUM',
+        label: 'MEDIUM INTEGRITY',
+        color: '#F59E0B',
+        icon: 'alert-triangle',
+        iconSvg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#F59E0B" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>',
+        message: 'Content has some concerns'
+      };
+    }
+    
     return {
-      name: 'VERY_LOW',
-      label: 'LIKELY MANIPULATED',
+      name: 'LOW',
+      label: 'LOW INTEGRITY',
       color: '#DC3545',
       icon: 'x-circle',
       iconSvg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#DC3545" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>',
-      message: 'Strong indicators of manipulation or inauthenticity'
+      message: 'Content shows significant integrity issues'
     };
   }
   
