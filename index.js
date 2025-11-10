@@ -475,6 +475,7 @@ app.post('/verify', upload.single('file'), async (req, res) => {
             ...(similarImages && { similar_images: similarImages }),
               ...(aiDetection && { ai_detection: aiDetection }),
               ...(googleVisionResult && { google_vision: googleVisionResult }),
+              ...(videoAnalysis && { video_analysis: videoAnalysis }),
           };
           
 
