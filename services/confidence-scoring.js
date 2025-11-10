@@ -155,6 +155,7 @@ class ConfidenceScoring {
     }
     
     // Video-specific labeling
+    console.log('DEBUG getLevel:', { mediaType, hasAnalysis: !!mediaAnalysis?.analysis, mediaAnalysis });
     if (mediaType === 'video' && mediaAnalysis?.analysis) {
       const aiPct = mediaAnalysis.analysis.aiPercentage || 0;
       const hasFaces = mediaAnalysis.frames?.some(f => 
