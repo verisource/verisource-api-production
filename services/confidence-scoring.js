@@ -216,9 +216,11 @@ class ConfidenceScoring {
     }
     
     // Audio-specific labeling
-    if (mediaType === 'audio') {
-      const aiConfidence = audioAIDetection?.ai_confidence || 0;
-      const likelyAI = audioAIDetection?.likely_ai_generated || false;
+    if (mediaType === 'audio' && audioAIDetection) {
+      const aiConfidence = audioAIDetection.ai_confidence || 0;
+      const likelyAI = audioAIDetection.likely_ai_generated || false;
+      
+      console.log(`🎵 Audio AI Detection: confidence=${aiConfidence}, likelyAI=${likelyAI}`);
       
       // For now, treat high AI confidence (70+) as fully AI-generated
       // Medium confidence (50-70) as synthetic voice
