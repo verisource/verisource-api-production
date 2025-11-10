@@ -1,5 +1,6 @@
 /**
  * Confidence Scoring System
+ * Last updated: 2025-11-10T04:48:17.759003
  * Calculates confidence scores based on multiple factors including pHash similarity
  */
 
