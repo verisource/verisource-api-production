@@ -143,7 +143,7 @@ class ConfidenceScoring {
    */
   static getLevel(percentage, isModified, aiDetection, mediaType, mediaAnalysis, audioAIDetection) {
     // AI detection override for images
-    if (mediaType === 'image' && aiDetection?.likely_ai_generated) {
+    if (mediaType === 'image' && aiDetection?.ai_confidence >= 60) {
       return {
         name: 'LOW',
         label: 'AI-GENERATED IMAGE',
