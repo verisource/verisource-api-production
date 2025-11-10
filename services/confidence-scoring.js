@@ -141,7 +141,7 @@ class ConfidenceScoring {
    * @param {Object} isModified - Modification detection result
    * @returns {Object} Level details
    */
-  static getLevel(percentage, isModified, aiDetection, mediaType, mediaAnalysis) {
+  static getLevel(percentage, isModified, aiDetection, mediaType, mediaAnalysis, audioAIDetection) {
     // AI detection override for images
     if (mediaType === 'image' && aiDetection?.likely_ai_generated) {
       return {
@@ -217,11 +217,14 @@ class ConfidenceScoring {
     
     // Audio-specific labeling
     if (mediaType === 'audio') {
-      const voiceIsAI = mediaAnalysis?.voice_synthesis_detected || false;
-      const backgroundIsAI = mediaAnalysis?.background_ai_detected || false;
-      const overallAiPct = mediaAnalysis?.ai_percentage || 0;
+      const aiConfidence = audioAIDetection?.ai_confidence || 0;
+      const likelyAI = audioAIDetection?.likely_ai_generated || false;
       
-      if (overallAiPct >= 90) {
+      // For now, treat high AI confidence (70+) as fully AI-generated
+      // Medium confidence (50-70) as synthetic voice
+      // Low confidence (<50) as natural
+      
+      if (aiConfidence >= 70) {
         return {
           name: 'LOW',
           label: 'FULLY AI-GENERATED AUDIO',
@@ -232,27 +235,19 @@ class ConfidenceScoring {
         };
       }
       
-      if (voiceIsAI) {
+      if (likelyAI && aiConfidence >= 50) {
         return {
           name: 'LOW',
           label: 'SYNTHETIC VOICE DETECTED',
           color: '#DC3545',
           icon: 'mic-off',
           iconSvg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#DC3545" stroke-width="2"><line x1="1" y1="1" x2="23" y2="23"/><path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"/></svg>',
-          message: 'AI-generated voice synthesis detected'
+          message: `Possible AI-generated voice (${aiConfidence}% confidence)`
         };
       }
       
-      if (backgroundIsAI) {
-        return {
-          name: 'MEDIUM',
-          label: 'NATURAL VOICE WITH AI AUDIO',
-          color: '#F59E0B',
-          icon: 'music',
-          iconSvg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#F59E0B" stroke-width="2"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>',
-          message: 'Authentic voice with AI-generated background/music'
-        };
-      }
+      // Future: Add background AI detection
+      // if (backgroundIsAI) { ... }
       
       return {
         name: 'HIGH',

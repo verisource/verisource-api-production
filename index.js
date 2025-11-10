@@ -20,6 +20,7 @@ try {
 // Import analysis and detection services
 const { analyzeVideo } = require('./video-analyzer');
 const { analyzeImage } = require('./google-vision-search');
+const { AudioAIDetection } = require('./services/audio-ai-detection');
 const { detectAIGeneration } = require('./ai-image-detector');
 const { generatePHash, searchSimilarImages } = require('./phash-module');
 const ConfidenceScoring = require('./services/confidence-scoring');
@@ -390,6 +391,19 @@ app.post('/verify', upload.single('file'), async (req, res) => {
         }
       }
 
+      // Analyze audio for AI detection
+      let audioAIDetection = null;
+      if (kind === 'audio') {
+        try {
+          console.log('🎵 Running audio AI detection...');
+          audioAIDetection = await AudioAIDetection.analyze(req.file.path);
+          console.log(`✅ Audio AI detection complete: ${audioAIDetection.likely_ai_generated ? 'LIKELY AI' : 'LIKELY AUTHENTIC'} (${audioAIDetection.ai_confidence}%)`);
+        } catch (err) {
+          console.error('⚠️ Audio AI detection error:', err.message);
+          audioAIDetection = { error: err.message };
+        }
+      }
+
       // Analyze video frames for AI detection
       let videoAnalysis = null;
       if (kind === 'video') {
@@ -440,7 +454,8 @@ app.post('/verify', upload.single('file'), async (req, res) => {
         ...(kind === 'audio' && chromaprint && {
           chromaprint: chromaprint,
           audio_duration: audioDuration,
-          ...(musicIdentification && { music_identification: musicIdentification })
+          ...(musicIdentification && { music_identification: musicIdentification }),
+          ...(audioAIDetection && { audio_ai_detection: audioAIDetection })
       }),
       ...(kind === 'image' && phash && {
         phash: phash,
@@ -476,6 +491,7 @@ app.post('/verify', upload.single('file'), async (req, res) => {
               ...(aiDetection && { ai_detection: aiDetection }),
               ...(googleVisionResult && { google_vision: googleVisionResult }),
               ...(videoAnalysis && { video_analysis: videoAnalysis }),
+              ...(audioAIDetection && { audio_ai_detection: audioAIDetection }),
           };
           
 
