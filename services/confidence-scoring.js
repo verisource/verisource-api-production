@@ -26,7 +26,7 @@ class ConfidenceScoring {
     // Check for modifications using pHash similarity
     const isModified = this.detectModification(verification);
     
-    const level = this.getLevel(percentage, isModified, verification.ai_detection, verification.kind, verification.video_analysis);
+    const level = this.getLevel(percentage, isModified, verification.ai_detection, verification.kind, verification.video_analysis, verification.audio_ai_detection);
     
     return {
       score: totalScore,
