@@ -1,8 +1,7 @@
 /**
  * Weather Verification Service
  * Verifies photo authenticity by comparing image conditions with historical weather data
- * API: WeatherAPI.com
- * FREE TIER LIMIT: Only last 7 days of historical data available
+ * API: WeatherAPI.com (PRO TIER - Historical data back to 2015)
  * Requires: WEATHER_API_KEY in .env
  */
 
@@ -14,27 +13,20 @@ const WEATHER_API_BASE = 'https://api.weatherapi.com/v1';
 async function getHistoricalWeather(gps, date) {
   if (!WEATHER_API_KEY || !gps || !date) return null;
   
-  // Check if date is within last 7 days (free tier limitation)
-  const photoDate = new Date(date);
-  const today = new Date();
-  const daysAgo = Math.floor((today - photoDate) / (1000 * 60 * 60 * 24));
-  
-  if (daysAgo > 7) {
-    console.log(`⚠️ Photo date (${date}) is ${daysAgo} days old - beyond free tier 7-day limit`);
-    return { error: 'historical_data_unavailable', message: 'Photo older than 7 days (free tier limit)' };
-  }
-  
   try {
+    console.log(`🌤️ Fetching weather for ${date} at ${gps.lat},${gps.lon}`);
     const response = await axios.get(`${WEATHER_API_BASE}/history.json`, {
       params: { 
         key: WEATHER_API_KEY, 
         q: `${gps.lat},${gps.lon}`, 
         dt: date 
       },
-      timeout: 5000
+      timeout: 10000
     });
 
     const day = response.data.forecast.forecastday[0].day;
+    console.log(`✅ Weather retrieved: ${day.condition.text}, ${day.avgtemp_c}°C`);
+    
     return {
       condition: day.condition.text,
       avgtemp_c: day.avgtemp_c,
@@ -43,11 +35,15 @@ async function getHistoricalWeather(gps, date) {
       is_rainy: day.totalprecip_mm > 0
     };
   } catch (error) {
-    console.error('Weather API error:', error.response?.data || error.message);
+    console.error('❌ Weather API error:', error.response?.data || error.message);
     if (error.response?.status === 400) {
-      return { error: 'invalid_request', message: 'Date may be too old or invalid format' };
+      console.error('  Request params:', { lat: gps.lat, lon: gps.lon, date });
+      return { error: 'invalid_request', message: error.response?.data?.error?.message || 'Invalid request format' };
     }
-    return null;
+    if (error.response?.status === 401 || error.response?.status === 403) {
+      return { error: 'auth_error', message: 'Invalid API key or insufficient permissions' };
+    }
+    return { error: 'api_error', message: error.message };
   }
 }
 
@@ -74,8 +70,8 @@ async function verifyWeatherConditions(imageData, visionLabels = []) {
   result.details = weather;
   
   const labels = visionLabels.map(l => (typeof l === 'string' ? l : l.description).toLowerCase());
-  const imageSunny = labels.some(l => l.includes('sun') || l.includes('clear'));
-  const imageRainy = labels.some(l => l.includes('rain') || l.includes('storm'));
+  const imageSunny = labels.some(l => l.includes('sun') || l.includes('clear') || l.includes('sky'));
+  const imageRainy = labels.some(l => l.includes('rain') || l.includes('storm') || l.includes('cloud'));
 
   if (imageSunny && weather.is_rainy) {
     result.warnings.push('Image appears sunny but weather was rainy - possible manipulation');
