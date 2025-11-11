@@ -53,22 +53,37 @@ function extractGPSAndDate(exifData) {
   const result = { gps: null, date: null };
   if (!exifData) return result;
 
-  if (exifData.GPSLatitude && exifData.GPSLongitude) {
-    result.gps = {
-      lat: convertDMSToDD(exifData.GPSLatitude, exifData.GPSLatitudeRef),
-      lon: convertDMSToDD(exifData.GPSLongitude, exifData.GPSLongitudeRef)
-    };
+  // Handle GPS coordinates - exif-parser already returns decimal degrees
+  if (exifData.GPSLatitude !== undefined && exifData.GPSLongitude !== undefined) {
+    // Check if already in decimal format (number)
+    if (typeof exifData.GPSLatitude === 'number') {
+      result.gps = {
+        lat: exifData.GPSLatitude,
+        lon: exifData.GPSLongitude
+      };
+    } else if (Array.isArray(exifData.GPSLatitude)) {
+      // DMS format [degrees, minutes, seconds]
+      result.gps = {
+        lat: convertDMSToDD(exifData.GPSLatitude, exifData.GPSLatitudeRef),
+        lon: convertDMSToDD(exifData.GPSLongitude, exifData.GPSLongitudeRef)
+      };
+    }
   }
 
-  // Handle different date formats
-  const dateStr = exifData.DateTimeOriginal || exifData.DateTime || exifData.CreateDate;
-  if (dateStr) {
-    // Convert to string if it's not already
-    const dateString = String(dateStr);
-    if (dateString.includes(' ')) {
-      result.date = dateString.split(' ')[0].replace(/:/g, '-');
+  // Handle date - exif-parser returns Unix timestamp
+  if (exifData.DateTimeOriginal) {
+    // If it's a Unix timestamp (number), convert to date string
+    if (typeof exifData.DateTimeOriginal === 'number') {
+      const date = new Date(exifData.DateTimeOriginal * 1000);
+      result.date = date.toISOString().split('T')[0]; // YYYY-MM-DD
     } else {
-      result.date = dateString;
+      // String format like "2024:06:15 14:30:00"
+      const dateString = String(exifData.DateTimeOriginal);
+      if (dateString.includes(' ')) {
+        result.date = dateString.split(' ')[0].replace(/:/g, '-');
+      } else {
+        result.date = dateString;
+      }
     }
   }
 
@@ -76,7 +91,7 @@ function extractGPSAndDate(exifData) {
 }
 
 function convertDMSToDD(dms, ref) {
-  if (!dms || dms.length < 3) return null;
+  if (!dms || !Array.isArray(dms) || dms.length < 3) return null;
   let dd = dms[0] + dms[1]/60 + dms[2]/3600;
   if (ref === 'S' || ref === 'W') dd = dd * -1;
   return dd;
