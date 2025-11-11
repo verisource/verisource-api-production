@@ -28,6 +28,8 @@ const ChromaprintService = require('./services/chromaprint');
 const acoustid = require('./acoustid-integration');
 const WeatherVerification = require('./services/weather-verification');
 const LandmarkVerification = require('./services/landmark-verification');
+const { verifyCameraModel } = require('./services/camera-model-verification');
+const { verifyCameraModel } = require('./services/camera-model-verification');
 // View engine for batch dashboard
 const app = express();
 
@@ -280,6 +282,7 @@ app.post('/verify', upload.single('file'), async (req, res) => {
   let weatherVerification = null;
   let landmarkVerification = null;
   let exifData = null; 
+  let cameraVerification = null;
 
   try {
     const buf = fs.readFileSync(req.file.path);
@@ -405,6 +408,15 @@ app.post('/verify', upload.single('file'), async (req, res) => {
           const exifBuffer = fs.readFileSync(req.file.path);
           const parser = ExifParser.create(exifBuffer);
           exifData = parser.parse().tags;
+          
+          // Verify camera model
+          const cameraVerification = verifyCameraModel(exifData);
+          if (cameraVerification.camera_found) {
+            console.log(`📷 Camera: ${cameraVerification.details.manufacturer} ${cameraVerification.details.recognized_model}`);
+          }
+          if (cameraVerification.warnings.length > 0) {
+            console.log('⚠️ Camera warnings:', cameraVerification.warnings);
+          }
           const gpsAndDate = LandmarkVerification.extractGPSAndDate(exifData);
           
           if (gpsAndDate.gps || gpsAndDate.date) {
@@ -514,6 +526,7 @@ app.post('/verify', upload.single('file'), async (req, res) => {
       ...(kind === 'image' && googleVisionResult && { google_vision: googleVisionResult }),
       ...(kind === 'image' && weatherVerification && { weather_verification: weatherVerification }),
       ...(kind === 'image' && landmarkVerification && { landmark_verification: landmarkVerification }),
+      ...(cameraVerification && { camera_verification: cameraVerification }),
       virustotal: await (async () => {
         try {
           console.log('🔍 Checking VirusTotal...');
