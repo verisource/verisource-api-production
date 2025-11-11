@@ -408,12 +408,20 @@ app.post('/verify', upload.single('file'), async (req, res) => {
           const exifBuffer = fs.readFileSync(req.file.path);
           const parser = ExifParser.create(exifBuffer);
           exifData = parser.parse().tags;
+          exifData = parser.parse().tags;
           
-          // Verify camera model
-          const cameraVerification = verifyCameraModel(exifData);
+          // Verify camera model (for all images with EXIF)
+          cameraVerification = verifyCameraModel(exifData);
           if (cameraVerification.camera_found) {
             console.log(`📷 Camera: ${cameraVerification.details.manufacturer} ${cameraVerification.details.recognized_model}`);
           }
+          if (cameraVerification.warnings.length > 0) {
+            console.log('⚠️ Camera warnings:', cameraVerification.warnings);
+          }
+          
+          exifData = parser.parse().tags;
+          
+          // Verify camera model
           if (cameraVerification.warnings.length > 0) {
             console.log('⚠️ Camera warnings:', cameraVerification.warnings);
           }
