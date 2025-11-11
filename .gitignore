@@ -42,3 +42,9 @@ google-vision-key.json
 # Bulk upload temporary files
 uploads/temp/*
 *.upload
+
+# Test files
+test-videos/
+test-all-images/
+quick-test-images/
+faceforensics-testing/
