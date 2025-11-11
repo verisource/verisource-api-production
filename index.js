@@ -26,6 +26,8 @@ const { generatePHash, searchSimilarImages } = require('./phash-module');
 const ConfidenceScoring = require('./services/confidence-scoring');
 const ChromaprintService = require('./services/chromaprint');
 const acoustid = require('./acoustid-integration');
+const WeatherVerification = require('./services/weather-verification');
+const LandmarkVerification = require('./services/landmark-verification');
 // View engine for batch dashboard
 const app = express();
 
@@ -275,6 +277,10 @@ app.post('/verify', upload.single('file'), async (req, res) => {
     return res.status(400).json({ error: 'No file uploaded' });
   }
 
+  let weatherVerification = null;
+  let landmarkVerification = null;
+  let exifData = null; 
+
   try {
     const buf = fs.readFileSync(req.file.path);
     const crypto = require('crypto');
@@ -391,6 +397,46 @@ app.post('/verify', upload.single('file'), async (req, res) => {
         }
       }
 
+      // Extract EXIF data for weather and landmark verification
+      if (kind === 'image') {
+        try {
+          console.log('📍 Extracting GPS and date from EXIF...');
+          const ExifParser = require('exif-parser');
+          const exifBuffer = fs.readFileSync(req.file.path);
+          const parser = ExifParser.create(exifBuffer);
+          exifData = parser.parse().tags;
+          const gpsAndDate = LandmarkVerification.extractGPSAndDate(exifData);
+          
+          if (gpsAndDate.gps || gpsAndDate.date) {
+            console.log(`📍 Found GPS: ${gpsAndDate.gps ? 'Yes' : 'No'}, Date: ${gpsAndDate.date || 'No'}`);
+            
+            // Weather verification
+            if (WeatherVerification.isConfigured()) {
+              console.log('🌤️ Verifying weather conditions...');
+              weatherVerification = await WeatherVerification.verifyWeatherConditions(
+                gpsAndDate,
+                googleVisionResult?.results?.labels || []
+              );
+              console.log(`✅ Weather verification: ${weatherVerification.verified ? 'MATCHED' : 'NOT VERIFIED'}`);
+            }
+            
+            // Landmark verification
+            if (googleVisionResult?.results?.landmarks) {
+              console.log('🗺️ Verifying landmark locations...');
+              landmarkVerification = LandmarkVerification.verifyLandmarkLocation(
+                googleVisionResult.results.landmarks,
+                gpsAndDate.gps
+              );
+              console.log(`✅ Landmark verification: ${landmarkVerification.landmarks_detected} landmarks detected`);
+            }
+          } else {
+            console.log('ℹ️ No GPS or date in EXIF - skipping weather/landmark verification');
+          }
+        } catch (err) {
+          console.error('⚠️ EXIF extraction error:', err.message);
+        }
+      } 
+
       // Analyze audio for AI detection
       let audioAIDetection = null;
       if (kind === 'audio') {
@@ -466,6 +512,8 @@ app.post('/verify', upload.single('file'), async (req, res) => {
         video_analysis: videoAnalysis
       }),
       ...(kind === 'image' && googleVisionResult && { google_vision: googleVisionResult }),
+      ...(kind === 'image' && weatherVerification && { weather_verification: weatherVerification }),
+      ...(kind === 'image' && landmarkVerification && { landmark_verification: landmarkVerification }),
       virustotal: await (async () => {
         try {
           console.log('🔍 Checking VirusTotal...');
