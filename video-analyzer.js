@@ -3,6 +3,7 @@ const path = require('path');
 const fs = require('fs');
 const { generatePHash, searchSimilarImages } = require('./phash-module');
 const { detectAIGeneration } = require('./ai-image-detector');
+const { analyzeFrameRate } = require('./services/frame-rate-verification');
 
 async function extractFrames(videoPath, fps = 1) {
   return new Promise((resolve, reject) => {
@@ -55,6 +56,11 @@ async function analyzeVideo(videoPath, options = {}) {
   const maxFrames = options.maxFrames || 30;
   try {
     console.log('Starting video analysis...');
+    
+    // Check frame rate consistency
+    console.log('Checking frame rate consistency...');
+    const frameRateAnalysis = await analyzeFrameRate(videoPath);
+    
     const metadata = await getVideoMetadata(videoPath);
     const extraction = await extractFrames(videoPath, fps);
     const framesToAnalyze = extraction.frames.slice(0, maxFrames);
@@ -121,6 +127,7 @@ async function analyzeVideo(videoPath, options = {}) {
         aiPercentage: Math.round(aiPercentage),
         videoConfidence: videoConfidence,
         verdict: verdict
+        ,frameRateAnalysis: frameRateAnalysis
       },
       frames: frameResults.slice(0, 10)
     };
