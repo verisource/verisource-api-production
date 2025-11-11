@@ -60,8 +60,17 @@ function extractGPSAndDate(exifData) {
     };
   }
 
-  const dateStr = exifData.DateTimeOriginal || exifData.DateTime;
-  if (dateStr) result.date = dateStr.split(' ')[0].replace(/:/g, '-');
+  // Handle different date formats
+  const dateStr = exifData.DateTimeOriginal || exifData.DateTime || exifData.CreateDate;
+  if (dateStr) {
+    // Convert to string if it's not already
+    const dateString = String(dateStr);
+    if (dateString.includes(' ')) {
+      result.date = dateString.split(' ')[0].replace(/:/g, '-');
+    } else {
+      result.date = dateString;
+    }
+  }
 
   return result;
 }
