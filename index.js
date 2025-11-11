@@ -29,7 +29,6 @@ const acoustid = require('./acoustid-integration');
 const WeatherVerification = require('./services/weather-verification');
 const LandmarkVerification = require('./services/landmark-verification');
 const { verifyCameraModel } = require('./services/camera-model-verification');
-const { verifyCameraModel } = require('./services/camera-model-verification');
 // View engine for batch dashboard
 const app = express();
 
