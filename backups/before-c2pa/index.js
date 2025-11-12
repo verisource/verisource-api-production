@@ -8,7 +8,6 @@ const path = require('path');
 const os = require('os');
 const db = require('./db-minimal');
 const { searchByFingerprint, saveVerification } = require('./search');
-const c2paVerification = require('./services/c2pa-verification');
 // Import canonicalization only (workers not needed for minimal endpoint)
 let canonicalizeImage;
 try { 
@@ -535,33 +534,6 @@ app.post('/verify', upload.single('file'), async (req, res) => {
       ...(kind === 'image' && weatherVerification && { weather_verification: weatherVerification }),
       ...(kind === 'image' && landmarkVerification && { landmark_verification: landmarkVerification }),
       ...(cameraVerification && { camera_verification: cameraVerification }),
-      // C2PA/Blockchain verification (Phase 1 Step 3)
-      c2pa_verification: await (async () => {
-        try {
-          console.log('🔐 Running C2PA verification...');
-          const c2paResult = await c2paVerification.verifyContent(
-            req.file.path,
-            kind  // 'image', 'video', or 'audio'
-          );
-          
-          if (c2paResult.has_c2pa_credentials) {
-            console.log(`✅ C2PA credentials found: ${c2paResult.credentials_valid ? 'VALID' : 'INVALID'} (+${c2paResult.confidence_boost}%)`);
-          } else {
-            console.log('ℹ️ No C2PA credentials found');
-          }
-          
-          return c2paResult;
-        } catch (err) {
-          console.error('⚠️ C2PA verification error:', err.message);
-          return {
-            has_c2pa_credentials: false,
-            credentials_valid: false,
-            confidence_boost: 0,
-            error: err.message,
-            errors: []
-          };
-        }
-      })(),
       virustotal: await (async () => {
         try {
           console.log('🔍 Checking VirusTotal...');

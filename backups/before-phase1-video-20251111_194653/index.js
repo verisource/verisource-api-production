@@ -8,7 +8,6 @@ const path = require('path');
 const os = require('os');
 const db = require('./db-minimal');
 const { searchByFingerprint, saveVerification } = require('./search');
-const c2paVerification = require('./services/c2pa-verification');
 // Import canonicalization only (workers not needed for minimal endpoint)
 let canonicalizeImage;
 try { 
@@ -29,7 +28,6 @@ const ChromaprintService = require('./services/chromaprint');
 const acoustid = require('./acoustid-integration');
 const WeatherVerification = require('./services/weather-verification');
 const LandmarkVerification = require('./services/landmark-verification');
-const { verifyCameraModel } = require('./services/camera-model-verification');
 // View engine for batch dashboard
 const app = express();
 
@@ -282,7 +280,6 @@ app.post('/verify', upload.single('file'), async (req, res) => {
   let weatherVerification = null;
   let landmarkVerification = null;
   let exifData = null; 
-  let cameraVerification = null;
 
   try {
     const buf = fs.readFileSync(req.file.path);
@@ -408,23 +405,6 @@ app.post('/verify', upload.single('file'), async (req, res) => {
           const exifBuffer = fs.readFileSync(req.file.path);
           const parser = ExifParser.create(exifBuffer);
           exifData = parser.parse().tags;
-          exifData = parser.parse().tags;
-          
-          // Verify camera model (for all images with EXIF)
-          cameraVerification = verifyCameraModel(exifData);
-          if (cameraVerification.camera_found) {
-            console.log(`📷 Camera: ${cameraVerification.details.manufacturer} ${cameraVerification.details.recognized_model}`);
-          }
-          if (cameraVerification.warnings.length > 0) {
-            console.log('⚠️ Camera warnings:', cameraVerification.warnings);
-          }
-          
-          exifData = parser.parse().tags;
-          
-          // Verify camera model
-          if (cameraVerification.warnings.length > 0) {
-            console.log('⚠️ Camera warnings:', cameraVerification.warnings);
-          }
           const gpsAndDate = LandmarkVerification.extractGPSAndDate(exifData);
           
           if (gpsAndDate.gps || gpsAndDate.date) {
@@ -534,34 +514,6 @@ app.post('/verify', upload.single('file'), async (req, res) => {
       ...(kind === 'image' && googleVisionResult && { google_vision: googleVisionResult }),
       ...(kind === 'image' && weatherVerification && { weather_verification: weatherVerification }),
       ...(kind === 'image' && landmarkVerification && { landmark_verification: landmarkVerification }),
-      ...(cameraVerification && { camera_verification: cameraVerification }),
-      // C2PA/Blockchain verification (Phase 1 Step 3)
-      c2pa_verification: await (async () => {
-        try {
-          console.log('🔐 Running C2PA verification...');
-          const c2paResult = await c2paVerification.verifyContent(
-            req.file.path,
-            kind  // 'image', 'video', or 'audio'
-          );
-          
-          if (c2paResult.has_c2pa_credentials) {
-            console.log(`✅ C2PA credentials found: ${c2paResult.credentials_valid ? 'VALID' : 'INVALID'} (+${c2paResult.confidence_boost}%)`);
-          } else {
-            console.log('ℹ️ No C2PA credentials found');
-          }
-          
-          return c2paResult;
-        } catch (err) {
-          console.error('⚠️ C2PA verification error:', err.message);
-          return {
-            has_c2pa_credentials: false,
-            credentials_valid: false,
-            confidence_boost: 0,
-            error: err.message,
-            errors: []
-          };
-        }
-      })(),
       virustotal: await (async () => {
         try {
           console.log('🔍 Checking VirusTotal...');
@@ -640,4 +592,3 @@ app.get('/admin/migrate-audio', async (req, res) => {
   }
 });
 // Force redeploy to pick up new API key
-
