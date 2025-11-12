@@ -4,7 +4,8 @@ const fs = require('fs');
 const { generatePHash, searchSimilarImages } = require('./phash-module');
 const { detectAIGeneration } = require('./ai-image-detector');
 const { analyzeFrameRate } = require('./services/frame-rate-verification');
-
+const temporalDetector = require('./services/video-analysis/temporal-inconsistency');
+const frequencyAnalyzer = require('./services/video-analysis/frequency-analyzer');
 async function extractFrames(videoPath, fps = 1) {
   return new Promise((resolve, reject) => {
     const outputDir = path.join(path.dirname(videoPath), 'frames');
@@ -54,6 +55,21 @@ async function getVideoMetadata(videoPath) {
 async function analyzeVideo(videoPath, options = {}) {
   const fps = options.fps || 1;
   const maxFrames = options.maxFrames || 30;
+  // Temporal inconsistency detection
+  let temporalAnalysis = null;
+  try {
+    temporalAnalysis = await temporalDetector.analyzeVideo(videoPath, { fps: 1, maxFrames: 30 });
+  } catch (err) {
+    console.error('⚠️ Temporal analysis error:', err.message);
+  }
+
+  // Frequency domain analysis
+  let frequencyAnalysis = null;
+  try {
+    frequencyAnalysis = await frequencyAnalyzer.analyzeVideo(videoPath, { maxFrames: 5 });
+  } catch (err) {
+    console.error('⚠️ Frequency analysis error:', err.message);
+  }
   try {
     console.log('Starting video analysis...');
     
@@ -126,8 +142,10 @@ async function analyzeVideo(videoPath, options = {}) {
         suspiciousPercentage: Math.round(suspiciousPercentage),
         aiPercentage: Math.round(aiPercentage),
         videoConfidence: videoConfidence,
-        verdict: verdict
-        ,frameRateAnalysis: frameRateAnalysis
+        verdict: verdict,
+        frameRateAnalysis: frameRateAnalysis,
+        temporalAnalysis: temporalAnalysis,
+        frequencyAnalysis: frequencyAnalysis
       },
       frames: frameResults.slice(0, 10)
     };
