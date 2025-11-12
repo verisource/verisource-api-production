@@ -9,6 +9,7 @@ const os = require('os');
 const db = require('./db-minimal');
 const { searchByFingerprint, saveVerification } = require('./search');
 const c2paVerification = require('./services/c2pa-verification');
+const shadowPhysics = require('./services/shadow-physics-verification');
 // Import canonicalization only (workers not needed for minimal endpoint)
 let canonicalizeImage;
 try { 
@@ -275,6 +276,8 @@ async function initializeDatabase() {
 // SINGLE FILE VERIFY ENDPOINT
 // ============================================
 app.post('/verify', upload.single('file'), async (req, res) => {
+  const requestId = Date.now();
+  console.log(`\n========== REQUEST ${requestId} START ==========`);
   if (!req.file) {
     return res.status(400).json({ error: 'No file uploaded' });
   }
@@ -283,6 +286,7 @@ app.post('/verify', upload.single('file'), async (req, res) => {
   let landmarkVerification = null;
   let exifData = null; 
   let cameraVerification = null;
+  let shadowPhysicsResult = null;
 
   try {
     const buf = fs.readFileSync(req.file.path);
@@ -449,14 +453,29 @@ app.post('/verify', upload.single('file'), async (req, res) => {
               );
               console.log(`✅ Landmark verification: ${landmarkVerification.landmarks_detected} landmarks detected`);
             }
-          } else {
-            console.log('ℹ️ No GPS or date in EXIF - skipping weather/landmark verification');
-          }
-        } catch (err) {
-          console.error('⚠️ EXIF extraction error:', err.message);
-        }
-      } 
-
+            if (gpsAndDate.gps && gpsAndDate.date) {
+              console.log('DEBUG gpsAndDate:', JSON.stringify(gpsAndDate, null, 2));
+              console.log('☀️ Verifying shadow physics...');
+              shadowPhysicsResult = shadowPhysics.verifyShadowPhysics(
+                exifData,
+                gpsAndDate.gps,
+                new Date(gpsAndDate.date),
+                null
+              );
+        
+            if (shadowPhysicsResult.violations && shadowPhysicsResult.violations.length > 0) {
+             console.log(`⚠️ Shadow physics violations: ${shadowPhysicsResult.violations.length}`);
+           } else {
+             console.log('✅ Shadow physics: VALID');
+           }
+         }
+       } else {
+        console.log('ℹ️ No GPS or date in EXIF - skipping weather/landmark verification');
+       }
+     } catch (err) {
+       console.error('⚠️ EXIF extraction error:', err.message);
+     }
+   } 
       // Analyze audio for AI detection
       let audioAIDetection = null;
       if (kind === 'audio') {
@@ -500,7 +519,9 @@ app.post('/verify', upload.single('file'), async (req, res) => {
     } catch (err) {
       console.error('⚠️ Database save error:', err.message);
     }
-    
+    console.log('DEBUG shadowPhysicsResult:', JSON.stringify(shadowPhysicsResult, null, 2));
+    console.log(`========== REQUEST ${requestId} END ==========\n`);
+
     res.json({
       kind: kind,
       filename: req.file.originalname,
@@ -535,6 +556,7 @@ app.post('/verify', upload.single('file'), async (req, res) => {
       ...(kind === 'image' && weatherVerification && { weather_verification: weatherVerification }),
       ...(kind === 'image' && landmarkVerification && { landmark_verification: landmarkVerification }),
       ...(cameraVerification && { camera_verification: cameraVerification }),
+      ...(shadowPhysicsResult && { shadow_physics: shadowPhysicsResult }),
       // C2PA/Blockchain verification (Phase 1 Step 3)
       c2pa_verification: await (async () => {
         try {

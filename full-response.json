@@ -1,0 +1,248 @@
+{
+  "kind": "image",
+  "filename": "test-gps-image.jpg",
+  "size_bytes": 564,
+  "fingerprint": {
+    "algorithm": "sha256",
+    "hash": "61e4969c96e5199e76f4776149595090e5eb703b33dca83799af9be6dcb2e155",
+    "version": "v1"
+  },
+  "verification": {
+    "status": "NEW_UPLOAD",
+    "is_first": true,
+    "first_seen": "2025-11-12T21:08:53.879Z",
+    "times_verified": 1,
+    "previous_uploads": []
+  },
+  "phash": "8000000000000000000000000000000000000000000000000000000000000000",
+  "similar_images": null,
+  "ai_detection": {
+    "likely_ai_generated": true,
+    "ai_confidence": 98,
+    "indicators": [
+      "Unusually high JPEG quality",
+      "Unnaturally low noise (0)",
+      "Unnaturally smooth (0)",
+      "Lack of texture detail",
+      "Unusual color distribution (100%)",
+      "Excessive saturation (100%)"
+    ],
+    "metadata_check": {
+      "has_camera_exif": true,
+      "dimensions": "1x1",
+      "format": "jpeg"
+    }
+  },
+  "google_vision": {
+    "enabled": true,
+    "found": true,
+    "service": "Google Vision",
+    "results": {
+      "web_detection": {
+        "full_matching_images": [
+          {
+            "url": "https://www.raiplay.it/dl/img/2023/01/27/1674814343415_rai-sport_logo-2022.png"
+          },
+          {
+            "url": "https://hrc-prod-requests.s3-us-west-2.amazonaws.com/HRC-Page-Header-Banner-Filler-IYA.png"
+          },
+          {
+            "url": "https://www.unesco.pl/fileadmin/user_upload/2024/07/0077d4.jpg"
+          },
+          {
+            "url": "https://kpmg.com/content/dam/kpmgsites/es/images/2024/02/2000x2000-cobalt.png"
+          },
+          {
+            "url": "https://www.newyorkcomiccon.com/content/dam/sitebuilder/rna/new-york-comic-con/evergreen/backgrounds/nycc-callout-background.png/_jcr_content/renditions/original.image_file.1999.1999.file/nycc-callout-background.png"
+          }
+        ],
+        "partial_matching_images": [],
+        "pages_with_matching_images": [
+          {
+            "url": "https://www.esri.com/en-us/arcgis/products/arcgis-field-maps/overview",
+            "page_title": "Field Data Collection App for Mobile Workers | ArcGIS Field Maps"
+          },
+          {
+            "url": "https://www.esriuk.com/en-gb/arcgis/products/arcgis-field-maps/overview",
+            "page_title": "ArcGIS Field Maps - Field Apps & Mobile Data Collection | Esri UK"
+          },
+          {
+            "url": "https://www.esri-ireland.ie/en-ie/products/arcgis-field-maps",
+            "page_title": "ArcGIS Field Maps | Field Apps & Mobile Data Collection - Esri Ireland"
+          },
+          {
+            "url": "https://mapman.ltd/solutions/field-maps/",
+            "page_title": "Field Maps – MAPMAN LTD"
+          },
+          {
+            "url": "https://mapman.ltd/solutions/",
+            "page_title": "Solutions – MAPMAN LTD"
+          }
+        ],
+        "web_entities": [
+          {
+            "description": "ArcGIS Field Maps",
+            "score": 0.7461000084877014
+          },
+          {
+            "description": "Map",
+            "score": 0.7078999876976013
+          },
+          {
+            "description": "ArcGIS",
+            "score": 0.7044000029563904
+          },
+          {
+            "description": "",
+            "score": 0.7021999955177307
+          },
+          {
+            "description": "Esri",
+            "score": 0.7021999955177307
+          },
+          {
+            "description": "Geographic Information System",
+            "score": 0.6618000268936157
+          },
+          {
+            "description": "map layer",
+            "score": 0.450300008058548
+          },
+          {
+            "description": "Mobile app",
+            "score": 0.4431999921798706
+          },
+          {
+            "description": "Data",
+            "score": 0.4357999861240387
+          },
+          {
+            "description": "Google Maps",
+            "score": 0.42910000681877136
+          }
+        ],
+        "best_guess_labels": [
+          "field maps gif"
+        ]
+      },
+      "safe_search": {
+        "adult": "VERY_UNLIKELY",
+        "violence": "VERY_UNLIKELY",
+        "racy": "UNLIKELY",
+        "is_safe": true
+      },
+      "labels": [
+        {
+          "description": "Blue",
+          "score": 0.9895356297492981
+        }
+      ],
+      "logos": [],
+      "faces": {
+        "count": 0
+      }
+    }
+  },
+  "camera_verification": {
+    "camera_found": true,
+    "is_valid": true,
+    "warnings": [],
+    "details": {
+      "make": "Apple",
+      "model": "iPhone 14 Pro",
+      "capture_date": 1721053800,
+      "recognized_model": "iPhone 14",
+      "manufacturer": "Apple",
+      "release_year": 2022,
+      "capture_year": 2024
+    }
+  },
+  "shadow_physics": {
+    "physics_valid": null,
+    "confidence": 0,
+    "violations": [],
+    "analysis": {
+      "error": "No GPS data available"
+    }
+  },
+  "c2pa_verification": {
+    "has_c2pa_credentials": false,
+    "credentials_valid": false,
+    "confidence_boost": 0,
+    "provenance": null,
+    "signature": null,
+    "edit_history": null,
+    "blockchain_anchored": false,
+    "errors": [
+      "C2PA tool not installed"
+    ]
+  },
+  "virustotal": {
+    "enabled": true,
+    "found": false,
+    "service": "VirusTotal",
+    "message": "File hash not found in VirusTotal database"
+  },
+  "confidence": {
+    "score": 70,
+    "max_score": 100,
+    "percentage": 70,
+    "level": "LOW",
+    "label": "AI-GENERATED IMAGE",
+    "color": "#9333EA",
+    "icon": "cpu",
+    "iconSvg": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"#9333EA\" stroke-width=\"2\"><rect x=\"4\" y=\"4\" width=\"16\" height=\"16\" rx=\"2\"/><rect x=\"9\" y=\"9\" width=\"6\" height=\"6\"/><path d=\"M9 1v3M15 1v3M9 20v3M15 20v3M20 9h3M20 14h3M1 9h3M1 14h3\"/></svg>",
+    "message": "AI generation detected (98% confidence)",
+    "is_modified": false,
+    "modification_details": null,
+    "factors": [
+      {
+        "name": "Metadata Quality",
+        "score": 25,
+        "max": 30,
+        "percentage": 83,
+        "details": [
+          "✅ Valid image file",
+          "✅ Cryptographic fingerprint generated"
+        ]
+      },
+      {
+        "name": "External Verification",
+        "score": 25,
+        "max": 30,
+        "percentage": 83,
+        "details": [
+          "✅ Not found in external databases (likely original)",
+          "⚠️ 5 exact online match(es) found",
+          "✅ Rich web analysis available"
+        ]
+      },
+      {
+        "name": "Forensic Analysis",
+        "score": 10,
+        "max": 25,
+        "percentage": 40,
+        "details": [
+          "✅ No obvious manipulation detected",
+          "⚠️ Possible AI generation (98% confidence)",
+          "✅ Safe content verified"
+        ]
+      },
+      {
+        "name": "Temporal Trust",
+        "score": 10,
+        "max": 15,
+        "percentage": 67,
+        "details": [
+          "✅ Previously verified content"
+        ]
+      }
+    ],
+    "warnings": [
+      "Low forensic analysis"
+    ],
+    "recommendations": [
+      "Consider obtaining additional verification from original source"
+    ]
+  }
+}
