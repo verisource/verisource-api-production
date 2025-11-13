@@ -286,6 +286,8 @@ app.post('/verify', upload.single('file'), async (req, res) => {
   let exifData = null; 
   let cameraVerification = null;
   let shadowPhysicsResult = null;
+  let audioAIDetection = null;
+  let videoAnalysis = null;
 
   try {
     const buf = fs.readFileSync(req.file.path);
