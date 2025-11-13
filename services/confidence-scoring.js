@@ -464,6 +464,7 @@ class ConfidenceScoring {
     let score = 10;
     const details = ['✅ No obvious manipulation detected'];
     
+    // AI Detection (images)
     if (data.ai_detection) {
       if (data.ai_detection.likely_ai_generated) {
         score -= 5;
@@ -474,37 +475,80 @@ class ConfidenceScoring {
       }
     }
     
+    // Shadow Physics Verification (NEW - Phase 2)
+    if (data.shadow_physics) {
+      if (data.shadow_physics.physics_valid === true) {
+        score += 3;
+        details.push('✅ Shadow physics verified (sun position matches)');
+      } else if (data.shadow_physics.physics_valid === false) {
+        score -= 3;
+        details.push(`⚠️ Shadow physics violations (${data.shadow_physics.violations?.length || 0} found)`);
+      }
+    }
+    
+    // Video Analysis - Temporal & Frame Rate (Phase 1 & 2)
+    if (data.video_analysis?.analysis) {
+      const videoAnalysis = data.video_analysis.analysis;
+      
+      // Temporal consistency
+      if (videoAnalysis.temporalConsistency === 'consistent') {
+        score += 2;
+        details.push('✅ Temporal consistency verified');
+      } else if (videoAnalysis.temporalConsistency === 'inconsistent') {
+        score -= 2;
+        details.push('⚠️ Temporal inconsistencies detected');
+      }
+      
+      // Frame rate consistency
+      if (videoAnalysis.frameRateConsistent === true) {
+        score += 2;
+        details.push('✅ Frame rate consistent');
+      } else if (videoAnalysis.frameRateConsistent === false) {
+        score -= 2;
+        details.push('⚠️ Frame rate inconsistencies');
+      }
+      
+      // AI content percentage
+      const aiPct = videoAnalysis.aiPercentage || 0;
+      if (aiPct < 5) {
+        score += 2;
+        details.push('✅ Minimal AI content');
+      } else if (aiPct >= 30) {
+        score -= 3;
+        details.push(`⚠️ High AI content (${aiPct}%)`);
+      }
+    }
+    
+    // Google Vision checks
     if (data.google_vision?.results?.safe_search?.is_safe) {
-      score += 5;
+      score += 2;
       details.push('✅ Safe content verified');
     }
     
-    // Use Google Vision labels (rich content analysis)
     if (data.google_vision?.results?.labels?.length > 5) {
-      score += 3;
-      details.push(`✅ Detailed content analysis (${data.google_vision.results.labels.length} labels)`);
+      score += 2;
+      details.push(`✅ Detailed analysis (${data.google_vision.results.labels.length} labels)`);
     }
     
-    // Face detection
     if (data.google_vision?.results?.faces?.count > 0) {
-      score += 2;
+      score += 1;
       details.push(`✅ ${data.google_vision.results.faces.count} face(s) detected`);
     }
     
+    // Similar images
     if (data.similar_images?.found && data.similar_images.count > 0) {
-      score += 5;
+      score += 2;
       const interpretation = data.similar_images.matches[0]?.interpretation || 'Similar';
       details.push(`✅ ${data.similar_images.count} similar version(s) found (${interpretation})`);
     }
     
     return {
       name: 'Forensic Analysis',
-      score: Math.min(score, 25),
+      score: Math.min(Math.max(score, 0), 25),
       max: 25,
       details
     };
-  }
-  
+  }  
   /**
    * Score temporal trust (max 15 points)
    */

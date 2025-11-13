@@ -277,7 +277,6 @@ async function initializeDatabase() {
 // ============================================
 app.post('/verify', upload.single('file'), async (req, res) => {
   const requestId = Date.now();
-  console.log(`\n========== REQUEST ${requestId} START ==========`);
   if (!req.file) {
     return res.status(400).json({ error: 'No file uploaded' });
   }
@@ -454,7 +453,6 @@ app.post('/verify', upload.single('file'), async (req, res) => {
               console.log(`✅ Landmark verification: ${landmarkVerification.landmarks_detected} landmarks detected`);
             }
             if (gpsAndDate.gps && gpsAndDate.date) {
-              console.log('DEBUG gpsAndDate:', JSON.stringify(gpsAndDate, null, 2));
               console.log('☀️ Verifying shadow physics...');
               shadowPhysicsResult = shadowPhysics.verifyShadowPhysics(
                 exifData,
@@ -519,8 +517,6 @@ app.post('/verify', upload.single('file'), async (req, res) => {
     } catch (err) {
       console.error('⚠️ Database save error:', err.message);
     }
-    console.log('DEBUG shadowPhysicsResult:', JSON.stringify(shadowPhysicsResult, null, 2));
-    console.log(`========== REQUEST ${requestId} END ==========\n`);
 
     res.json({
       kind: kind,
@@ -610,6 +606,7 @@ app.post('/verify', upload.single('file'), async (req, res) => {
               ...(googleVisionResult && { google_vision: googleVisionResult }),
               ...(videoAnalysis && { video_analysis: videoAnalysis }),
               ...(audioAIDetection && { audio_ai_detection: audioAIDetection }),
+              ...(shadowPhysicsResult && { shadow_physics: shadowPhysicsResult }),
           };
           
 
