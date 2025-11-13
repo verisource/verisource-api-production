@@ -109,7 +109,8 @@ async function analyzeImage(image) {
           score: logo.score
         })) || [],
         faces: {
-          count: result.faceAnnotations?.length || 0
+          count: result.faceAnnotations?.length || 0,
+          details: result.faceAnnotations || []
         }
       }
     };

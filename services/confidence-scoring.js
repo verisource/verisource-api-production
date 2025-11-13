@@ -486,6 +486,17 @@ class ConfidenceScoring {
       }
     }
     
+    // Deepfake Detection (NEW - Phase 3)
+    if (data.deepfake_detection) {
+      if (data.deepfake_detection.is_deepfake === true) {
+        score -= 5;
+        details.push(`⚠️ Deepfake indicators detected (${data.deepfake_detection.confidence}% confidence)`);
+      } else if (data.deepfake_detection.is_deepfake === false) {
+        score += 3;
+        details.push('✅ No deepfake indicators (authentic faces)');
+      }
+    }
+
     // Video Analysis - Temporal & Frame Rate (Phase 1 & 2)
     if (data.video_analysis?.analysis) {
       const videoAnalysis = data.video_analysis.analysis;

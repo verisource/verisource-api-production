@@ -10,6 +10,7 @@ const db = require('./db-minimal');
 const { searchByFingerprint, saveVerification } = require('./search');
 const c2paVerification = require('./services/c2pa-verification');
 const shadowPhysics = require('./services/shadow-physics-verification');
+const deepfakeDetection = require('./services/deepfake-detection');
 // Import canonicalization only (workers not needed for minimal endpoint)
 let canonicalizeImage;
 try { 
@@ -288,6 +289,7 @@ app.post('/verify', upload.single('file'), async (req, res) => {
   let shadowPhysicsResult = null;
   let audioAIDetection = null;
   let videoAnalysis = null;
+  let deepfakeAnalysis = null;
 
   try {
     const buf = fs.readFileSync(req.file.path);
@@ -405,6 +407,23 @@ app.post('/verify', upload.single('file'), async (req, res) => {
         }
       }
 
+      // Enhanced deepfake detection for images
+      
+      if (kind === 'image' && googleVisionResult) {
+        try {
+          console.log('🎭 Running deepfake detection...');
+          deepfakeAnalysis = deepfakeDetection.analyzeImage(googleVisionResult);
+          if (deepfakeAnalysis.is_deepfake) {
+            console.log(`⚠️ Deepfake indicators detected: ${deepfakeAnalysis.confidence}% confidence`);
+          }
+        } catch (err) {
+          console.error('⚠️ Deepfake detection error:', err.message);
+        }
+      }
+      
+
+      // Extract EXIF data for weather and landmark verification
+
       // Extract EXIF data for weather and landmark verification
       if (kind === 'image') {
         try {
@@ -520,8 +539,9 @@ app.post('/verify', upload.single('file'), async (req, res) => {
     } catch (err) {
       console.error('⚠️ Database save error:', err.message);
     }
-
+    
     res.json({
+
       kind: kind,
       filename: req.file.originalname,
       size_bytes: req.file.size,
@@ -556,6 +576,7 @@ app.post('/verify', upload.single('file'), async (req, res) => {
       ...(kind === 'image' && landmarkVerification && { landmark_verification: landmarkVerification }),
       ...(cameraVerification && { camera_verification: cameraVerification }),
       ...(shadowPhysicsResult && { shadow_physics: shadowPhysicsResult }),
+      ...(deepfakeAnalysis && { deepfake_detection: deepfakeAnalysis }),
       // C2PA/Blockchain verification (Phase 1 Step 3)
       c2pa_verification: await (async () => {
         try {
@@ -611,8 +632,6 @@ app.post('/verify', upload.single('file'), async (req, res) => {
               ...(audioAIDetection && { audio_ai_detection: audioAIDetection }),
               ...(shadowPhysicsResult && { shadow_physics: shadowPhysicsResult }),
           };
-          
-
           console.log('📊 Calculating confidence score...');
           const score = ConfidenceScoring.calculate(confidenceData);
           console.log(`✅ Confidence: ${score.level} (${score.percentage}%)`);
