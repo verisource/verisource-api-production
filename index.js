@@ -409,85 +409,86 @@ app.post('/verify', upload.single('file'), async (req, res) => {
           console.log('📍 Extracting GPS and date from EXIF...');
           const ExifParser = require('exif-parser');
           const exifBuffer = fs.readFileSync(req.file.path);
-          const parser = ExifParser.create(exifBuffer);
-          exifData = parser.parse().tags;
-          exifData = parser.parse().tags;
           
-          // Verify camera model (for all images with EXIF)
-          cameraVerification = verifyCameraModel(exifData);
-          if (cameraVerification.camera_found) {
-            console.log(`📷 Camera: ${cameraVerification.details.manufacturer} ${cameraVerification.details.recognized_model}`);
-          }
-          if (cameraVerification.warnings.length > 0) {
-            console.log('⚠️ Camera warnings:', cameraVerification.warnings);
-          }
-          
-          exifData = parser.parse().tags;
-          
-          // Verify camera model
-          if (cameraVerification.warnings.length > 0) {
-            console.log('⚠️ Camera warnings:', cameraVerification.warnings);
-          }
-          const gpsAndDate = LandmarkVerification.extractGPSAndDate(exifData);
-          
-          if (gpsAndDate.gps || gpsAndDate.date) {
-            console.log(`📍 Found GPS: ${gpsAndDate.gps ? 'Yes' : 'No'}, Date: ${gpsAndDate.date || 'No'}`);
+          // Validate file is large enough for EXIF
+          if (exifBuffer.length < 12) {
+            console.log('ℹ️ File too small for EXIF data');
+          } 
+          // Check for JPEG magic bytes (0xFF 0xD8)
+          else if (exifBuffer[0] !== 0xFF || exifBuffer[1] !== 0xD8) {
+            console.log('ℹ️ Not a JPEG file - skipping EXIF extraction');
+          } 
+          // Valid JPEG, attempt EXIF parsing
+          else {
+            try {
+              const parser = ExifParser.create(exifBuffer);
+              exifData = parser.parse().tags;
+              
+              // Verify camera model (for all images with EXIF)
+              cameraVerification = verifyCameraModel(exifData);
+              if (cameraVerification.camera_found) {
+                console.log(`📷 Camera: ${cameraVerification.details.manufacturer} ${cameraVerification.details.recognized_model}`);
+              }
+              if (cameraVerification.warnings.length > 0) {
+                console.log('⚠️ Camera warnings:', cameraVerification.warnings);
+              }
+              
+              const gpsAndDate = LandmarkVerification.extractGPSAndDate(exifData);
+              
+              if (gpsAndDate.gps || gpsAndDate.date) {
+                console.log(`📍 Found GPS: ${gpsAndDate.gps ? 'Yes' : 'No'}, Date: ${gpsAndDate.date || 'No'}`);
+                
+                // Weather verification
+                if (WeatherVerification.isConfigured()) {
+                  console.log('🌤️ Verifying weather conditions...');
+                  weatherVerification = await WeatherVerification.verifyWeatherConditions(
+                    gpsAndDate,
+                    googleVisionResult?.results?.labels || []
+                  );
+                  console.log(`✅ Weather verification: ${weatherVerification.verified ? 'MATCHED' : 'NOT VERIFIED'}`);
+                }
+                
+                // Landmark verification
+                if (googleVisionResult?.results?.landmarks) {
+                  console.log('🗺️ Verifying landmark locations...');
+                  landmarkVerification = LandmarkVerification.verifyLandmarkLocation(
+                    googleVisionResult.results.landmarks,
+                    gpsAndDate.gps
+                  );
+                  console.log(`✅ Landmark verification: ${landmarkVerification.landmarks_detected} landmarks detected`);
+                }
+                
+                // Shadow physics verification
+                if (gpsAndDate.gps && gpsAndDate.date) {
+                  console.log('☀️ Verifying shadow physics...');
+                  shadowPhysicsResult = shadowPhysics.verifyShadowPhysics(
+                    exifData,
+                    gpsAndDate.gps,
+                    new Date(gpsAndDate.date),
+                    null
+                  );
             
-            // Weather verification
-            if (WeatherVerification.isConfigured()) {
-              console.log('🌤️ Verifying weather conditions...');
-              weatherVerification = await WeatherVerification.verifyWeatherConditions(
-                gpsAndDate,
-                googleVisionResult?.results?.labels || []
-              );
-              console.log(`✅ Weather verification: ${weatherVerification.verified ? 'MATCHED' : 'NOT VERIFIED'}`);
+                  if (shadowPhysicsResult.violations && shadowPhysicsResult.violations.length > 0) {
+                    console.log(`⚠️ Shadow physics violations: ${shadowPhysicsResult.violations.length}`);
+                  } else {
+                    console.log('✅ Shadow physics: VALID');
+                  }
+                }
+              } else {
+                console.log('ℹ️ No GPS or date in EXIF - skipping weather/landmark verification');
+              }
+              
+            } catch (exifParseError) {
+              console.log('ℹ️ JPEG file has invalid/corrupted EXIF data');
             }
-            
-            // Landmark verification
-            if (googleVisionResult?.results?.landmarks) {
-              console.log('🗺️ Verifying landmark locations...');
-              landmarkVerification = LandmarkVerification.verifyLandmarkLocation(
-                googleVisionResult.results.landmarks,
-                gpsAndDate.gps
-              );
-              console.log(`✅ Landmark verification: ${landmarkVerification.landmarks_detected} landmarks detected`);
-            }
-            if (gpsAndDate.gps && gpsAndDate.date) {
-              console.log('☀️ Verifying shadow physics...');
-              shadowPhysicsResult = shadowPhysics.verifyShadowPhysics(
-                exifData,
-                gpsAndDate.gps,
-                new Date(gpsAndDate.date),
-                null
-              );
-        
-            if (shadowPhysicsResult.violations && shadowPhysicsResult.violations.length > 0) {
-             console.log(`⚠️ Shadow physics violations: ${shadowPhysicsResult.violations.length}`);
-           } else {
-             console.log('✅ Shadow physics: VALID');
-           }
-         }
-       } else {
-        console.log('ℹ️ No GPS or date in EXIF - skipping weather/landmark verification');
-       }
-     } catch (err) {
-       console.error('⚠️ EXIF extraction error:', err.message);
-     }
-   } 
-      // Analyze audio for AI detection
-      let audioAIDetection = null;
-      if (kind === 'audio') {
-        try {
-          console.log('🎵 Running audio AI detection...');
-          audioAIDetection = await AudioAIDetection.analyze(req.file.path);
-          console.log(`✅ Audio AI detection complete: ${audioAIDetection.likely_ai_generated ? 'LIKELY AI' : 'LIKELY AUTHENTIC'} (${audioAIDetection.ai_confidence}%)`);
+          }
+          
         } catch (err) {
-          console.error('⚠️ Audio AI detection error:', err.message);
-          audioAIDetection = { error: err.message };
+          console.error('⚠️ EXIF extraction error:', err.message);
         }
       }
-
-      // Analyze video frames for AI detection
+      
+      // Analyze audio for AI detection
       let videoAnalysis = null;
       if (kind === 'video') {
         try {
