@@ -421,7 +421,6 @@ app.post('/verify', upload.single('file'), async (req, res) => {
         }
       }
       
-
       // Extract EXIF data for weather and landmark verification
 
       // Extract EXIF data for weather and landmark verification
@@ -470,14 +469,6 @@ app.post('/verify', upload.single('file'), async (req, res) => {
                 }
                 
                 // Landmark verification
-                if (googleVisionResult?.results?.landmarks) {
-                  console.log('🗺️ Verifying landmark locations...');
-                  landmarkVerification = LandmarkVerification.verifyLandmarkLocation(
-                    googleVisionResult.results.landmarks,
-                    gpsAndDate.gps
-                  );
-                  console.log(`✅ Landmark verification: ${landmarkVerification.landmarks_detected} landmarks detected`);
-                }
                 
                 // Shadow physics verification
                 if (gpsAndDate.gps && gpsAndDate.date) {
@@ -500,6 +491,20 @@ app.post('/verify', upload.single('file'), async (req, res) => {
               }
               
             } catch (exifParseError) {
+
+      // Landmark verification (works with or without GPS)
+      if (kind === 'image' && googleVisionResult?.results?.landmarks?.length > 0) {
+        try {
+          console.log('🗺️ Verifying landmark locations...');
+          landmarkVerification = LandmarkVerification.verifyLandmarkLocation(
+            googleVisionResult.results.landmarks,
+            exifData?.gps || null  // Pass GPS if available, null otherwise
+          );
+          console.log(`✅ Landmark verification: ${landmarkVerification.landmarks_detected} landmarks detected`);
+        } catch (landmarkErr) {
+          console.error('⚠️ Landmark verification error:', landmarkErr.message);
+        }
+      }
               console.log('ℹ️ JPEG file has invalid/corrupted EXIF data');
             }
           }
