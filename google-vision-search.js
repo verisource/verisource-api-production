@@ -11,7 +11,7 @@ let client;
 try {
   // Option 1: Use base64 environment variable (for Railway production)
   if (process.env.GOOGLE_VISION_KEY_BASE64) {
-    console.log('�� Loading Google Vision key from environment variable...');
+    console.log('🔑 Loading Google Vision key from environment variable...');
     const keyJson = Buffer.from(process.env.GOOGLE_VISION_KEY_BASE64, 'base64').toString('utf8');
     const credentials = JSON.parse(keyJson);
     
@@ -62,7 +62,8 @@ async function analyzeImage(image) {
         { type: 'SAFE_SEARCH_DETECTION' },
         { type: 'LABEL_DETECTION', maxResults: 10 },
         { type: 'LOGO_DETECTION', maxResults: 5 },
-        { type: 'FACE_DETECTION', maxResults: 10 }
+        { type: 'FACE_DETECTION', maxResults: 10 },
+        { type: 'LANDMARK_DETECTION', maxResults: 10 }  // ← ADDED THIS LINE
       ]
     });
 
@@ -111,7 +112,15 @@ async function analyzeImage(image) {
         faces: {
           count: result.faceAnnotations?.length || 0,
           details: result.faceAnnotations || []
-        }
+        },
+        landmarks: result.landmarkAnnotations?.map(landmark => ({
+          description: landmark.description,
+          score: landmark.score,
+          locations: landmark.locations?.map(loc => ({
+            lat: loc.latLng?.latitude,
+            lng: loc.latLng?.longitude
+          }))
+        })) || []  // ← ADDED THIS SECTION
       }
     };
 
