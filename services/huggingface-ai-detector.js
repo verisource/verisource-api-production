@@ -7,7 +7,7 @@
 const fs = require('fs');
 const fetch = require('node-fetch');
 
-const HF_API_URL = 'https://router.huggingface.co/hf-inference/models/Organika/sdxl-detector';
+const HF_API_URL = 'https://router.huggingface.co/hf-inference/models/Nahrawy/AIorNot';
 const HF_TOKEN = process.env.HUGGINGFACE_TOKEN;
 
 /**
