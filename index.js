@@ -31,6 +31,7 @@ const ChromaprintService = require('./services/chromaprint');
 const acoustid = require('./acoustid-integration');
 const WeatherVerification = require('./services/weather-verification');
 const LandmarkVerification = require('./services/landmark-verification');
+const PortraitModeDetection = require('./services/portrait-mode-detection');
 const { verifyCameraModel } = require('./services/camera-model-verification');
 // View engine for batch dashboard
 const app = express();
@@ -389,6 +390,17 @@ app.post('/verify', upload.single('file'), async (req, res) => {
           aiDetection = await detectAIGeneration(req.file.path);
           console.log(`✅ AI detection complete: ${aiDetection.likely_ai_generated ? 'LIKELY AI' : 'LIKELY AUTHENTIC'} (${aiDetection.ai_confidence}%)`);
         } catch (err) {
+
+          // Adjust AI detection for portrait mode (computational photography)
+          if (aiDetection && !aiDetection.error && exifData) {
+            const portraitDetection = PortraitModeDetection.detectPortraitMode(exifData);
+            if (portraitDetection.isPortraitMode) {
+              console.log(`📸 Portrait mode detected: ${portraitDetection.confidence}% confidence`);
+              console.log(`   Indicators: ${portraitDetection.indicators.join(", ")}`);
+              aiDetection = PortraitModeDetection.adjustForPortraitMode(aiDetection, portraitDetection);
+              console.log(`   AI confidence adjusted: ${aiDetection.original_ai_confidence}% → ${aiDetection.ai_confidence}%`);
+            }
+          }
           console.error('⚠️ AI detection error:', err.message);
           aiDetection = { error: err.message };
         }
