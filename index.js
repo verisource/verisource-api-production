@@ -507,7 +507,19 @@ app.post('/verify', upload.single('file'), async (req, res) => {
           console.error('⚠️ EXIF extraction error:', err.message);
         }
       }
-      
+      // Landmark verification for images without GPS data
+      if (kind === 'image' && !exifData && googleVisionResult?.results?.landmarks?.length > 0) {
+        try {
+          console.log('🗺️ Verifying landmarks (no GPS available)...');
+          landmarkVerification = LandmarkVerification.verifyLandmarkLocation(
+            googleVisionResult.results.landmarks,
+            null  // No GPS data available
+          );
+          console.log(`✅ Landmark verification: ${landmarkVerification.landmarks_detected} landmarks detected`);
+        } catch (landmarkErr) {
+          console.error('⚠️ Landmark verification error:', landmarkErr.message);
+        }
+      }
       // Analyze audio for AI detection
       let videoAnalysis = null;
       if (kind === 'video') {
