@@ -508,12 +508,6 @@ app.post('/verify', upload.single('file'), async (req, res) => {
         }
       }
       // Landmark verification for images without GPS data
-      console.log('🔍 DEBUG: Checking landmark verification condition...');
-      console.log('  kind:', kind);
-      console.log('  exifData:', exifData ? 'EXISTS' : 'NULL');
-      console.log('  exifData.GPSLatitude:', exifData?.GPSLatitude);
-      console.log('  googleVisionResult exists:', !!googleVisionResult);
-      console.log('  landmarks length:', googleVisionResult?.results?.landmarks?.length);
       if (kind === 'image' && (!exifData || !exifData.GPSLatitude) && googleVisionResult?.results?.landmarks?.length > 0) {
         try {
           console.log('🗺️ Verifying landmarks (no GPS available)...');
