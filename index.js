@@ -24,7 +24,7 @@ try {
 const { analyzeVideo } = require('./video-analyzer');
 const { analyzeImage } = require('./google-vision-search');
 const { AudioAIDetection } = require('./services/audio-ai-detection');
-const { detectAIGeneration } = require('./ai-image-detector');
+const { detectAIGeneration } = require('./services/ensemble-ai-detection');
 const { generatePHash, searchSimilarImages } = require('./phash-module');
 const ConfidenceScoring = require('./services/confidence-scoring');
 const ChromaprintService = require('./services/chromaprint');
