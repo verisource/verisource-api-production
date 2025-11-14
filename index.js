@@ -33,6 +33,7 @@ const WeatherVerification = require('./services/weather-verification');
 const LandmarkVerification = require('./services/landmark-verification');
 const PortraitModeDetection = require('./services/portrait-mode-detection');
 const { verifyCameraModel } = require('./services/camera-model-verification');
+const AIGeneratorDetector = require('./services/ai-generator-detector');
 // View engine for batch dashboard
 const app = express();
 
@@ -559,6 +560,30 @@ app.post('/verify', upload.single('file'), async (req, res) => {
           videoAnalysis = { error: err.message };
         }
       }
+     // AI Generator Detection (Sora, Runway, Pika, Kling, Midjourney, DALL-E, etc.)
+      let generatorDetection = null;
+      try {
+        console.log('🔍 Running AI generator detection...');
+        const generatorDetector = new AIGeneratorDetector();
+        
+        if (kind === 'video' && videoAnalysis && videoAnalysis.success) {
+          generatorDetection = await generatorDetector.analyze(req.file.path, {
+            videoFrames: videoAnalysis.frames || [],
+            temporalAnalysis: videoAnalysis.analysis?.temporalAnalysis || null,
+            metadata: videoAnalysis.metadata || {}
+          });
+          console.log(`✅ Generator detection: ${generatorDetection.likelyGenerator} (${generatorDetection.confidence}%)`);
+        } else if (kind === 'image' && aiDetection) {
+          generatorDetection = await generatorDetector.analyze(req.file.path, {
+            existingAnalysis: aiDetection,
+            metadata: {}
+          });
+          console.log(`✅ Generator detection: ${generatorDetection.likelyGenerator} (${generatorDetection.confidence}%)`);
+        }
+      } catch (err) {
+        console.error('⚠️ Generator detection error:', err.message);
+        generatorDetection = { error: err.message };
+      }
     // Save this verification to database
     try {
       const ipAddress = req.ip || req.connection.remoteAddress;
@@ -606,6 +631,7 @@ app.post('/verify', upload.single('file'), async (req, res) => {
       ...(kind === 'video' && videoAnalysis && {
         video_analysis: videoAnalysis
       }),
+      ...(generatorDetection && { generator_detection: generatorDetection }),
       ...(kind === 'image' && googleVisionResult && { google_vision: googleVisionResult }),
       ...(kind === 'image' && weatherVerification && { weather_verification: weatherVerification }),
       ...(kind === 'image' && landmarkVerification && { landmark_verification: landmarkVerification }),
