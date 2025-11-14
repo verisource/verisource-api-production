@@ -445,74 +445,93 @@ class ConfidenceScoring {
   /**
    * Score external verification (max 30 points)
    */
+  
+  /**
+   * Score external verification (max 30 points)
+   * Fixed logic: Not found ≠ authentic, found on reputable sites = better
+   */
   static scoreExternalVerification(data) {
     let score = 0;
     const details = [];
     
-    if (data.external_search?.found) {
-      const vt = data.external_search.results;
-      
-      if (vt.malware_detections?.malicious === 0) {
-        score += 10;
-        details.push('✅ No malware detected');
-      }
-      
-      if (vt.times_submitted > 10) {
-        details.push('⚠️ Found online - may be reupload');
-        score += 5;
-      } else if (vt.times_submitted > 0) {
-        details.push('⚠️ Previously seen online');
-        score += 10;
-      } else {
-        score += 15;
-        details.push('✅ Not previously indexed');
-      }
-      
-      if (vt.reputation >= 0) {
-        score += 5;
-        details.push('✅ Positive reputation');
-      }
-    } else {
-      // Not found = GOOD (original content)
-      score += 20;
-      details.push('✅ Not found in external databases (likely original)');
-    }
-    
-    // Check Google Vision web detection
+    // Check Google Vision web detection FIRST (more reliable)
     if (data.google_vision?.results?.web_detection) {
       const webDetection = data.google_vision.results.web_detection;
       const fullMatches = webDetection.full_matching_images?.length || 0;
       const partialMatches = webDetection.partial_matching_images?.length || 0;
+      const pages = webDetection.pages_with_matching_images || [];
       
       if (fullMatches === 0 && partialMatches === 0) {
+        // Not found online - NEUTRAL (could be new/original OR AI-generated)
         score += 10;
-        details.push('✅ No online matches found (original content)');
-      } else if (fullMatches > 0) {
-        score += 3;
-        details.push(`⚠️ ${fullMatches} exact online match(es) found`);
-      } else if (partialMatches > 0) {
-        score += 7;
-        details.push(`⚠️ ${partialMatches} similar online match(es) found`);
+        details.push('ℹ️ No online matches (new content or AI-generated)');
+      } else {
+        // Found online - check WHERE it was found
+        const hasReputableSources = pages.some(page => {
+          const url = page.url?.toLowerCase() || '';
+          return url.includes('wikipedia') || 
+                 url.includes('getty') || 
+                 url.includes('shutterstock') ||
+                 url.includes('news') ||
+                 url.includes('.gov') ||
+                 url.includes('.edu');
+        });
+        
+        if (hasReputableSources) {
+          score += 20;
+          details.push('✅ Found on reputable sources (increases authenticity)');
+        } else if (fullMatches > 10) {
+          score += 8;
+          details.push(`⚠️ Widely circulated online (${fullMatches} exact matches)`);
+        } else if (fullMatches > 0) {
+          score += 15;
+          details.push(`✅ Found online (${fullMatches} match${fullMatches > 1 ? 'es' : ''})`);
+        } else {
+          score += 12;
+          details.push(`✅ Similar content found (${partialMatches} partial matches)`);
+        }
+      }
+    } else {
+      // Google Vision not available - neutral score
+      score += 10;
+      details.push('ℹ️ Web detection unavailable');
+    }
+    
+    // VirusTotal check (security, not authenticity)
+    if (data.external_search?.found) {
+      const vt = data.external_search.results;
+      
+      if (vt.malware_detections?.malicious === 0) {
+        score += 5;
+        details.push('✅ No malware detected');
+      } else if (vt.malware_detections?.malicious > 0) {
+        score -= 10; // Penalty for malware
+        details.push(`❌ ${vt.malware_detections.malicious} malware detections`);
       }
       
-      // Bonus: Rich web entity data
-      if (webDetection.web_entities?.length > 5) {
-        score += 2;
-        details.push('✅ Rich web analysis available');
+      if (vt.reputation && vt.reputation < -50) {
+        score -= 5;
+        details.push('⚠️ Negative reputation score');
+      } else if (vt.reputation && vt.reputation > 0) {
+        score += 5;
+        details.push('✅ Positive reputation');
       }
-    } else if (data.google_vision?.enabled && !data.google_vision?.found) {
-      score += 10;
-      details.push('✅ Google Vision found no matches (original)');
+    } else {
+      // Not on VirusTotal - neutral
+      score += 5;
+      details.push('ℹ️ Not indexed on VirusTotal');
     }
+    
+    // Ensure score stays within 0-30 range
+    score = Math.max(0, Math.min(30, score));
     
     return {
       name: 'External Verification',
-      score: Math.min(score, 30),
+      score,
       max: 30,
       details
     };
   }
-  
   /**
    * Score forensic analysis (max 25 points)
    */
