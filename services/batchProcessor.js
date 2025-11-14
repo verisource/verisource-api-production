@@ -1,6 +1,7 @@
 /**
  * Batch Processor Service
  * Handles parallel processing of multiple image files for verification
+ * Now includes JPEG Artifact Analysis and Ensemble AI Detection
  */
 
 const fs = require('fs').promises;
@@ -57,15 +58,66 @@ class BatchProcessor {
     try {
       console.log(`[BatchProcessor] Processing file ${index + 1}: ${file.originalname}`);
       
-      // Import the image processor dynamically to avoid circular dependencies
-      const { canonicalizeImage } = require('../canonicalization');
+      // Import services dynamically
+      const { detectAIGeneration } = require('./ensemble-ai-detection');
+      const { generatePHash } = require('../phash-module');
+      const crypto = require('crypto');
+      const sharp = require('sharp');
+      const mime = require('mime-types');
       
-      // Process the image using your existing processor
-      const result = await canonicalizeImage(file.path, {
-        userId: options.userId,
-        checkDuplicates: options.checkDuplicates !== false,
-        originalName: file.originalname
-      });
+      // Detect file type
+      const dm = file.mimetype || mime.lookup(file.originalname) || 'application/octet-stream';
+      const isImg = /^image\//i.test(dm) || /\.(png|jpe?g|gif|webp)$/i.test(file.originalname);
+      const kind = isImg ? 'image' : 'unknown';
+      
+      // Read file buffer
+      const buffer = await fs.readFile(file.path);
+      
+      // Generate SHA-256 fingerprint
+      const sha256 = crypto.createHash('sha256').update(buffer).digest('hex');
+      
+      // Get image metadata
+      let metadata = { format: file.mimetype?.split('/')[1], size: file.size };
+      if (kind === 'image') {
+        try {
+          const imageMetadata = await sharp(file.path).metadata();
+          metadata = {
+            width: imageMetadata.width,
+            height: imageMetadata.height,
+            format: imageMetadata.format,
+            size: file.size
+          };
+        } catch (err) {
+          console.error(`[BatchProcessor] Metadata extraction error for file ${index + 1}:`, err.message);
+        }
+      }
+      
+      // Run AI detection for images (with JPEG artifact analysis)
+      let aiDetection = null;
+      if (kind === 'image') {
+        try {
+          console.log(`[BatchProcessor] Running AI detection for file ${index + 1}...`);
+          aiDetection = await detectAIGeneration(file.path);
+          console.log(`[BatchProcessor] File ${index + 1} AI result: ${aiDetection.likely_ai_generated ? 'AI' : 'Real'} (${aiDetection.ai_confidence}%)`);
+        } catch (err) {
+          console.error(`[BatchProcessor] AI detection error for file ${index + 1}:`, err.message);
+          aiDetection = { error: err.message };
+        }
+      }
+      
+      // Generate perceptual hash for images
+      let phash = null;
+      if (kind === 'image') {
+        try {
+          const phashResult = await generatePHash(file.path);
+          if (phashResult.success) {
+            phash = phashResult.phash;
+            console.log(`[BatchProcessor] File ${index + 1} pHash: ${phash.substring(0, 16)}...`);
+          }
+        } catch (err) {
+          console.error(`[BatchProcessor] pHash error for file ${index + 1}:`, err.message);
+        }
+      }
       
       // Clean up temp file
       await fs.unlink(file.path).catch(err => {
@@ -77,33 +129,65 @@ class BatchProcessor {
         index,
         filename: file.originalname,
         status: 'success',
-        fileId: result.fileId || this.generateFileId(),
+        kind: kind,
+        fileId: this.generateFileId(),
         fingerprint: {
-          sha256: result.sha256 || result.hash,
-          perceptualHash: result.perceptualHash || result.phash,
-          hashVersion: result.hashVersion || 'v2'
+          sha256: sha256,
+          perceptualHash: phash,
+          hashVersion: 'v2'
         },
-        metadata: {
-          width: result.width || result.metadata?.width,
-          height: result.height || result.metadata?.height,
-          format: result.format || result.metadata?.format || file.mimetype?.split('/')[1],
-          size: file.size,
-          created: result.created || result.metadata?.created || new Date()
-        },
-        matches: this.formatMatches(result.matches || []),
+        metadata: metadata,
+        // AI Detection results (including JPEG artifact analysis)
+        ...(aiDetection && !aiDetection.error && {
+          ai_detection: {
+            likely_ai_generated: aiDetection.likely_ai_generated,
+            confidence: aiDetection.ai_confidence,
+            ensemble_used: aiDetection.ensemble_used,
+            detector_count: aiDetection.detector_count,
+            detectors: aiDetection.individual_results ? {
+              jpeg_artifacts: aiDetection.individual_results.jpeg ? {
+                confidence: aiDetection.individual_results.jpeg.confidence,
+                verdict: aiDetection.individual_results.jpeg.verdict,
+                details: {
+                  standardMatch: aiDetection.individual_results.jpeg.details?.quantizationTables?.standardMatch,
+                  cameraSignature: aiDetection.individual_results.jpeg.details?.quantizationTables?.cameraManufacturer,
+                  variance: aiDetection.individual_results.jpeg.details?.quantizationTables?.variance,
+                  highFreqEnergy: aiDetection.individual_results.jpeg.details?.dctCoefficients?.highFreqEnergy,
+                  uniformity: aiDetection.individual_results.jpeg.details?.dctCoefficients?.uniformity
+                }
+              } : null,
+              local_heuristic: aiDetection.individual_results.local ? {
+                confidence: aiDetection.individual_results.local.confidence,
+                verdict: aiDetection.individual_results.local.verdict
+              } : null,
+              huggingface: aiDetection.individual_results.huggingface ? {
+                confidence: aiDetection.individual_results.huggingface.confidence,
+                verdict: aiDetection.individual_results.huggingface.verdict
+              } : null
+            } : null,
+            agreement: aiDetection.agreement,
+            weights_used: aiDetection.weights_used,
+            indicators: aiDetection.indicators
+          }
+        }),
+        matches: [],
         verification: {
-          isOriginal: !result.matches || result.matches.length === 0,
-          confidence: result.confidence || this.calculateConfidence(result),
-          warnings: this.generateWarnings(result)
+          isOriginal: true,
+          confidence: this.calculateConfidence({ metadata }, aiDetection),
+          warnings: this.generateWarnings({ metadata }, aiDetection)
         },
-        processingTime: result.processingTime || null
+        processingTime: null
       };
       
     } catch (error) {
       console.error(`[BatchProcessor] Error processing file ${index + 1} (${file.originalname}):`, error.message);
       
       // Clean up temp file on error
-      await fs.unlink(file.path).catch(() => {});
+      try {
+        await fs.unlink(file.path);
+      } catch (unlinkErr) {
+        // Ignore cleanup errors
+      }
       
       // Format the error result
       return {
@@ -152,13 +236,17 @@ class BatchProcessor {
     const duplicatesFound = formatted.reduce((count, r) => {
       return count + (r.status === 'success' && r.matches && r.matches.length > 0 ? 1 : 0);
     }, 0);
+    const aiDetectedCount = formatted.reduce((count, r) => {
+      return count + (r.status === 'success' && r.ai_detection?.likely_ai_generated ? 1 : 0);
+    }, 0);
     
     return {
       summary: {
         total: files.length,
         successful,
         failed,
-        duplicatesFound
+        duplicatesFound,
+        aiGeneratedDetected: aiDetectedCount
       },
       timing: {
         processingTime,
@@ -188,10 +276,22 @@ class BatchProcessor {
   /**
    * Generate warnings based on processing results
    * @param {Object} result - Processing result
+   * @param {Object} aiDetection - AI detection result (optional)
    * @returns {Array} Array of warning messages
    */
-  generateWarnings(result) {
+  generateWarnings(result, aiDetection = null) {
     const warnings = [];
+    
+    // Check for AI generation
+    if (aiDetection && !aiDetection.error && aiDetection.likely_ai_generated) {
+      if (aiDetection.ai_confidence >= 80) {
+        warnings.push(`High confidence AI-generated content detected (${aiDetection.ai_confidence}%)`);
+      } else if (aiDetection.ai_confidence >= 60) {
+        warnings.push(`Likely AI-generated content detected (${aiDetection.ai_confidence}%)`);
+      } else {
+        warnings.push(`Possible AI-generated content detected (${aiDetection.ai_confidence}%)`);
+      }
+    }
     
     // Check for duplicates
     if (result.matches && result.matches.length > 0) {
@@ -229,21 +329,60 @@ class BatchProcessor {
   /**
    * Calculate confidence level based on result data
    * @param {Object} result - Processing result
+   * @param {Object} aiDetection - AI detection result (optional)
    * @returns {string} Confidence level: 'high', 'medium', or 'low'
    */
-  calculateConfidence(result) {
-    if (result.confidence) {
+  calculateConfidence(result, aiDetection = null) {
+    if (result.confidence && typeof result.confidence === 'string') {
       return result.confidence;
     }
     
-    // Calculate based on image properties
+    let score = 0;
+    let factors = 0;
+    
+    // Factor 1: Image resolution
     const width = result.width || result.metadata?.width || 0;
     const height = result.height || result.metadata?.height || 0;
     const pixels = width * height;
     
-    if (pixels >= 2000000) return 'high';  // 2MP+
-    if (pixels >= 500000) return 'medium'; // 500K - 2MP
-    return 'low'; // < 500K
+    if (pixels >= 2000000) {
+      score += 3;
+    } else if (pixels >= 500000) {
+      score += 2;
+    } else {
+      score += 1;
+    }
+    factors++;
+    
+    // Factor 2: AI detection confidence
+    if (aiDetection && !aiDetection.error && aiDetection.ensemble_used) {
+      if (aiDetection.detector_count >= 3) {
+        score += 3;
+      } else if (aiDetection.detector_count >= 2) {
+        score += 2;
+      } else {
+        score += 1;
+      }
+      factors++;
+      
+      // Factor 3: Detector agreement
+      if (aiDetection.agreement) {
+        if (aiDetection.agreement.level === 'high') {
+          score += 3;
+        } else if (aiDetection.agreement.level === 'medium') {
+          score += 2;
+        } else {
+          score += 1;
+        }
+        factors++;
+      }
+    }
+    
+    const avgScore = factors > 0 ? score / factors : 2;
+    
+    if (avgScore >= 2.5) return 'high';
+    if (avgScore >= 1.5) return 'medium';
+    return 'low';
   }
   
   /**
@@ -276,12 +415,10 @@ class BatchProcessor {
    * @returns {string} Error code
    */
   getErrorCode(error) {
-    // Check for explicit error code
     if (error.code) return error.code;
     
     const message = error.message.toLowerCase();
     
-    // Check for common error patterns
     if (message.includes('invalid') || message.includes('corrupt')) {
       return 'INVALID_IMAGE';
     }

@@ -80,6 +80,7 @@ app.use(limiter);
 
 // Batch upload routes
 const batchRoutes = require('./routes/batch');
+app.use('/api', batchRoutes);
 
 // VIRUSTOTAL EXTERNAL SEARCH
 // ============================================================================
