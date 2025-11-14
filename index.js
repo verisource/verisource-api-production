@@ -508,7 +508,7 @@ app.post('/verify', upload.single('file'), async (req, res) => {
         }
       }
       // Landmark verification for images without GPS data
-      if (kind === 'image' && !exifData && googleVisionResult?.results?.landmarks?.length > 0) {
+      if (kind === 'image' && (!exifData || !exifData.GPSLatitude) && googleVisionResult?.results?.landmarks?.length > 0) {
         try {
           console.log('🗺️ Verifying landmarks (no GPS available)...');
           landmarkVerification = LandmarkVerification.verifyLandmarkLocation(
