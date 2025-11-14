@@ -7,7 +7,7 @@
 const fs = require('fs');
 const fetch = require('node-fetch');
 
-const HF_API_URL = 'https://api-inference.huggingface.co/models/umm-maybe/AI-image-detector';
+const HF_API_URL = 'https://router.huggingface.co/hf-inference/models/umm-maybe/AI-image-detector';
 const HF_TOKEN = process.env.HUGGINGFACE_TOKEN;
 
 /**
