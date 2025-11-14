@@ -470,7 +470,13 @@ app.post('/verify', upload.single('file'), async (req, res) => {
                 
                 // Landmark verification
                 if (googleVisionResult?.results?.landmarks) {
-                // Landmark verification moved to line ~510
+                  console.log('🗺️ Verifying landmark locations...');
+                  landmarkVerification = LandmarkVerification.verifyLandmarkLocation(
+                    googleVisionResult.results.landmarks,
+                    gpsAndDate.gps
+                  );
+                  console.log(`✅ Landmark verification: ${landmarkVerification.landmarks_detected} landmarks detected`);
+                }
                 
                 // Shadow physics verification
                 if (gpsAndDate.gps && gpsAndDate.date) {
@@ -508,24 +514,6 @@ app.post('/verify', upload.single('file'), async (req, res) => {
         try {
           console.log('🎥 Analyzing video frames...');
           videoAnalysis = await analyzeVideo(req.file.path, {
-
-      // Landmark verification (works with or without GPS) 
-      if (kind === 'image' && googleVisionResult?.results?.landmarks?.length > 0) {
-        try {
-          console.log('🗺️ Verifying landmark locations...');
-          const gpsData = exifData?.GPSLatitude ? {
-            lat: exifData.GPSLatitude,
-            lon: exifData.GPSLongitude
-          } : null;
-          landmarkVerification = LandmarkVerification.verifyLandmarkLocation(
-            googleVisionResult.results.landmarks,
-            gpsData
-          );
-          console.log(`✅ Landmark verification: ${landmarkVerification.landmarks_detected} landmarks detected`);
-        } catch (landmarkErr) {
-          console.error('⚠️ Landmark verification error:', landmarkErr.message);
-        }
-      }
             fps: 1,
             maxFrames: 30
           });
