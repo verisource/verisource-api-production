@@ -455,6 +455,17 @@ app.post('/verify', upload.single('file'), async (req, res) => {
             try {
               const parser = ExifParser.create(exifBuffer);
               exifData = parser.parse().tags;
+
+              // Adjust AI detection for portrait mode
+              if (aiDetection && !aiDetection.error) {
+                const portraitDetection = PortraitModeDetection.detectPortraitMode(exifData);
+                if (portraitDetection.isPortraitMode) {
+                  console.log(`📸 Portrait mode detected: ${portraitDetection.confidence}% confidence`);
+                  console.log(`   Indicators: ${portraitDetection.indicators.join(", ")}`);
+                  aiDetection = PortraitModeDetection.adjustForPortraitMode(aiDetection, portraitDetection);
+                  console.log(`   AI confidence adjusted: ${aiDetection.original_ai_confidence}% → ${aiDetection.ai_confidence}%`);
+                }
+              }
               
               // Verify camera model (for all images with EXIF)
               cameraVerification = verifyCameraModel(exifData);
