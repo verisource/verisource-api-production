@@ -65,8 +65,8 @@ async function detectAI(imagePath) {
         const result = await response.json();
         
         // Result format: [{ label: "artificial", score: 0.85 }, { label: "human", score: 0.15 }]
-        const artificialScore = result.find(r => r.label === 'artificial')?.score || 0;
-        const humanScore = result.find(r => r.label === 'human')?.score || 0;
+        const artificialScore = result.find(r => r.label === 'artificial' || r.label === 'ai' || r.label === 'AI' || r.label === 'fake')?.score || 0;
+        const humanScore = result.find(r => r.label === 'human' || r.label === 'real' || r.label === 'Real' || r.label === 'natural')?.score || 0;
         
         const aiConfidence = Math.round(artificialScore * 100);
         
