@@ -567,17 +567,18 @@ app.post('/verify', upload.single('file'), async (req, res) => {
         const generatorDetector = new AIGeneratorDetector();
         
         if (kind === 'video' && videoAnalysis && videoAnalysis.success) {
-          generatorDetection = await generatorDetector.analyze(req.file.path, {
-            videoFrames: videoAnalysis.frames || [],
-            temporalAnalysis: videoAnalysis.analysis?.temporalAnalysis || null,
-            metadata: videoAnalysis.metadata || {}
-          });
+          generatorDetection = await generatorDetector.analyzeVideo(
+            videoAnalysis.frames || [],
+            videoAnalysis.analysis?. temporalAnalysis || null,
+            videoAnalysis.metadata || {}
+          );
           console.log(`✅ Generator detection: ${generatorDetection.likelyGenerator} (${generatorDetection.confidence}%)`);
         } else if (kind === 'image' && aiDetection) {
-          generatorDetection = await generatorDetector.analyze(req.file.path, {
-            existingAnalysis: aiDetection,
-            metadata: {}
-          });
+          generatorDetection = await generatorDetector.analyzeImage(
+            req.file.path,
+            aiDetection,
+            {}
+          );
           console.log(`✅ Generator detection: ${generatorDetection.likelyGenerator} (${generatorDetection.confidence}%)`);
         }
       } catch (err) {
