@@ -10,7 +10,6 @@ const db = require('./db-minimal');
 const { searchByFingerprint, saveVerification } = require('./search');
 const c2paVerification = require('./services/c2pa-verification');
 const shadowPhysics = require('./services/shadow-physics-verification');
-const reverseImageSearch = require('./services/reverse-image-search');
 const deepfakeDetection = require('./services/deepfake-detection');
 // Import canonicalization only (workers not needed for minimal endpoint)
 let canonicalizeImage;
@@ -25,16 +24,14 @@ try {
 const { analyzeVideo } = require('./video-analyzer');
 const { analyzeImage } = require('./google-vision-search');
 const { AudioAIDetection } = require('./services/audio-ai-detection');
-const { detectAIGeneration } = require('./services/ensemble-ai-detection');
+const { detectAIGeneration } = require('./ai-image-detector');
 const { generatePHash, searchSimilarImages } = require('./phash-module');
 const ConfidenceScoring = require('./services/confidence-scoring');
 const ChromaprintService = require('./services/chromaprint');
 const acoustid = require('./acoustid-integration');
 const WeatherVerification = require('./services/weather-verification');
 const LandmarkVerification = require('./services/landmark-verification');
-const PortraitModeDetection = require('./services/enhanced-portrait-detection');
 const { verifyCameraModel } = require('./services/camera-model-verification');
-const AIGeneratorDetector = require('./services/ai-generator-detector');
 // View engine for batch dashboard
 const app = express();
 
@@ -82,7 +79,6 @@ app.use(limiter);
 
 // Batch upload routes
 const batchRoutes = require('./routes/batch');
-app.use('/api', batchRoutes);
 
 // VIRUSTOTAL EXTERNAL SEARCH
 // ============================================================================
@@ -393,26 +389,6 @@ app.post('/verify', upload.single('file'), async (req, res) => {
           aiDetection = await detectAIGeneration(req.file.path);
           console.log(`✅ AI detection complete: ${aiDetection.likely_ai_generated ? 'LIKELY AI' : 'LIKELY AUTHENTIC'} (${aiDetection.ai_confidence}%)`);
         } catch (err) {
-
-         // Adjust AI detection for portrait mode / computational photography
-if (aiDetection && !aiDetection.error && exifData) {
-  const portraitDetection = PortraitModeDetection.detectPortraitMode(exifData);
-  
-  if (portraitDetection.isComputationalPhotography) {
-    console.log(`📸 Computational photography detected: ${portraitDetection.confidence}% confidence`);
-    console.log(`   Indicators: ${portraitDetection.indicators.slice(0, 3).join(", ")}`);
-    
-    aiDetection = PortraitModeDetection.adjustAIDetectionResults(aiDetection, portraitDetection);
-    
-    if (aiDetection.portrait_mode_adjustment?.applied) {
-      console.log(`   ✅ AI confidence adjusted: ${aiDetection.ai_confidence_raw}% → ${aiDetection.ai_confidence}%`);
-      if (aiDetection.portrait_mode_adjustment.safeguards_applied.length > 0) {
-        console.log(`   🛡️ Safeguards: ${aiDetection.portrait_mode_adjustment.safeguards_applied.join(', ')}`);
-      }
-    }
-  }
-}
-
           console.error('⚠️ AI detection error:', err.message);
           aiDetection = { error: err.message };
         }
@@ -467,17 +443,6 @@ if (aiDetection && !aiDetection.error && exifData) {
             try {
               const parser = ExifParser.create(exifBuffer);
               exifData = parser.parse().tags;
-
-              // Adjust AI detection for portrait mode
-              if (aiDetection && !aiDetection.error) {
-                const portraitDetection = PortraitModeDetection.detectPortraitMode(exifData);
-                if (portraitDetection.isPortraitMode) {
-                  console.log(`📸 Portrait mode detected: ${portraitDetection.confidence}% confidence`);
-                  console.log(`   Indicators: ${portraitDetection.indicators.join(", ")}`);
-                  aiDetection = PortraitModeDetection.adjustForPortraitMode(aiDetection, portraitDetection);
-                  console.log(`   AI confidence adjusted: ${aiDetection.original_ai_confidence}% → ${aiDetection.ai_confidence}%`);
-                }
-              }
               
               // Verify camera model (for all images with EXIF)
               cameraVerification = verifyCameraModel(exifData);
@@ -542,53 +507,7 @@ if (aiDetection && !aiDetection.error && exifData) {
           console.error('⚠️ EXIF extraction error:', err.message);
         }
       }
-      // Landmark verification for images without GPS data
-      if (kind === 'image' && (!exifData || !exifData.GPSLatitude) && googleVisionResult?.results?.landmarks?.length > 0) {
-        try {
-          console.log('🗺️ Verifying landmarks (no GPS available)...');
-          landmarkVerification = LandmarkVerification.verifyLandmarkLocation(
-            googleVisionResult.results.landmarks,
-            null  // No GPS data available
-          );
-          console.log(`✅ Landmark verification: ${landmarkVerification.landmarks_detected} landmarks detected`);
-        } catch (landmarkErr) {
-          console.error('⚠️ Landmark verification error:', landmarkErr.message);
-        }
-      }
-            // ========== ADD REVERSE IMAGE SEARCH HERE ==========
-      let reverseSearchResults = null;
-      if (kind === 'image') {
-        try {
-          console.log('🔍 Running reverse image search...');
-          reverseSearchResults = await reverseImageSearch.search(buf, {
-            services: ['tineye', 'bing'],
-            includeAnalysis: true
-          });
-          
-          if (reverseSearchResults.combined_analysis) {
-            const analysis = reverseSearchResults.combined_analysis;
-            console.log(`✅ Reverse search: Found ${analysis.total_matches_found} matches online`);
-            
-            if (analysis.is_original) {
-              console.log('   Status: LIKELY ORIGINAL (not found online)');
-            } else {
-              console.log(`   Status: Found on ${analysis.total_matches_found} sites`);
-              if (analysis.age_analysis?.is_very_old) {
-                console.log(`   ⚠️ WARNING: Image is ${analysis.age_analysis.age_readable}`);
-              }
-              if (analysis.content_type === 'stock_photo') {
-                console.log('   ⚠️ WARNING: Stock photo detected');
-              }
-            }
-          }
-        } catch (err) {
-          console.error('⚠️ Reverse image search error:', err.message);
-          reverseSearchResults = { 
-            search_performed: false, 
-            error: err.message 
-          };
-        }
-      }
+      
       // Analyze audio for AI detection
       let videoAnalysis = null;
       if (kind === 'video') {
@@ -603,31 +522,6 @@ if (aiDetection && !aiDetection.error && exifData) {
           console.error('⚠️ Video analysis error:', err.message);
           videoAnalysis = { error: err.message };
         }
-      }
-     // AI Generator Detection (Sora, Runway, Pika, Kling, Midjourney, DALL-E, etc.)
-      let generatorDetection = null;
-      try {
-        console.log('🔍 Running AI generator detection...');
-        const generatorDetector = new AIGeneratorDetector();
-        
-        if (kind === 'video' && videoAnalysis && videoAnalysis.success) {
-          generatorDetection = await generatorDetector.analyzeVideo(
-            videoAnalysis.frames || [],
-            videoAnalysis.analysis?. temporalAnalysis || null,
-            videoAnalysis.metadata || {}
-          );
-          console.log(`✅ Generator detection: ${generatorDetection.likelyGenerator} (${generatorDetection.confidence}%)`);
-        } else if (kind === 'image' && aiDetection) {
-          generatorDetection = await generatorDetector.analyzeImage(
-            req.file.path,
-            aiDetection,
-            {}
-          );
-          console.log(`✅ Generator detection: ${generatorDetection.likelyGenerator} (${generatorDetection.confidence}%)`);
-        }
-      } catch (err) {
-        console.error('⚠️ Generator detection error:', err.message);
-        generatorDetection = { error: err.message };
       }
     // Save this verification to database
     try {
@@ -676,14 +570,12 @@ if (aiDetection && !aiDetection.error && exifData) {
       ...(kind === 'video' && videoAnalysis && {
         video_analysis: videoAnalysis
       }),
-      ...(generatorDetection && { generator_detection: generatorDetection }),
       ...(kind === 'image' && googleVisionResult && { google_vision: googleVisionResult }),
       ...(kind === 'image' && weatherVerification && { weather_verification: weatherVerification }),
       ...(kind === 'image' && landmarkVerification && { landmark_verification: landmarkVerification }),
       ...(cameraVerification && { camera_verification: cameraVerification }),
       ...(shadowPhysicsResult && { shadow_physics: shadowPhysicsResult }),
       ...(deepfakeAnalysis && { deepfake_detection: deepfakeAnalysis }),
-      ...(reverseSearchResults && { reverse_image_search: reverseSearchResults }),
       // C2PA/Blockchain verification (Phase 1 Step 3)
       c2pa_verification: await (async () => {
         try {
@@ -738,8 +630,7 @@ if (aiDetection && !aiDetection.error && exifData) {
               ...(videoAnalysis && { video_analysis: videoAnalysis }),
               ...(audioAIDetection && { audio_ai_detection: audioAIDetection }),
               ...(shadowPhysicsResult && { shadow_physics: shadowPhysicsResult }),
-              ...(reverseSearchResults && { reverse_image_search: reverseSearchResults }),
-            };
+          };
           console.log('📊 Calculating confidence score...');
           const score = ConfidenceScoring.calculate(confidenceData);
           console.log(`✅ Confidence: ${score.level} (${score.percentage}%)`);

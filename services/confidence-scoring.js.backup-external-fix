@@ -351,37 +351,93 @@ class ConfidenceScoring {
   }
   
   /**
-   * Score metadata quality (max 30 points)
+   * Score metadata quality (max 40 points)
    */
   static scoreMetadataQuality(data) {
     let score = 0;
     const details = [];
     
+    // Base file type validation (10 points)
     if (data.kind === 'image') {
-      score += 15;
+      score += 10;
       details.push('✅ Valid image file');
     } else if (data.kind === 'video') {
-      score += 15;
+      score += 10;
       details.push('✅ Valid video file');
     } else if (data.kind === 'audio') {
-      score += 15;
+      score += 10;
       details.push('✅ Valid audio file');
     }
     
+    // Cryptographic fingerprint (8 points)
     if (data.canonical?.fingerprint || data.fingerprint) {
-      score += 10;
+      score += 8;
       details.push('✅ Cryptographic fingerprint generated');
     }
     
+    // File size check (3 points)
     if (data.size_bytes > 1000) {
-      score += 5;
+      score += 3;
       details.push('✅ Reasonable file size');
+    }
+    
+    // EXIF metadata presence (5 points) - Images only
+    if (data.kind === 'image') {
+      const hasExif = data.camera_verification?.camera_found || 
+                     data.weather_verification?.location_data?.gps ||
+                     data.landmark_verification?.landmarks_detected > 0 ||
+                     data.shadow_physics?.sun_position;
+      
+      if (hasExif) {
+        score += 5;
+        details.push('✅ EXIF metadata present');
+      } else {
+        details.push('⚠️ No EXIF metadata found');
+      }
+    }
+    
+    // GPS data (4 points)
+    if (data.weather_verification?.location_data?.gps || 
+        data.shadow_physics?.analysis?.location) {
+      score += 4;
+      details.push('✅ GPS coordinates present');
+    }
+    
+    // Camera information (4 points)
+    if (data.camera_verification?.camera_found) {
+      score += 4;
+      const camera = data.camera_verification.details;
+      details.push(`✅ Camera: ${camera.manufacturer} ${camera.recognized_model}`);
+    }
+    
+    // Timestamp verification (3 points)
+    if (data.weather_verification?.location_data?.date || 
+        data.shadow_physics?.analysis?.timestamp) {
+      score += 3;
+      details.push('✅ Creation timestamp present');
+    }
+    
+    // Weather/Landmark correlation (3 points)
+    if (data.weather_verification?.verified === true) {
+      score += 2;
+      details.push('✅ Weather conditions verified');
+    }
+    if (data.landmark_verification?.landmarks_detected > 0) {
+      score += 1;
+      details.push(`✅ ${data.landmark_verification.landmarks_detected} landmark(s) verified`);
+    }
+    
+    // C2PA credentials (bonus, not counted in max 40)
+    if (data.c2pa_verification?.has_c2pa_credentials && 
+        data.c2pa_verification?.credentials_valid) {
+      score += 5;
+      details.push('✅ Valid C2PA credentials found');
     }
     
     return {
       name: 'Metadata Quality',
-      score,
-      max: 30,
+      score: Math.min(score, 40), // Cap at 40
+      max: 40,
       details
     };
   }

@@ -107,7 +107,6 @@ function analyzeMetadata(verification) {
   
   return { score: Math.min(score, 30), details };
 };
-}
 
 function analyzeExternalSearch(verification) {
   let score = 0;
