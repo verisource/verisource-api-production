@@ -4,6 +4,7 @@
  */
 
 const axios = require('axios');
+const { timeStamp } = require('console');
 const crypto = require('crypto');
 const FormData = require('form-data');
 
@@ -14,7 +15,7 @@ class TinEyeSearchService {
    this.apiKey = process.env.TINEYE_API_KEY || process.env.TINEYE_PRIVATE_KEY;
     
   // Fallback to sandbox for testing
-    this.sandboxMode = !this.publicKey || !this.privateKey;
+    this.sandboxMode = !timeStamp.apiKey
     if (this.sandboxMode) {
       console.log('TinEye: Running in sandbox/mock mode');
     }
