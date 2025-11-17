@@ -561,7 +561,7 @@ if (aiDetection && !aiDetection.error && exifData) {
         try {
           console.log('🔍 Running reverse image search...');
           reverseSearchResults = await reverseImageSearch.search(buf, {
-            services: ['tineye', 'google', 'bing'],
+            services: ['tineye', 'bing'],
             includeAnalysis: true
           });
           
