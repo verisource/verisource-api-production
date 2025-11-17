@@ -28,7 +28,17 @@ async function getHistoricalWeather(gps, date) {
       is_rainy: day.totalprecip_mm > 0
     };
   } catch (error) {
-    console.error('Weather API error:', error.response?.status, error.response?.data || error.message);
+    const errorCode = error.response?.data?.error?.code;
+    console.error('Weather API error:', errorCode, error.response?.data?.error?.message || error.message);
+    
+    // Error 1008 = API key doesn't have historical access
+    if (errorCode === 1008) {
+      return { 
+        error: "historical_not_available", 
+        message: "Historical weather data not available - upgrade API plan"
+      };
+    }
+    
     return {
          error: "api_error",
          message: error.message,
