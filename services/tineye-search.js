@@ -57,7 +57,7 @@ class TinEyeSearchService {
 
     try {
       const form = new FormData();
-      form.append('image', imageBuffer, {
+      form.append('image_upload', imageBuffer, {
         filename: 'search_image.jpg',
         contentType: 'image/jpeg'
       });
