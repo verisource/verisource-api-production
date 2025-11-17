@@ -30,4 +30,7 @@ async function verifyWeatherConditions(imageData, visionLabels = []) {
   return { verified: true, confidence: 50, historical_weather: weatherData };
 }
 
-module.exports = { getHistoricalWeather, verifyWeatherConditions };
+function isConfigured() {
+  return !!WEATHER_API_KEY;
+}
+module.exports = { getHistoricalWeather, verifyWeatherConditions, isConfigured };
