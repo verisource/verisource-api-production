@@ -4,17 +4,19 @@
  * for comprehensive image verification
  */
 
-const tineyeSearch = require('./tineye-search');
-const bingSearch = require('./bing-visual-search');
+const TinEyeService = require('./tineye-search');
+const BingVisualSearchService = require('./bing-visual-search');
+const GoogleReverseSearchService = require('./google-reverse-search');
 
 class ReverseImageSearchService {
   constructor() {
     this.services = {
-      tineye: tineyeSearch,
-      bing: bingSearch
+      tineye: TinEyeService,  // Already an instance, no 'new'
+      bing: BingVisualSearchService,  // Already an instance, no 'new'
+      google: new GoogleReverseSearchService()  // This one needs 'new'
     };
   }
-
+  
   /**
    * Perform comprehensive reverse image search across all services
    * @param {Buffer} imageBuffer - The image file buffer
@@ -23,7 +25,7 @@ class ReverseImageSearchService {
    */
   async search(imageBuffer, options = {}) {
     const {
-      services = ['tineye', 'bing'], // Which services to use
+      services = ['tineye', 'google', 'bing'], // Which services to use
       timeout = 60000, // Total timeout for all searches
       includeAnalysis = true // Include combined analysis
     } = options;
@@ -37,6 +39,7 @@ class ReverseImageSearchService {
       // Individual service results
       tineye: null,
       bing: null,
+      google: null,
       
       // Combined analysis
       combined_analysis: null,
@@ -88,6 +91,20 @@ class ReverseImageSearchService {
       );
     }
 
+    if (services.includes('google')) {
+      const googleStart = Date.now();
+      searchPromises.push(
+        this.services.google.search(imageBuffer, options.google || {})
+          .then(result => {
+            results.google = result;
+            results.performance.services_timing.google = Date.now() - googleStart;
+          })
+          .catch(error => {
+            results.google = { status: 'error', error: error.message };
+            results.performance.services_timing.google = Date.now() - googleStart;
+          })
+      );
+    }
     // Wait for all searches to complete
     await Promise.all(searchPromises);
 
@@ -142,6 +159,9 @@ class ReverseImageSearchService {
     // Aggregate total matches
     if (results.tineye && results.tineye.status === 'found') {
       analysis.total_matches_found += results.tineye.total_results || 0;
+    }
+    if (results.google && results.google.status === 'found') {
+  analysis.total_matches_found += results.google.total_results || 0;
     }
     if (results.bing && results.bing.status === 'found') {
       analysis.total_matches_found += results.bing.total_results || 0;
@@ -554,7 +574,7 @@ class ReverseImageSearchService {
    */
   async quickSearch(imageBuffer) {
     const results = await this.search(imageBuffer, {
-      services: ['tineye'], // Just use TinEye for quick check
+      services: ['tineye', 'google', 'bing'], 
       includeAnalysis: true
     });
 
