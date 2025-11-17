@@ -12,7 +12,10 @@ const c2paVerification = require('./services/c2pa-verification');
 const shadowPhysics = require('./services/shadow-physics-verification');
 const reverseImageSearch = require('./services/reverse-image-search');
 const deepfakeDetection = require('./services/deepfake-detection');
+const stockPhotoDetection = require('./services/stock-photo-detection');
 const AudioSpectralAnalysis = require('./services/audio-spectral-analysis');
+const EnhancedAIDetector = require('./services/enhanced-ai-detector');
+const JPEGForensics = require('./services/jpeg-forensics');
 // Import canonicalization only (workers not needed for minimal endpoint)
 let canonicalizeImage;
 try { 
@@ -401,39 +404,59 @@ app.post('/verify', upload.single('file'), async (req, res) => {
       } catch (err) {
         console.error('⚠️ pHash error:', err.message);
       }
-    }
-    
-
-      // Detect AI-generated images
-      let aiDetection = null;
-      if (kind === 'image') {
-        try {
-          console.log('🤖 Running AI generation detection...');
-          aiDetection = await detectAIGeneration(req.file.path);
-          console.log(`✅ AI detection complete: ${aiDetection.likely_ai_generated ? 'LIKELY AI' : 'LIKELY AUTHENTIC'} (${aiDetection.ai_confidence}%)`);
-        } catch (err) {
-
-         // Adjust AI detection for portrait mode / computational photography
-if (aiDetection && !aiDetection.error && exifData) {
-  const portraitDetection = PortraitModeDetection.detectPortraitMode(exifData);
   
-  if (portraitDetection.isComputationalPhotography) {
-    console.log(`📸 Computational photography detected: ${portraitDetection.confidence}% confidence`);
-    console.log(`   Indicators: ${portraitDetection.indicators.slice(0, 3).join(", ")}`);
-    
-    aiDetection = PortraitModeDetection.adjustAIDetectionResults(aiDetection, portraitDetection);
-    
-    if (aiDetection.portrait_mode_adjustment?.applied) {
-      console.log(`   ✅ AI confidence adjusted: ${aiDetection.ai_confidence_raw}% → ${aiDetection.ai_confidence}%`);
-      if (aiDetection.portrait_mode_adjustment.safeguards_applied.length > 0) {
-        console.log(`   🛡️ Safeguards: ${aiDetection.portrait_mode_adjustment.safeguards_applied.join(', ')}`);
-      }
     }
+
+    // Detect AI-generated images with JPEG forensics
+let aiDetection = null;
+if (kind === 'image') {
+  try {
+    console.log('🤖 Running enhanced AI detection with forensics...');
+    const enhancedResult = await EnhancedAIDetector.detect(req.file.path);
+    
+    // Use enhanced results but preserve raw confidence for your adjustment
+    aiDetection = {
+      likely_ai_generated: enhancedResult.likely_ai_generated,
+      ai_confidence: enhancedResult.ai_confidence,
+      ai_confidence_raw: enhancedResult.ai_confidence, // Store for your adjustment
+      indicators: enhancedResult.indicators,
+      warnings: enhancedResult.warnings,
+      recommendations: enhancedResult.recommendations,
+      
+      forensic_analysis: {
+        manipulation_detected: enhancedResult.manipulation_detected,
+        manipulation_confidence: enhancedResult.manipulation_confidence,
+        ela_performed: enhancedResult.jpeg_forensics?.ela_analysis?.performed || false,
+        compression_quality: enhancedResult.jpeg_forensics?.compression_analysis?.quality_estimate || 0,
+        double_compressed: enhancedResult.jpeg_forensics?.compression_analysis?.double_compressed || false,
+        noise_level: enhancedResult.jpeg_forensics?.noise_analysis?.noise_level || 'unknown'
+      },
+      
+      verdict: enhancedResult.overall_verdict,
+      analysis_time_ms: enhancedResult.analysis_time_ms
+    };
+    
+    console.log(`✅ Enhanced detection: ${enhancedResult.overall_verdict} (${enhancedResult.ai_confidence}%)`);
+    
+  } catch (err) {
+    console.error('⚠️ AI detection error:', err.message);
+    aiDetection = { error: err.message };
   }
 }
 
-          console.error('⚠️ AI detection error:', err.message);
-          aiDetection = { error: err.message };
+      // Adjust AI detection for portrait mode / computational photography
+      if (aiDetection && !aiDetection.error && exifData) {
+        const portraitDetection = PortraitModeDetection.detectPortraitMode(exifData);
+        
+        if (portraitDetection.isComputationalPhotography) {
+          console.log(`📸 Computational photography detected: ${portraitDetection.confidence}% confidence`);
+          console.log(`   Indicators: ${portraitDetection.indicators.slice(0, 3).join(", ")}`);
+          
+          aiDetection = PortraitModeDetection.adjustAIDetectionResults(aiDetection, portraitDetection);
+          
+          if (aiDetection.portrait_mode_adjustment?.applied) {
+            console.log(`   ✅ AI confidence adjusted: ${aiDetection.ai_confidence_raw}% → ${aiDetection.ai_confidence}%`);
+          }
         }
       }
 
@@ -704,6 +727,7 @@ if (aiDetection && !aiDetection.error && exifData) {
       ...(shadowPhysicsResult && { shadow_physics: shadowPhysicsResult }),
       ...(deepfakeAnalysis && { deepfake_detection: deepfakeAnalysis }),
       ...(reverseSearchResults && { reverse_image_search: reverseSearchResults }),
+      //...(stockPhotoResult && { stock_photo_detection: stockPhotoResult }),
       // C2PA/Blockchain verification (Phase 1 Step 3)
       c2pa_verification: await (async () => {
         try {
