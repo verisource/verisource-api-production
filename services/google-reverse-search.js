@@ -31,24 +31,32 @@ class GoogleReverseSearchService {
     }
 
     try {
-      const base64Image = imageBuffer.toString('base64');
       const fetch = (await import('node-fetch')).default;
+      const FormData = (await import('form-data')).default;
       
-      const params = new URLSearchParams({
-        engine: 'google_reverse_image',
-        image_content: base64Image,
-        api_key: this.apiKey,
-        hl: options.language || 'en',
-        gl: options.country || 'us'
+      // Create form data with image file
+      const formData = new FormData();
+      formData.append('engine', 'google_reverse_image');
+      formData.append('api_key', this.apiKey);
+      formData.append('hl', options.language || 'en');
+      formData.append('gl', options.country || 'us');
+      
+      // Append image as file (not base64 in URL)
+      formData.append('image', imageBuffer, {
+        filename: 'image.jpg',
+        contentType: 'image/jpeg'
       });
 
-      const response = await fetch(`${this.endpoint}?${params}`, {
-        method: 'GET',
+      const response = await fetch(this.endpoint, {
+        method: 'POST',
+        body: formData,
+        headers: formData.getHeaders(),
         timeout: 45000
       });
 
       if (!response.ok) {
-        throw new Error(`SerpAPI error: ${response.status} ${response.statusText}`);
+        const errorText = await response.text();
+        throw new Error(`SerpAPI error: ${response.status} ${response.statusText} - ${errorText}`);
       }
 
       const data = await response.json();
