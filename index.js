@@ -275,7 +275,7 @@ async function initializeDatabase() {
 app.get('/test/weather', async (req, res) => {
   const result = await WeatherVerification.getHistoricalWeather(
     { lat: 36.1699, lon: -115.1398 }, // Las Vegas
-    '2024-01-15'
+    '2024-10-15'
   );
   res.json({ 
     configured: WeatherVerification.isConfigured(),
