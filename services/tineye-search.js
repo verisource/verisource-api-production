@@ -206,16 +206,24 @@ class TinEyeSearchService {
     // Calculate age
     let ageInfo = null;
     if (firstAppearance) {
-      const firstDate = new Date(firstAppearance.crawl_date);
-      const now = new Date();
-      const ageDays = Math.floor((now - firstDate) / (1000 * 60 * 60 * 24));
+      // Get crawl_date from backlinks if not directly available
+      let crawlDate = firstAppearance.crawl_date;
+      if (!crawlDate && firstAppearance.backlinks && firstAppearance.backlinks.length > 0) {
+        crawlDate = firstAppearance.backlinks[0].crawl_date;
+      }
       
-      ageInfo = {
-        days: ageDays,
-        months: Math.floor(ageDays / 30),
-        years: Math.floor(ageDays / 365),
-        human_readable: this.formatAge(ageDays)
-      };
+      if (crawlDate) {
+        const firstDate = new Date(crawlDate);
+        const now = new Date();
+        const ageDays = Math.floor((now - firstDate) / (1000 * 60 * 60 * 24));
+        
+        ageInfo = {
+          days: ageDays,
+          months: Math.floor(ageDays / 30),
+          years: Math.floor(ageDays / 365),
+          human_readable: this.formatAge(ageDays)
+        };
+      }
     }
 
     return {
