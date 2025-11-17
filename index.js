@@ -271,6 +271,18 @@ async function initializeDatabase() {
 (async () => {
   console.log('🚀 Starting VeriSource API...');
   
+  // Weather API test endpoint
+app.get('/test/weather', async (req, res) => {
+  const result = await WeatherVerification.getHistoricalWeather(
+    { lat: 36.1699, lon: -115.1398 }, // Las Vegas
+    '2024-01-15'
+  );
+  res.json({ 
+    configured: WeatherVerification.isConfigured(),
+    weather_data: result 
+  });
+});
+
   // Initialize database before starting server
   await initializeDatabase();
   
