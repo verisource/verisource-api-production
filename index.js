@@ -12,6 +12,7 @@ const c2paVerification = require('./services/c2pa-verification');
 const shadowPhysics = require('./services/shadow-physics-verification');
 const reverseImageSearch = require('./services/reverse-image-search');
 const deepfakeDetection = require('./services/deepfake-detection');
+const AudioSpectralAnalysis = require('./services/audio-spectral-analysis');
 // Import canonicalization only (workers not needed for minimal endpoint)
 let canonicalizeImage;
 try { 
@@ -354,6 +355,24 @@ app.post('/verify', upload.single('file'), async (req, res) => {
       } else if (kind === 'audio' && !acoustid.isConfigured()) {
         console.log('⚠️ AcoustID not configured - skipping music identification');
       }
+
+      // Audio Spectral Analysis for AI voice detection
+      let audioSpectralAnalysis = null;
+      if (kind === 'audio') {
+        try {
+          console.log('🔊 Running audio spectral analysis...');
+          audioSpectralAnalysis = await AudioSpectralAnalysis.analyze(req.file.path);
+          
+          if (audioSpectralAnalysis.is_likely_ai_voice) {
+            console.log(`⚠️ AI voice detected: ${audioSpectralAnalysis.ai_confidence}% confidence`);
+          } else {
+            console.log(`✅ Audio analysis: ${audioSpectralAnalysis.verdict}`);
+          }
+        } catch (err) {
+          console.error('⚠️ Audio spectral analysis error:', err.message);
+          audioSpectralAnalysis = { error: err.message };
+        }
+      }
     
     // Generate pHash for images
     let phash = null;
@@ -662,12 +681,13 @@ if (aiDetection && !aiDetection.error && exifData) {
         times_verified: searchResults.found ? searchResults.total_verifications : 1,
         previous_uploads: searchResults.found ? searchResults.matches : []
       },
-        ...(kind === 'audio' && chromaprint && {
+      ...(kind === 'audio' && chromaprint && {
           chromaprint: chromaprint,
           audio_duration: audioDuration,
           ...(musicIdentification && { music_identification: musicIdentification }),
-          ...(audioAIDetection && { audio_ai_detection: audioAIDetection })
-      }),
+          ...(audioAIDetection && { audio_ai_detection: audioAIDetection }),
+          ...(audioSpectralAnalysis && { audio_spectral_analysis: audioSpectralAnalysis })
+      }),  
       ...(kind === 'image' && phash && {
         phash: phash,
         similar_images: similarImages,
