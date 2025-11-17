@@ -10,7 +10,16 @@ async function getHistoricalWeather(gps, date) {
       params: { key: WEATHER_API_KEY, q: gps.lat + "," + gps.lon, dt: date },
       timeout: 10000
     });
+
+     // Check if response has expected structure
+    if (!response.data || !response.data.forecast || !response.data.forecast.forecastday) {
+      console.error('Unexpected API response structure:', response.data);
+      return { error: "invalid_response", message: "Unexpected API response" };
+    }
+
     const day = response.data.forecast.forecastday[0].day;
+    console.log("Weather retrieved: " + day.condition.text + ", " + day.avgtemp_c + "°C");
+   
     return {
       condition: day.condition.text,
       avgtemp_c: day.avgtemp_c,
@@ -19,7 +28,13 @@ async function getHistoricalWeather(gps, date) {
       is_rainy: day.totalprecip_mm > 0
     };
   } catch (error) {
-    return { error: "api_error", message: error.message };
+    console.error('Weather API error:', error.response?.status, error.response?.data || error.message);
+    return {
+         error: "api_error",
+         message: error.message,
+         status: error.response?.status,
+         details: error.response?.data
+     };
   }
 }
 
