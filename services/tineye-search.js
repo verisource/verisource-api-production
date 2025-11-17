@@ -11,8 +11,10 @@ class TinEyeSearchService {
   constructor() {
     // TinEye API credentials
     this.apiUrl = process.env.TINEYE_API_URL || 'https://api.tineye.com/rest/';
-    this.publicKey = process.env.TINEYE_PUBLIC_KEY;
-    this.privateKey = process.env.TINEYE_PRIVATE_KEY;
+   this.apiKey = process.env.TINEYE_API_KEY || process.env.TINEYE_PRIVATE_KEY;
+
+// Fallback to sandbox for testing
+this.sandboxMode = !this.apiKey; 
     
     // Fallback to sandbox for testing
     this.sandboxMode = !this.publicKey || !this.privateKey;
@@ -68,15 +70,11 @@ class TinEyeSearchService {
 
       const date = new Date().toUTCString();
       const requestUri = '/search/';
-      const signature = this.generateSignature('POST', form.getHeaders()['content-type'], date, requestUri);
-
-      const response = await axios.post(`${this.apiUrl}search/`, form, {
-        headers: {
-          ...form.getHeaders(),
-          'Date': date,
-          'X-Api-Key': this.publicKey,
-          'X-Api-Signature': signature
-        },
+      const response = await axios.post(url, form, {
+  headers: {
+    ...form.getHeaders(),
+    'x-api-key': this.apiKey
+  },
         timeout: 30000 // 30 second timeout
       });
 
