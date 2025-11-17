@@ -15,7 +15,7 @@ class TinEyeSearchService {
    this.apiKey = process.env.TINEYE_API_KEY || process.env.TINEYE_PRIVATE_KEY;
     
   // Fallback to sandbox for testing
-    this.sandboxMode = !this.apiKey
+    this.sandboxMode = !this.apiKey;
     if (this.sandboxMode) {
       console.log('TinEye: Running in sandbox/mock mode');
     }
