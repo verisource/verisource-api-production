@@ -251,7 +251,7 @@ class TinEyeSearchService {
         domain: match.domain || this.extractDomain(match.page_url),
         crawl_date: match.crawl_date,
         image_url: match.image_url,
-        match_percentage: match.score ? Math.round(match.score * 100) : 100,
+        match_percentage: match.score ? Math.round(match.score) : 100,
         backlinks: match.backlinks || 0,
         width: match.width,
         height: match.height
