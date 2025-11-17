@@ -12,11 +12,8 @@ class TinEyeSearchService {
     // TinEye API credentials
     this.apiUrl = process.env.TINEYE_API_URL || 'https://api.tineye.com/rest/';
    this.apiKey = process.env.TINEYE_API_KEY || process.env.TINEYE_PRIVATE_KEY;
-
-// Fallback to sandbox for testing
-this.sandboxMode = !this.apiKey; 
     
-    // Fallback to sandbox for testing
+  // Fallback to sandbox for testing
     this.sandboxMode = !this.publicKey || !this.privateKey;
     if (this.sandboxMode) {
       console.log('TinEye: Running in sandbox/mock mode');
