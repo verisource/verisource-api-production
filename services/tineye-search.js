@@ -68,6 +68,7 @@ class TinEyeSearchService {
 
       const date = new Date().toUTCString();
       const requestUri = '/search/';
+      const url = this.apiUrl + 'search/';
       const response = await axios.post(url, form, {
   headers: {
     ...form.getHeaders(),
