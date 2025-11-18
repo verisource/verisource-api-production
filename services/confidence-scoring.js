@@ -142,8 +142,8 @@ class ConfidenceScoring {
    * @returns {Object} Level details
    */
   static getLevel(percentage, isModified, aiDetection, mediaType, mediaAnalysis, audioAIDetection) {
-    // AI detection override for images
-    if (mediaType === 'image' && aiDetection?.ai_confidence >= 60) {
+   // High confidence AI generation (70%+)
+    if (mediaType === 'image' && aiDetection?.ai_confidence >= 70) {
       return {
         name: 'LOW',
         label: 'AI-GENERATED IMAGE',
@@ -151,6 +151,18 @@ class ConfidenceScoring {
         icon: 'cpu',
         iconSvg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#9333EA" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><path d="M9 1v3M15 1v3M9 20v3M15 20v3M20 9h3M20 14h3M1 9h3M1 14h3"/></svg>',
         message: `AI generation detected (${aiDetection.ai_confidence}% confidence)`
+      };
+    }
+
+    // Medium confidence - likely edited/AI-enhanced (40-69%)
+    if (mediaType === 'image' && aiDetection?.ai_confidence >= 40) {
+      return {
+        name: 'MEDIUM',
+        label: 'EDITED PHOTOGRAPH',
+        color: '#F59E0B',
+        icon: 'edit',
+        iconSvg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#F59E0B" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>',
+        message: `Photograph with AI enhancements or heavy editing (${aiDetection.ai_confidence}% AI indicators)`
       };
     }
     
