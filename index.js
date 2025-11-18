@@ -447,29 +447,36 @@ let aiDetection = null;
 if (kind === 'image') {
   try {
    console.log('🤖 Running ensemble AI detection with forensics...');
-   const enhancedResult = await detectAIGeneration(req.file.path); 
+    const ensembleResult = await detectAIGeneration(req.file.path);
     
-    // Use enhanced results but preserve raw confidence for your adjustment
+    // Map ensemble result to expected format
     aiDetection = {
-      likely_ai_generated: enhancedResult.likely_ai_generated,
-      ai_confidence: enhancedResult.ai_confidence,
-      ai_confidence_raw: enhancedResult.ai_confidence, // Store for your adjustment
-      indicators: enhancedResult.indicators,
-      warnings: enhancedResult.warnings,
-      recommendations: enhancedResult.recommendations,
+      likely_ai_generated: ensembleResult.likely_ai_generated,
+      ai_confidence: ensembleResult.ai_confidence,
+      ai_confidence_raw: ensembleResult.ai_confidence, // Store for portrait adjustment
+      indicators: ensembleResult.indicators || [],
+      warnings: [],
+      recommendations: [],
+      
+      // Add ensemble-specific data
+      ensemble_results: ensembleResult.individual_results || null,
+      ensemble_agreement: ensembleResult.agreement || null,
+      detector_count: ensembleResult.detector_count || 1,
       
       forensic_analysis: {
-        manipulation_detected: enhancedResult.manipulation_detected,
-        manipulation_confidence: enhancedResult.manipulation_confidence,
-        ela_performed: enhancedResult.jpeg_forensics?.ela_analysis?.performed || false,
-        compression_quality: enhancedResult.jpeg_forensics?.compression_analysis?.quality_estimate || 0,
-        double_compressed: enhancedResult.jpeg_forensics?.compression_analysis?.double_compressed || false,
-        noise_level: enhancedResult.jpeg_forensics?.noise_analysis?.noise_level || 'unknown'
+        manipulation_detected: ensembleResult.ai_confidence >= 50,
+        manipulation_confidence: ensembleResult.ai_confidence,
+        ela_performed: false, // ELA not part of ensemble yet
+        compression_quality: ensembleResult.individual_results?.jpeg?.details?.quality || 0,
+        double_compressed: ensembleResult.individual_results?.jpeg?.details?.doubleCompressed || false,
+        noise_level: ensembleResult.individual_results?.jpeg?.details?.noise || 'unknown'
       },
       
-      verdict: enhancedResult.overall_verdict,
-      analysis_time_ms: enhancedResult.analysis_time_ms
+      verdict: ensembleResult.likely_ai_generated ? 'AI-GENERATED' : 'LIKELY AUTHENTIC',
+      analysis_time_ms: 0
     };
+    
+    console.log(`✅ Ensemble detection: ${aiDetection.verdict} (${aiDetection.ai_confidence}%)`);
     
     console.log(`✅ Enhanced detection: ${enhancedResult.overall_verdict} (${enhancedResult.ai_confidence}%)`);
     
