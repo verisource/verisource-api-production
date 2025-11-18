@@ -478,7 +478,7 @@ if (kind === 'image') {
     
     console.log(`✅ Ensemble detection: ${aiDetection.verdict} (${aiDetection.ai_confidence}%)`);
     
-    console.log(`✅ Enhanced detection: ${enhancedResult.overall_verdict} (${enhancedResult.ai_confidence}%)`);
+    console.log(`✅ Ensemble detection: ${ensembleResult.likely_ai_generated ? 'AI-GENERATED' : 'AUTHENTIC'} (${ensembleResult.ai_confidence}%)`);
     
   } catch (err) {
     console.error('⚠️ AI detection error:', err.message);
