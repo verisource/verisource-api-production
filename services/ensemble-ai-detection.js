@@ -241,7 +241,7 @@ function calculateTwoDetectorEnsemble(jpegResult, localResult, hfResult) {
  * Legacy ensemble (Local + HF only, no JPEG)
  */
 function calculateLegacyEnsemble(localResult, hfResult) {
-  const weights = { local: 1.00, huggingface: 0.00  // HF disabled };
+  const weights = { local: 1.00, huggingface: 0.00 };  // HF disabled 
   
   const ensembleConfidence = Math.round(
     (localResult.ai_confidence * weights.local) +
