@@ -446,8 +446,8 @@ try {
 let aiDetection = null;
 if (kind === 'image') {
   try {
-    console.log('🤖 Running enhanced AI detection with forensics...');
-    const enhancedResult = await EnhancedAIDetector.detect(req.file.path);
+   console.log('🤖 Running ensemble AI detection with forensics...');
+   const enhancedResult = await detectAIGeneration(req.file.path); 
     
     // Use enhanced results but preserve raw confidence for your adjustment
     aiDetection = {
