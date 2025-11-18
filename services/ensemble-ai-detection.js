@@ -92,9 +92,9 @@ async function detectAIGeneration(imagePath) {
  */
 function calculateFullEnsemble(jpegResult, localResult, hfResult) {
   const weights = {
-    jpeg: 0.40,
-    local: 0.30,
-    huggingface: 0.30
+    jpeg: 0.50,
+    local: 0.50,
+    huggingface: 0.00
   };
   
   // Convert JPEG confidence (0-1) to percentage (0-100)
@@ -166,7 +166,7 @@ function calculateTwoDetectorEnsemble(jpegResult, localResult, hfResult) {
   
   if (jpegResult && localResult) {
     // JPEG + Local
-    weights = { jpeg: 0.57, local: 0.43 }; // Maintain JPEG priority
+    weights = { jpeg: 0.50, local: 0.50 }; // Maintain JPEG priority
     const jpegConfidence = Math.round(jpegResult.confidence * 100);
     
     ensembleConfidence = Math.round(
