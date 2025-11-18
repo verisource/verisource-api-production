@@ -16,6 +16,7 @@ const stockPhotoDetection = require('./services/stock-photo-detection');
 const AudioSpectralAnalysis = require('./services/audio-spectral-analysis');
 const EnhancedAIDetector = require('./services/enhanced-ai-detector');
 const JPEGForensics = require('./services/jpeg-forensics');
+const BlockchainService = require('./services/opentimestamps-service');
 // Import canonicalization only (workers not needed for minimal endpoint)
 let canonicalizeImage;
 try { 
@@ -283,6 +284,17 @@ app.get('/test/weather', async (req, res) => {
   });
 });
 
+// Check blockchain verification status
+app.get('/blockchain/verify/:hash', async (req, res) => {
+  try {
+    const { hash } = req.params;
+    const verification = await BlockchainService.verify(hash);
+    res.json(verification);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
   // Initialize database before starting server
   await initializeDatabase();
   
@@ -315,6 +327,17 @@ app.post('/verify', upload.single('file'), async (req, res) => {
     const buf = fs.readFileSync(req.file.path);
     const crypto = require('crypto');
     const fingerprint = crypto.createHash('sha256').update(buf).digest('hex');
+
+   // NEW: Timestamp to blockchain
+let blockchainVerification = null;
+try {
+  console.log('🔗 Timestamping to Bitcoin blockchain...');
+  blockchainVerification = await BlockchainService.timestamp(fingerprint, req.file.originalname);
+  console.log(`✅ Blockchain: ${blockchainVerification.status}`);
+} catch (error) {
+  console.error('⚠️ Blockchain timestamping failed:', error.message);
+  blockchainVerification = { success: false, error: error.message };
+} 
     
     // Detect file type
     const dm = req.file.mimetype || mime.lookup(req.file.originalname) || 'application/octet-stream';
@@ -700,7 +723,6 @@ if (kind === 'image') {
     }
     
     res.json({
-
       kind: kind,
       filename: req.file.originalname,
       size_bytes: req.file.size,
@@ -709,6 +731,8 @@ if (kind === 'image') {
         hash: fingerprint,
         version: 'v1'
       },
+      blockchain_verification: blockchainVerification,  
+  ai_detection: aiDetection,
       verification: {
         status: searchResults.found ? 'PREVIOUSLY_VERIFIED' : 'NEW_UPLOAD',
         is_first: searchResults.is_first_verification,

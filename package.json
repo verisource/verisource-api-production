@@ -40,6 +40,7 @@
     "multer": "^1.4.5-lts.2",
     "node-cache": "^5.1.2",
     "node-fetch": "^2.7.0",
+    "opentimestamps": "^0.4.9",
     "pg": "^8.16.3",
     "sharp": "^0.34.4",
     "sqlite3": "^5.1.7",
