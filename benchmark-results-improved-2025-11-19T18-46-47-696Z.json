@@ -1,0 +1,650 @@
+{
+  "timestamp": "2025-11-19T18:46:47.696Z",
+  "version": "improved",
+  "features": [
+    "blur-filtering",
+    "weighted-aggregation",
+    "dynamic-thresholds"
+  ],
+  "metrics": {
+    "totalTests": 30,
+    "validTests": 30,
+    "errors": 0,
+    "uncertain": 0,
+    "confusionMatrix": {
+      "truePositive": 21,
+      "trueNegative": 2,
+      "falsePositive": 0,
+      "falseNegative": 7
+    },
+    "accuracy": "76.67",
+    "precision": "100.00",
+    "recall": "75.00",
+    "f1Score": "85.71",
+    "avgProcessingTime": "4.9",
+    "byCategory": {
+      "AI-generated videos": {
+        "total": 11,
+        "correct": 10,
+        "errors": 0
+      },
+      "Deepfake videos": {
+        "total": 5,
+        "correct": 1,
+        "errors": 0
+      },
+      "Manipulated/edited videos": {
+        "total": 12,
+        "correct": 10,
+        "errors": 0
+      },
+      "Authentic real videos": {
+        "total": 2,
+        "correct": 2,
+        "errors": 0
+      }
+    }
+  },
+  "detailedResults": [
+    {
+      "file": "Midjourney video 1.mp4",
+      "category": "AI-generated videos",
+      "expectedLabel": "AI",
+      "binaryExpected": "AI",
+      "predictedLabel": "REAL",
+      "binaryPredicted": "REAL",
+      "verdict": "AUTHENTIC",
+      "confidence": 100,
+      "framesAnalyzed": 5,
+      "totalFrames": 5,
+      "aiPercentage": 0,
+      "weightedScore": 0,
+      "thresholds": {
+        "aiThreshold": 60,
+        "suspiciousThreshold": 40
+      },
+      "correct": false,
+      "duration": 1.6
+    },
+    {
+      "file": "Midjourney video 2.mp4",
+      "category": "AI-generated videos",
+      "expectedLabel": "AI",
+      "binaryExpected": "AI",
+      "predictedLabel": "MANIPULATED",
+      "binaryPredicted": "AI",
+      "verdict": "SUSPICIOUS",
+      "confidence": 40,
+      "framesAnalyzed": 5,
+      "totalFrames": 5,
+      "aiPercentage": 20,
+      "weightedScore": 0,
+      "thresholds": {
+        "aiThreshold": 60,
+        "suspiciousThreshold": 40
+      },
+      "correct": true,
+      "duration": 1
+    },
+    {
+      "file": "Midjourney video 3.mp4",
+      "category": "AI-generated videos",
+      "expectedLabel": "AI",
+      "binaryExpected": "AI",
+      "predictedLabel": "AI",
+      "binaryPredicted": "AI",
+      "verdict": "LIKELY_AI_GENERATED",
+      "confidence": 0,
+      "framesAnalyzed": 5,
+      "totalFrames": 5,
+      "aiPercentage": 100,
+      "weightedScore": 0,
+      "thresholds": {
+        "aiThreshold": 60,
+        "suspiciousThreshold": 40
+      },
+      "correct": true,
+      "duration": 1
+    },
+    {
+      "file": "Midjourney video 4.mp4",
+      "category": "AI-generated videos",
+      "expectedLabel": "AI",
+      "binaryExpected": "AI",
+      "predictedLabel": "AI",
+      "binaryPredicted": "AI",
+      "verdict": "SUSPICIOUS",
+      "confidence": 0,
+      "framesAnalyzed": 5,
+      "totalFrames": 5,
+      "aiPercentage": 0,
+      "weightedScore": 0,
+      "thresholds": {
+        "aiThreshold": 60,
+        "suspiciousThreshold": 40
+      },
+      "correct": true,
+      "duration": 1
+    },
+    {
+      "file": "Midjourney video 5.mp4",
+      "category": "AI-generated videos",
+      "expectedLabel": "AI",
+      "binaryExpected": "AI",
+      "predictedLabel": "AI",
+      "binaryPredicted": "AI",
+      "verdict": "LIKELY_AI_GENERATED",
+      "confidence": 0,
+      "framesAnalyzed": 5,
+      "totalFrames": 5,
+      "aiPercentage": 100,
+      "weightedScore": 0,
+      "thresholds": {
+        "aiThreshold": 60,
+        "suspiciousThreshold": 40
+      },
+      "correct": true,
+      "duration": 1.8
+    },
+    {
+      "file": "ai video 1.mp4",
+      "category": "AI-generated videos",
+      "expectedLabel": "AI",
+      "binaryExpected": "AI",
+      "predictedLabel": "MANIPULATED",
+      "binaryPredicted": "AI",
+      "verdict": "POSSIBLY_MANIPULATED",
+      "confidence": 88,
+      "framesAnalyzed": 8,
+      "totalFrames": 11,
+      "aiPercentage": 13,
+      "weightedScore": 0,
+      "thresholds": {
+        "aiThreshold": 60,
+        "suspiciousThreshold": 40
+      },
+      "correct": true,
+      "duration": 1
+    },
+    {
+      "file": "ai video 2.mp4",
+      "category": "AI-generated videos",
+      "expectedLabel": "AI",
+      "binaryExpected": "AI",
+      "predictedLabel": "MANIPULATED",
+      "binaryPredicted": "AI",
+      "verdict": "POSSIBLY_MANIPULATED",
+      "confidence": 79,
+      "framesAnalyzed": 19,
+      "totalFrames": 26,
+      "aiPercentage": 21,
+      "weightedScore": 0,
+      "thresholds": {
+        "aiThreshold": 50,
+        "suspiciousThreshold": 35
+      },
+      "correct": true,
+      "duration": 2.4
+    },
+    {
+      "file": "ai video 4 (1).mp4",
+      "category": "AI-generated videos",
+      "expectedLabel": "AI",
+      "binaryExpected": "AI",
+      "predictedLabel": "MANIPULATED",
+      "binaryPredicted": "AI",
+      "verdict": "POSSIBLY_MANIPULATED",
+      "confidence": 80,
+      "framesAnalyzed": 15,
+      "totalFrames": 21,
+      "aiPercentage": 20,
+      "weightedScore": 0,
+      "thresholds": {
+        "aiThreshold": 50,
+        "suspiciousThreshold": 35
+      },
+      "correct": true,
+      "duration": 3.9
+    },
+    {
+      "file": "ai video 4 (2).mp4",
+      "category": "AI-generated videos",
+      "expectedLabel": "AI",
+      "binaryExpected": "AI",
+      "predictedLabel": "AI",
+      "binaryPredicted": "AI",
+      "verdict": "LIKELY_AI_GENERATED",
+      "confidence": 27,
+      "framesAnalyzed": 15,
+      "totalFrames": 21,
+      "aiPercentage": 73,
+      "weightedScore": 0,
+      "thresholds": {
+        "aiThreshold": 50,
+        "suspiciousThreshold": 35
+      },
+      "correct": true,
+      "duration": 3.7
+    },
+    {
+      "file": "ai video 5.mp4",
+      "category": "AI-generated videos",
+      "expectedLabel": "AI",
+      "binaryExpected": "AI",
+      "predictedLabel": "AI",
+      "binaryPredicted": "AI",
+      "verdict": "LIKELY_AI_GENERATED",
+      "confidence": 0,
+      "framesAnalyzed": 14,
+      "totalFrames": 20,
+      "aiPercentage": 100,
+      "weightedScore": 0,
+      "thresholds": {
+        "aiThreshold": 50,
+        "suspiciousThreshold": 35
+      },
+      "correct": true,
+      "duration": 4.3
+    },
+    {
+      "file": "ai video 6.mp4",
+      "category": "AI-generated videos",
+      "expectedLabel": "AI",
+      "binaryExpected": "AI",
+      "predictedLabel": "AI",
+      "binaryPredicted": "AI",
+      "verdict": "SUSPICIOUS",
+      "confidence": 0,
+      "framesAnalyzed": 7,
+      "totalFrames": 10,
+      "aiPercentage": 29,
+      "weightedScore": 0,
+      "thresholds": {
+        "aiThreshold": 60,
+        "suspiciousThreshold": 40
+      },
+      "correct": true,
+      "duration": 1
+    },
+    {
+      "file": "deepfakedetection.mp4",
+      "category": "Deepfake videos",
+      "expectedLabel": "AI",
+      "binaryExpected": "AI",
+      "predictedLabel": "REAL",
+      "binaryPredicted": "REAL",
+      "verdict": "AUTHENTIC",
+      "confidence": 100,
+      "framesAnalyzed": 7,
+      "totalFrames": 10,
+      "aiPercentage": 0,
+      "weightedScore": 0,
+      "thresholds": {
+        "aiThreshold": 60,
+        "suspiciousThreshold": 40
+      },
+      "correct": false,
+      "duration": 0.8
+    },
+    {
+      "file": "deepfakes (1).mp4",
+      "category": "Deepfake videos",
+      "expectedLabel": "AI",
+      "binaryExpected": "AI",
+      "predictedLabel": "REAL",
+      "binaryPredicted": "REAL",
+      "verdict": "AUTHENTIC",
+      "confidence": 100,
+      "framesAnalyzed": 10,
+      "totalFrames": 13,
+      "aiPercentage": 0,
+      "weightedScore": 0,
+      "thresholds": {
+        "aiThreshold": 60,
+        "suspiciousThreshold": 40
+      },
+      "correct": false,
+      "duration": 1.3
+    },
+    {
+      "file": "face2face.mp4",
+      "category": "Deepfake videos",
+      "expectedLabel": "AI",
+      "binaryExpected": "AI",
+      "predictedLabel": "AI",
+      "binaryPredicted": "AI",
+      "verdict": "LIKELY_AI_GENERATED",
+      "confidence": 22,
+      "framesAnalyzed": 9,
+      "totalFrames": 12,
+      "aiPercentage": 78,
+      "weightedScore": 0,
+      "thresholds": {
+        "aiThreshold": 60,
+        "suspiciousThreshold": 40
+      },
+      "correct": true,
+      "duration": 1.2
+    },
+    {
+      "file": "faceshifter (1).mp4",
+      "category": "Deepfake videos",
+      "expectedLabel": "AI",
+      "binaryExpected": "AI",
+      "predictedLabel": "REAL",
+      "binaryPredicted": "REAL",
+      "verdict": "AUTHENTIC",
+      "confidence": 100,
+      "framesAnalyzed": 9,
+      "totalFrames": 12,
+      "aiPercentage": 0,
+      "weightedScore": 0,
+      "thresholds": {
+        "aiThreshold": 60,
+        "suspiciousThreshold": 40
+      },
+      "correct": false,
+      "duration": 0.9
+    },
+    {
+      "file": "faceswap (1).mp4",
+      "category": "Deepfake videos",
+      "expectedLabel": "AI",
+      "binaryExpected": "AI",
+      "predictedLabel": "REAL",
+      "binaryPredicted": "REAL",
+      "verdict": "AUTHENTIC",
+      "confidence": 100,
+      "framesAnalyzed": 11,
+      "totalFrames": 15,
+      "aiPercentage": 0,
+      "weightedScore": 0,
+      "thresholds": {
+        "aiThreshold": 60,
+        "suspiciousThreshold": 40
+      },
+      "correct": false,
+      "duration": 1.5
+    },
+    {
+      "file": "nature-doc-1.mp4",
+      "category": "Manipulated/edited videos",
+      "expectedLabel": "MANIPULATED",
+      "binaryExpected": "AI",
+      "predictedLabel": "AI",
+      "binaryPredicted": "AI",
+      "verdict": "LIKELY_AI_GENERATED",
+      "confidence": 0,
+      "framesAnalyzed": 7,
+      "totalFrames": 10,
+      "aiPercentage": 100,
+      "weightedScore": 0,
+      "thresholds": {
+        "aiThreshold": 60,
+        "suspiciousThreshold": 40
+      },
+      "correct": true,
+      "duration": 1
+    },
+    {
+      "file": "nature-doc-2.mp4",
+      "category": "Manipulated/edited videos",
+      "expectedLabel": "MANIPULATED",
+      "binaryExpected": "AI",
+      "predictedLabel": "AI",
+      "binaryPredicted": "AI",
+      "verdict": "SUSPICIOUS",
+      "confidence": 0,
+      "framesAnalyzed": 7,
+      "totalFrames": 10,
+      "aiPercentage": 43,
+      "weightedScore": 0,
+      "thresholds": {
+        "aiThreshold": 60,
+        "suspiciousThreshold": 40
+      },
+      "correct": true,
+      "duration": 2.7
+    },
+    {
+      "file": "phone-ai-1.mp4",
+      "category": "Manipulated/edited videos",
+      "expectedLabel": "MANIPULATED",
+      "binaryExpected": "AI",
+      "predictedLabel": "MANIPULATED",
+      "binaryPredicted": "AI",
+      "verdict": "POSSIBLY_MANIPULATED",
+      "confidence": 71,
+      "framesAnalyzed": 7,
+      "totalFrames": 9,
+      "aiPercentage": 29,
+      "weightedScore": 0,
+      "thresholds": {
+        "aiThreshold": 60,
+        "suspiciousThreshold": 40
+      },
+      "correct": true,
+      "duration": 8.1
+    },
+    {
+      "file": "phone-ai-2.mp4",
+      "category": "Manipulated/edited videos",
+      "expectedLabel": "MANIPULATED",
+      "binaryExpected": "AI",
+      "predictedLabel": "AI",
+      "binaryPredicted": "AI",
+      "verdict": "LIKELY_AI_GENERATED",
+      "confidence": 0,
+      "framesAnalyzed": 5,
+      "totalFrames": 7,
+      "aiPercentage": 100,
+      "weightedScore": 0,
+      "thresholds": {
+        "aiThreshold": 60,
+        "suspiciousThreshold": 40
+      },
+      "correct": true,
+      "duration": 5.8
+    },
+    {
+      "file": "phone-ai-3.mp4",
+      "category": "Manipulated/edited videos",
+      "expectedLabel": "MANIPULATED",
+      "binaryExpected": "AI",
+      "predictedLabel": "AI",
+      "binaryPredicted": "AI",
+      "verdict": "LIKELY_AI_GENERATED",
+      "confidence": 0,
+      "framesAnalyzed": 7,
+      "totalFrames": 10,
+      "aiPercentage": 100,
+      "weightedScore": 0,
+      "thresholds": {
+        "aiThreshold": 60,
+        "suspiciousThreshold": 40
+      },
+      "correct": true,
+      "duration": 8.2
+    },
+    {
+      "file": "video_1.mp4",
+      "category": "Manipulated/edited videos",
+      "expectedLabel": "MANIPULATED",
+      "binaryExpected": "AI",
+      "predictedLabel": "AI",
+      "binaryPredicted": "AI",
+      "verdict": "LIKELY_AI_GENERATED",
+      "confidence": 7,
+      "framesAnalyzed": 30,
+      "totalFrames": 213,
+      "aiPercentage": 93,
+      "weightedScore": 0,
+      "thresholds": {
+        "aiThreshold": 35,
+        "suspiciousThreshold": 25
+      },
+      "correct": true,
+      "duration": 25.2
+    },
+    {
+      "file": "video_3 copy.mp4",
+      "category": "Manipulated/edited videos",
+      "expectedLabel": "MANIPULATED",
+      "binaryExpected": "AI",
+      "predictedLabel": "AI",
+      "binaryPredicted": "AI",
+      "verdict": "LIKELY_AI_GENERATED",
+      "confidence": 36,
+      "framesAnalyzed": 11,
+      "totalFrames": 15,
+      "aiPercentage": 64,
+      "weightedScore": 0,
+      "thresholds": {
+        "aiThreshold": 60,
+        "suspiciousThreshold": 40
+      },
+      "correct": true,
+      "duration": 2.9
+    },
+    {
+      "file": "video_3.mp4",
+      "category": "Manipulated/edited videos",
+      "expectedLabel": "MANIPULATED",
+      "binaryExpected": "AI",
+      "predictedLabel": "AI",
+      "binaryPredicted": "AI",
+      "verdict": "LIKELY_AI_GENERATED",
+      "confidence": 20,
+      "framesAnalyzed": 30,
+      "totalFrames": 594,
+      "aiPercentage": 80,
+      "weightedScore": 0,
+      "thresholds": {
+        "aiThreshold": 35,
+        "suspiciousThreshold": 25
+      },
+      "correct": true,
+      "duration": 17
+    },
+    {
+      "file": "video_5 copy.mp4",
+      "category": "Manipulated/edited videos",
+      "expectedLabel": "MANIPULATED",
+      "binaryExpected": "AI",
+      "predictedLabel": "AI",
+      "binaryPredicted": "AI",
+      "verdict": "LIKELY_AI_GENERATED",
+      "confidence": 40,
+      "framesAnalyzed": 30,
+      "totalFrames": 60,
+      "aiPercentage": 60,
+      "weightedScore": 0,
+      "thresholds": {
+        "aiThreshold": 40,
+        "suspiciousThreshold": 30
+      },
+      "correct": true,
+      "duration": 9.9
+    },
+    {
+      "file": "video_5.mp4",
+      "category": "Manipulated/edited videos",
+      "expectedLabel": "MANIPULATED",
+      "binaryExpected": "AI",
+      "predictedLabel": "AI",
+      "binaryPredicted": "AI",
+      "verdict": "LIKELY_AI_GENERATED",
+      "confidence": 50,
+      "framesAnalyzed": 30,
+      "totalFrames": 567,
+      "aiPercentage": 50,
+      "weightedScore": 0,
+      "thresholds": {
+        "aiThreshold": 35,
+        "suspiciousThreshold": 25
+      },
+      "correct": true,
+      "duration": 16.6
+    },
+    {
+      "file": "video_7.mp4",
+      "category": "Manipulated/edited videos",
+      "expectedLabel": "MANIPULATED",
+      "binaryExpected": "AI",
+      "predictedLabel": "REAL",
+      "binaryPredicted": "REAL",
+      "verdict": "AUTHENTIC",
+      "confidence": 100,
+      "framesAnalyzed": 7,
+      "totalFrames": 10,
+      "aiPercentage": 0,
+      "weightedScore": 0,
+      "thresholds": {
+        "aiThreshold": 60,
+        "suspiciousThreshold": 40
+      },
+      "correct": false,
+      "duration": 1
+    },
+    {
+      "file": "video_8.mp4",
+      "category": "Manipulated/edited videos",
+      "expectedLabel": "MANIPULATED",
+      "binaryExpected": "AI",
+      "predictedLabel": "REAL",
+      "binaryPredicted": "REAL",
+      "verdict": "AUTHENTIC",
+      "confidence": 100,
+      "framesAnalyzed": 7,
+      "totalFrames": 10,
+      "aiPercentage": 0,
+      "weightedScore": 0,
+      "thresholds": {
+        "aiThreshold": 60,
+        "suspiciousThreshold": 40
+      },
+      "correct": false,
+      "duration": 3
+    },
+    {
+      "file": "Real Video 1.mp4",
+      "category": "Authentic real videos",
+      "expectedLabel": "REAL",
+      "binaryExpected": "REAL",
+      "predictedLabel": "REAL",
+      "binaryPredicted": "REAL",
+      "verdict": "AUTHENTIC",
+      "confidence": 100,
+      "framesAnalyzed": 8,
+      "totalFrames": 11,
+      "aiPercentage": 0,
+      "weightedScore": 0,
+      "thresholds": {
+        "aiThreshold": 60,
+        "suspiciousThreshold": 40
+      },
+      "correct": true,
+      "duration": 8.9
+    },
+    {
+      "file": "Real Video 2.mp4",
+      "category": "Authentic real videos",
+      "expectedLabel": "REAL",
+      "binaryExpected": "REAL",
+      "predictedLabel": "REAL",
+      "binaryPredicted": "REAL",
+      "verdict": "AUTHENTIC",
+      "confidence": 100,
+      "framesAnalyzed": 7,
+      "totalFrames": 9,
+      "aiPercentage": 0,
+      "weightedScore": 0,
+      "thresholds": {
+        "aiThreshold": 60,
+        "suspiciousThreshold": 40
+      },
+      "correct": true,
+      "duration": 7.1
+    }
+  ]
+}

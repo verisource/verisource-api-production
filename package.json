@@ -29,6 +29,7 @@
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
     "ejs": "^3.1.10",
+    "ethers": "^6.15.0",
     "exif-parser": "^0.1.12",
     "express": "^4.21.2",
     "express-rate-limit": "^7.5.0",
