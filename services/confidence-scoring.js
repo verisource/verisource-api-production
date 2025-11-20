@@ -142,8 +142,8 @@ class ConfidenceScoring {
    * @returns {Object} Level details
    */
   static getLevel(percentage, isModified, aiDetection, mediaType, mediaAnalysis, audioAIDetection) {
-   // High confidence AI generation (70%+)
-    if (mediaType === 'image' && aiDetection?.ai_confidence >= 70) {
+   // AI-generated content (50%+) - Catches DALL-E 3 realistic images
+    if (mediaType === 'image' && aiDetection?.ai_confidence >= 50) {
       return {
         name: 'LOW',
         label: 'AI-GENERATED IMAGE',
@@ -154,18 +154,17 @@ class ConfidenceScoring {
       };
     }
 
-    // Medium confidence - likely edited/AI-enhanced (40-69%)
-    if (mediaType === 'image' && aiDetection?.ai_confidence >= 40) {
+    // Edited photograph with AI indicators (30-49%)
+    if (mediaType === 'image' && aiDetection?.ai_confidence >= 30) {
       return {
         name: 'MEDIUM',
         label: 'EDITED PHOTOGRAPH',
         color: '#F59E0B',
         icon: 'edit',
         iconSvg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#F59E0B" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>',
-        message: `Photograph with AI enhancements or heavy editing (${aiDetection.ai_confidence}% AI indicators)`
+        message: `Photograph with AI enhancements or editing (${aiDetection.ai_confidence}% AI indicators)`
       };
     }
-    
     // Video-specific labeling
     if (mediaType === 'video' && mediaAnalysis?.analysis) {
       const aiPct = mediaAnalysis.analysis.aiPercentage || 0;
