@@ -757,7 +757,6 @@ if (kind === 'image') {
       ...(kind === 'image' && phash && {
         phash: phash,
         similar_images: similarImages,
-          ...(aiDetection && { ai_detection: aiDetection }),
       }),
       ...(kind === 'video' && videoAnalysis && {
         video_analysis: videoAnalysis
