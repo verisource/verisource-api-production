@@ -41,6 +41,10 @@ const PortraitModeDetection = require('./services/enhanced-portrait-detection');
 const { verifyCameraModel } = require('./services/camera-model-verification');
 const AIGeneratorDetector = require('./services/ai-generator-detector');
 // View engine for batch dashboard
+const HEICDetection = require('./services/heic-detection');
+const SensorNoiseAnalysis = require('./services/sensor-noise-analysis');
+const LivePhotoValidator = require('./services/live-photo-validator');
+const CompressionSignature = require('./services/compression-signature-detector');
 const app = express();
 
 // View engine for batch dashboard
@@ -564,6 +568,69 @@ if (kind === 'image') {
               }
               
               // Verify camera model (for all images with EXIF)
+
+              // 1. HEIC/HEVC Format Detection
+              try {
+                console.log('📱 Checking for HEIC/HEVC format...');
+                const heicDetection = await HEICDetection.detectHEIC(req.file.path, exifData);
+                if (heicDetection.wasHEIC) {
+                  console.log(`✅ HEIC detected: ${heicDetection.confidence}% confidence`);
+                  console.log(`   Format: ${heicDetection.format_conversion}`);
+                  aiDetection = HEICDetection.adjustForHEIC(aiDetection, heicDetection);
+                  console.log(`   AI confidence adjusted: ${aiDetection.original_ai_confidence}% → ${aiDetection.ai_confidence}%`);
+                }
+              } catch (err) {
+                console.error('⚠️ HEIC detection error:', err.message);
+              }
+
+              // 2. Sensor Noise Analysis (Near-PRNU)
+              try {
+                console.log('🔬 Analyzing sensor noise patterns...');
+                const noiseAnalysis = await SensorNoiseAnalysis.analyzeSensorNoise(req.file.path);
+                if (noiseAnalysis.has_sensor_noise || noiseAnalysis.ai_likelihood > 40) {
+                  console.log(`✅ Noise analysis complete:`);
+                  console.log(`   Camera sensor: ${noiseAnalysis.confidence}% | AI anomalies: ${noiseAnalysis.ai_likelihood}%`);
+                  aiDetection = SensorNoiseAnalysis.adjustForSensorNoise(aiDetection, noiseAnalysis);
+                  console.log(`   AI confidence adjusted: ${aiDetection.original_ai_confidence}% → ${aiDetection.ai_confidence}%`);
+                }
+              } catch (err) {
+                console.error('⚠️ Sensor noise analysis error:', err.message);
+              }
+
+              // 3. Live Photo Validation (iPhone only)
+              try {
+                console.log('🎬 Checking for Live Photo pairing...');
+                const livePhotoValidation = await LivePhotoValidator.validateLivePhoto(req.file.path, exifData);
+                if (livePhotoValidation.is_live_photo) {
+                  console.log(`✅ Live Photo detected: ${livePhotoValidation.confidence}% confidence`);
+                  if (livePhotoValidation.pairing_valid) {
+                    console.log(`   ✓ Video pairing validated (${livePhotoValidation.temporal_consistency ? 'temporal consistency confirmed' : 'partial validation'})`);
+                  }
+                  aiDetection = LivePhotoValidator.adjustForLivePhoto(aiDetection, livePhotoValidation);
+                  console.log(`   AI confidence adjusted: ${aiDetection.original_ai_confidence}% → ${aiDetection.ai_confidence}%`);
+                }
+              } catch (err) {
+                console.error('⚠️ Live Photo validation error:', err.message);
+              }
+
+              // 4. Manufacturer Compression Signature
+              try {
+                console.log('🔍 Analyzing JPEG compression signature...');
+                const compressionAnalysis = await CompressionSignature.analyzeCompressionSignature(req.file.path, exifData);
+                if (compressionAnalysis.manufacturer_detected || compressionAnalysis.ai_likelihood > 40) {
+                  console.log(`✅ Compression signature analyzed:`);
+                  console.log(`   Manufacturer: ${compressionAnalysis.manufacturer_detected || 'Generic'} (${compressionAnalysis.confidence}% match)`);
+                  if (compressionAnalysis.ai_likelihood > 40) {
+                    console.log(`   ⚠️ AI-like compression detected: ${compressionAnalysis.ai_likelihood}%`);
+                  }
+                  aiDetection = CompressionSignature.adjustForCompressionSignature(aiDetection, compressionAnalysis);
+                  console.log(`   AI confidence adjusted: ${aiDetection.original_ai_confidence}% → ${aiDetection.ai_confidence}%`);
+                }
+              } catch (err) {
+                console.error('⚠️ Compression signature analysis error:', err.message);
+              }
+
+              console.log(`\n📊 FINAL AI CONFIDENCE: ${aiDetection.ai_confidence}% (started at ${aiDetection.ai_confidence_raw || aiDetection.original_ai_confidence || 'unknown'}%)\n`);
               cameraVerification = verifyCameraModel(exifData);
               if (cameraVerification.camera_found) {
                 console.log(`📷 Camera: ${cameraVerification.details.manufacturer} ${cameraVerification.details.recognized_model}`);

@@ -82,7 +82,7 @@ async function detectAIGeneration(imagePath) {
         if (ratio > 0.95) {
           suspicionScore += 20;
           indicators.push('Unusually high JPEG quality');
-        } else if (ratio < 0.3) {
+        } else if (ratio < 0.15) {  // More lenient
           suspicionScore += 10;
           indicators.push('Suspiciously low compression');
         }
