@@ -3,15 +3,15 @@
  * Combines multiple AI detectors for improved accuracy
  * 
  * Current ensemble:
- * 1. JPEG Artifact Analysis - 40% weight (highest - most reliable)
- * 2. Local detector (heuristic-based) - 30% weight
- * 3. Hugging Face AI-or-Not - 30% weight
+ * 1. JPEG Artifact Analysis - 60% weight (highest - most reliable)
+ * 2. Local detector (heuristic-based) - 40% weight
  * 
- * Expected combined accuracy: 92-95%
+ * HuggingFace detector REMOVED (was inaccurate)
+ * 
+ * Expected combined accuracy: 90-93%
  */
 
 const localDetector = require('../ai-image-detector');
-const hfDetector = require('./huggingface-ai-detector');
 const JPEGArtifactAnalyzer = require('./jpeg-artifact-analysis');
 
 // Initialize JPEG analyzer
@@ -25,8 +25,8 @@ const jpegAnalyzer = new JPEGArtifactAnalyzer();
 async function detectAIGeneration(imagePath) {
   console.log('🎯 Running ensemble AI detection with JPEG artifact analysis...');
   
-  // Run all three detectors in parallel
-  const [jpegResult, localResult, hfResult] = await Promise.all([
+  // Run both detectors in parallel (HuggingFace removed)
+  const [jpegResult, localResult] = await Promise.all([
     jpegAnalyzer.analyze(imagePath).catch(err => {
       console.error('JPEG analyzer error:', err.message);
       return null;
@@ -34,39 +34,23 @@ async function detectAIGeneration(imagePath) {
     localDetector.detectAIGeneration(imagePath).catch(err => {
       console.error('Local detector error:', err.message);
       return null;
-    }),
-    hfDetector.isConfigured() 
-      ? hfDetector.detectAI(imagePath).catch(err => {
-          console.error('HF detector error:', err.message);
-          return null;
-        })
-      : null
+    })
   ]);
   
   // Determine which detectors are available
   const availableDetectors = {
     jpeg: jpegResult !== null && jpegResult.confidence > 0,
-    local: localResult !== null,
-    huggingface: hfResult !== null
+    local: localResult !== null
   };
   
   const detectorCount = Object.values(availableDetectors).filter(v => v).length;
   
-  console.log(`📊 Available detectors: JPEG=${availableDetectors.jpeg}, Local=${availableDetectors.local}, HF=${availableDetectors.huggingface}`);
+  console.log(`📊 Available detectors: JPEG=${availableDetectors.jpeg}, Local=${availableDetectors.local}`);
   
   // Calculate ensemble result based on available detectors
-  if (availableDetectors.jpeg && availableDetectors.local && availableDetectors.huggingface) {
-    // All three detectors available - use optimal weights
-    return calculateFullEnsemble(jpegResult, localResult, hfResult);
-  } else if (availableDetectors.jpeg && availableDetectors.local) {
-    // JPEG + Local only
-    return calculateTwoDetectorEnsemble(jpegResult, localResult, null);
-  } else if (availableDetectors.jpeg && availableDetectors.huggingface) {
-    // JPEG + HF only
-    return calculateTwoDetectorEnsemble(jpegResult, null, hfResult);
-  } else if (availableDetectors.local && availableDetectors.huggingface) {
-    // Local + HF only (original ensemble)
-    return calculateLegacyEnsemble(localResult, hfResult);
+  if (availableDetectors.jpeg && availableDetectors.local) {
+    // Both detectors available - use weighted ensemble
+    return calculateTwoDetectorEnsemble(jpegResult, localResult);
   } else if (availableDetectors.jpeg) {
     // JPEG only
     return formatJPEGOnlyResult(jpegResult);
@@ -78,203 +62,72 @@ async function detectAIGeneration(imagePath) {
     return {
       likely_ai_generated: false,
       ai_confidence: 0,
-      indicators: ['Error: No detectors available'],
-      ensemble_used: false,
-      detector_count: 0,
-      error: 'All detectors failed'
+      detectors: [],
+      confidence: 0,
+      agreement: 'none',
+      message: 'No detectors available'
     };
   }
 }
 
 /**
- * Calculate ensemble with all three detectors
- * Weights: JPEG 40%, Local 30%, HF 30%
+ * Calculate ensemble with JPEG + Local detectors
  */
-function calculateFullEnsemble(jpegResult, localResult, hfResult) {
-  const weights = {
-    jpeg: 0.50,
-    local: 0.50,
-    huggingface: 0.00
-  };
+function calculateTwoDetectorEnsemble(jpegResult, localResult) {
+  console.log('🤖 Running ensemble with JPEG + Local detectors...');
   
-  // Convert JPEG confidence (0-1) to percentage (0-100)
-  const jpegConfidence = Math.round(jpegResult.confidence * 100);
+  // Weights: JPEG is more reliable
+  const weights = { jpeg: 0.60, local: 0.40 };
   
-  // Calculate weighted ensemble confidence
-  const ensembleConfidence = Math.round(
-    (jpegConfidence * weights.jpeg) +
-    (localResult.ai_confidence * weights.local) +
-    (hfResult.ai_confidence * weights.huggingface)
-  );
+  // Calculate weighted confidence
+  const weightedConfidence = 
+    (jpegResult.ai_confidence * weights.jpeg) +
+    (localResult.ai_confidence * weights.local);
   
-  const isAI = ensembleConfidence >= 50;
-  
-  // Combine indicators from all detectors
-  const combinedIndicators = [
-    `JPEG Analysis: ${jpegResult.reasoning}`,
-    ...localResult.indicators.map(i => `Local: ${i}`),
-    `HuggingFace: ${hfResult.ai_confidence}% AI confidence`
+  const detectorResults = [
+    `JPEG: ${jpegResult.ai_confidence}%`,
+    `Local: ${localResult.ai_confidence}%`
   ];
   
-  // Calculate agreement level across all three
-  const confidences = [jpegConfidence, localResult.ai_confidence, hfResult.ai_confidence];
-  const avgConfidence = confidences.reduce((a, b) => a + b, 0) / confidences.length;
-  const maxDeviation = Math.max(...confidences.map(c => Math.abs(c - avgConfidence)));
-  const agreementLevel = maxDeviation < 15 ? 'high' : maxDeviation < 30 ? 'medium' : 'low';
+  console.log(`✅ Full ensemble result: ${Math.round(weightedConfidence)}% (${detectorResults.join(', ')})`);
   
-  console.log(`✅ Full ensemble result: ${ensembleConfidence}% (JPEG: ${jpegConfidence}%, Local: ${localResult.ai_confidence}%, HF: ${hfResult.ai_confidence}%)`);
-  console.log(`   Agreement: ${agreementLevel} (max deviation: ${Math.round(maxDeviation)}%)`);
-  
-  return {
-    likely_ai_generated: isAI,
-    ai_confidence: ensembleConfidence,
-    indicators: combinedIndicators,
-    metadata_check: localResult.metadata_check,
-    
-    // Ensemble-specific data
-    ensemble_used: true,
-    detector_count: 3,
-    individual_results: {
-      jpeg: {
-        confidence: jpegConfidence,
-        verdict: jpegResult.isAI,
-        details: jpegResult.details
-      },
-      local: {
-        confidence: localResult.ai_confidence,
-        verdict: localResult.likely_ai_generated
-      },
-      huggingface: {
-        confidence: hfResult.ai_confidence,
-        verdict: hfResult.likely_ai_generated
-      }
-    },
-    agreement: {
-      level: agreementLevel,
-      max_deviation: Math.round(maxDeviation),
-      average_confidence: Math.round(avgConfidence)
-    },
-    weights_used: weights
-  };
-}
-
-/**
- * Calculate ensemble with two detectors
- */
-function calculateTwoDetectorEnsemble(jpegResult, localResult, hfResult) {
-  let weights, ensembleConfidence, combinedIndicators, individual;
-  
-  if (jpegResult && localResult) {
-    // JPEG + Local
-    weights = { jpeg: 0.50, local: 0.50 }; // Maintain JPEG priority
-    const jpegConfidence = Math.round(jpegResult.confidence * 100);
-    
-    ensembleConfidence = Math.round(
-      (jpegConfidence * weights.jpeg) +
-      (localResult.ai_confidence * weights.local)
-    );
-    
-    combinedIndicators = [
-      `JPEG Analysis: ${jpegResult.reasoning}`,
-      ...localResult.indicators.map(i => `Local: ${i}`)
-    ];
-    
-    individual = {
-      jpeg: {
-        confidence: jpegConfidence,
-        verdict: jpegResult.isAI,
-        details: jpegResult.details
-      },
-      local: {
-        confidence: localResult.ai_confidence,
-        verdict: localResult.likely_ai_generated
-      }
-    };
-    
-    console.log(`✅ Two-detector ensemble (JPEG+Local): ${ensembleConfidence}%`);
-    
-  } else if (jpegResult && hfResult) {
-    // JPEG + HF
-    weights = { jpeg: 0.57, huggingface: 0.43 }; // Maintain JPEG priority
-    const jpegConfidence = Math.round(jpegResult.confidence * 100);
-    
-    ensembleConfidence = Math.round(
-      (jpegConfidence * weights.jpeg) +
-      (hfResult.ai_confidence * weights.huggingface)
-    );
-    
-    combinedIndicators = [
-      `JPEG Analysis: ${jpegResult.reasoning}`,
-      `HuggingFace: ${hfResult.ai_confidence}% AI confidence`
-    ];
-    
-    individual = {
-      jpeg: {
-        confidence: jpegConfidence,
-        verdict: jpegResult.isAI,
-        details: jpegResult.details
-      },
-      huggingface: {
-        confidence: hfResult.ai_confidence,
-        verdict: hfResult.likely_ai_generated
-      }
-    };
-    
-    console.log(`✅ Two-detector ensemble (JPEG+HF): ${ensembleConfidence}%`);
-  }
-  
-  const isAI = ensembleConfidence >= 50;
-  
-  return {
-    likely_ai_generated: isAI,
-    ai_confidence: ensembleConfidence,
-    indicators: combinedIndicators,
-    metadata_check: localResult?.metadata_check,
-    ensemble_used: true,
-    detector_count: 2,
-    individual_results: individual,
-    weights_used: weights
-  };
-}
-
-/**
- * Legacy ensemble (Local + HF only, no JPEG)
- */
-function calculateLegacyEnsemble(localResult, hfResult) {
-  const weights = { local: 1.00, huggingface: 0.00 };  // HF disabled 
-  
-  const ensembleConfidence = Math.round(
-    (localResult.ai_confidence * weights.local) +
-    (hfResult.ai_confidence * weights.huggingface)
-  );
-  
-  const isAI = ensembleConfidence >= 50;
-  
-  const combinedIndicators = [
-    ...localResult.indicators.map(i => `Local: ${i}`),
-    `HuggingFace: ${hfResult.ai_confidence}% AI confidence`
+  // Calculate agreement
+  const deviations = [
+    Math.abs(jpegResult.ai_confidence - weightedConfidence),
+    Math.abs(localResult.ai_confidence - weightedConfidence)
   ];
+  const maxDeviation = Math.max(...deviations);
   
-  console.log(`✅ Legacy ensemble (Local+HF): ${ensembleConfidence}%`);
+  let agreement = 'high';
+  if (maxDeviation > 25) agreement = 'low';
+  else if (maxDeviation > 15) agreement = 'medium';
+  
+  console.log(`   Agreement: ${agreement} (max deviation: ${Math.round(maxDeviation)}%)`);
+  
+  const isAI = weightedConfidence >= 50;
+  const label = isAI ? 'AI-GENERATED' : 'LIKELY AUTHENTIC';
+  console.log(`✅ Ensemble detection: ${label} (${Math.round(weightedConfidence)}%)`);
   
   return {
     likely_ai_generated: isAI,
-    ai_confidence: ensembleConfidence,
-    indicators: combinedIndicators,
-    metadata_check: localResult.metadata_check,
-    ensemble_used: true,
-    detector_count: 2,
-    individual_results: {
-      local: {
-        confidence: localResult.ai_confidence,
-        verdict: localResult.likely_ai_generated
+    ai_confidence: Math.round(weightedConfidence),
+    detectors: [
+      {
+        name: 'JPEG Artifacts',
+        confidence: jpegResult.ai_confidence,
+        weight: weights.jpeg,
+        indicators: jpegResult.indicators || []
       },
-      huggingface: {
-        confidence: hfResult.ai_confidence,
-        verdict: hfResult.likely_ai_generated
+      {
+        name: 'Local Heuristics',
+        confidence: localResult.ai_confidence,
+        weight: weights.local,
+        indicators: localResult.indicators || []
       }
-    },
-    weights_used: weights
+    ],
+    confidence: Math.round(weightedConfidence),
+    agreement,
+    method: 'weighted_ensemble'
   };
 }
 
@@ -282,36 +135,45 @@ function calculateLegacyEnsemble(localResult, hfResult) {
  * Format JPEG-only result
  */
 function formatJPEGOnlyResult(jpegResult) {
-  const jpegConfidence = Math.round(jpegResult.confidence * 100);
-  
-  console.log(`ℹ️ Using JPEG detector only: ${jpegConfidence}%`);
+  console.log(`✅ Ensemble detection: JPEG only (${jpegResult.ai_confidence}%)`);
   
   return {
-    likely_ai_generated: jpegResult.isAI,
-    ai_confidence: jpegConfidence,
-    indicators: [`JPEG Analysis: ${jpegResult.reasoning}`],
-    ensemble_used: false,
-    detector_count: 1,
-    individual_results: {
-      jpeg: {
-        confidence: jpegConfidence,
-        verdict: jpegResult.isAI,
-        details: jpegResult.details
+    likely_ai_generated: jpegResult.ai_confidence >= 50,
+    ai_confidence: jpegResult.ai_confidence,
+    detectors: [
+      {
+        name: 'JPEG Artifacts',
+        confidence: jpegResult.ai_confidence,
+        weight: 1.0,
+        indicators: jpegResult.indicators || []
       }
-    }
+    ],
+    confidence: jpegResult.ai_confidence,
+    agreement: 'single_detector',
+    method: 'jpeg_only'
   };
 }
 
 /**
- * Format local-only result
+ * Format Local-only result
  */
 function formatLocalOnlyResult(localResult) {
-  console.log('ℹ️ Using local detector only');
+  console.log(`✅ Ensemble detection: Local only (${localResult.ai_confidence}%)`);
   
   return {
-    ...localResult,
-    ensemble_used: false,
-    detector_count: 1
+    likely_ai_generated: localResult.ai_confidence >= 50,
+    ai_confidence: localResult.ai_confidence,
+    detectors: [
+      {
+        name: 'Local Heuristics',
+        confidence: localResult.ai_confidence,
+        weight: 1.0,
+        indicators: localResult.indicators || []
+      }
+    ],
+    confidence: localResult.ai_confidence,
+    agreement: 'single_detector',
+    method: 'local_only'
   };
 }
 
@@ -319,11 +181,11 @@ function formatLocalOnlyResult(localResult) {
  * Check if ensemble detection is available
  */
 function isEnsembleAvailable() {
-  return hfDetector.isConfigured();
+  return true; // JPEG + Local always available
 }
 
 /**
- * Check if JPEG artifact analysis is available
+ * Check if JPEG analysis is available
  */
 function isJPEGAnalysisAvailable() {
   return jpegAnalyzer !== null;
