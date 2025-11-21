@@ -32,6 +32,43 @@ const CAMERA_DATABASE = {
 };
 
 /**
+// Based on the uploaded smartphone database
+
+// Apple iPhones (from spreadsheet)
+'iPhone 17 Pro Max': { release: '2025-09-20', resolution: [[2796, 1290]], features: ['portrait', 'night', 'proraw', 'cinematic'] },
+'iPhone 16 Pro Max': { release: '2024-09-20', resolution: [[2796, 1290]], features: ['portrait', 'night', 'proraw', 'cinematic'] },
+'iPhone 15 Pro': { release: '2023-09-22', resolution: [[2796, 1290]], features: ['portrait', 'night', 'proraw', 'cinematic'] },
+'iPhone 14 Pro': { release: '2022-09-16', resolution: [[2556, 1179]], features: ['portrait', 'night', 'proraw', 'cinematic'] },
+'iPhone 13 Pro': { release: '2021-09-24', resolution: [[2532, 1170]], features: ['portrait', 'night', 'proraw', 'cinematic'] },
+'iPhone 12 Pro': { release: '2020-10-23', resolution: [[2532, 1170]], features: ['portrait', 'night', 'proraw'] },
+
+// Samsung Galaxy (from spreadsheet)
+'Galaxy S24 Ultra': { release: '2024-02-07', resolution: [[3120, 1440]], features: ['portrait', 'night', 'expert_raw'] },
+'Galaxy S23 Ultra': { release: '2023-02-17', resolution: [[3088, 1440]], features: ['portrait', 'night', 'expert_raw'] },
+'Galaxy S22 Ultra': { release: '2022-02-25', resolution: [[3088, 1440]], features: ['portrait', 'night', 'expert_raw'] },
+'Galaxy S21 Ultra': { release: '2021-01-29', resolution: [[3200, 1440]], features: ['portrait', 'night'] },
+'Galaxy S20 Ultra': { release: '2020-03-06', resolution: [[3200, 1440]], features: ['portrait', 'night'] },
+
+// Google Pixel (from spreadsheet)
+'Pixel 9 Pro': { release: '2024-10-15', resolution: [[3120, 1440]], features: ['portrait', 'night'] },
+'Pixel 8 Pro': { release: '2023-10-12', resolution: [[2992, 1344]], features: ['portrait', 'night'] },
+'Pixel 7 Pro': { release: '2022-10-13', resolution: [[3120, 1440]], features: ['portrait', 'night'] },
+'Pixel 6 Pro': { release: '2021-10-28', resolution: [[3120, 1440]], features: ['portrait', 'night'] },
+'Pixel 5': { release: '2020-10-15', resolution: [[3040, 1080]], features: ['portrait', 'night'] },
+
+// Xiaomi (from spreadsheet)
+'Xiaomi 14 Ultra': { release: '2024-02-22', resolution: [[3200, 1440]], features: ['portrait', 'night'] },
+'Xiaomi 14 Pro': { release: '2023-10-26', resolution: [[3200, 1440]], features: ['portrait', 'night'] },
+'Xiaomi 13 Ultra': { release: '2023-04-21', resolution: [[3200, 1440]], features: ['portrait', 'night'] },
+'Xiaomi 12 Pro': { release: '2021-12-31', resolution: [[3200, 1440]], features: ['portrait', 'night'] },
+'Mi 10 Pro 5G': { release: '2020-02-18', resolution: [[3040, 1080]], features: ['portrait', 'night'] },
+
+// Huawei (from spreadsheet)
+'P60 Pro': { release: '2023-03-31', resolution: [[2700, 1228]], features: ['portrait', 'night'] },
+'Mate 60 Pro': { release: '2023-09-10', resolution: [[2720, 1260]], features: ['portrait', 'night'] },
+'P50 Pro': { release: '2021-08-12', resolution: [[2700, 1228]], features: ['portrait', 'night'] },
+'Mate 50 Pro': { release: '2020-10-22', resolution: [[2772, 1344]], features: ['portrait', 'night'] },
+
  * Validate image temporal consistency
  * @param {Object} cameraDetails - Detected camera details
  * @param {string} imageDate - Image capture date (ISO format or timestamp)
