@@ -823,6 +823,24 @@ if (kind === 'image') {
           { date: cameraVerification.details.capture_date, width: imgMeta.width, height: imgMeta.height, claimed_features: [] }
         );
         cameraVerification.validation = validation;
+          
+          // Adjust AI confidence based on validation results
+          if (validation.valid && validation.confidence >= 80 && aiDetection) {
+            const adjustment = Math.round(validation.confidence / 3); // 80-100 confidence = 27-33 point reduction
+            const originalAI = aiDetection.ai_confidence;
+            aiDetection.ai_confidence = Math.max(0, aiDetection.ai_confidence - adjustment);
+            console.log(`   📊 AI confidence adjusted for validation: ${originalAI}% → ${aiDetection.ai_confidence}% (-${adjustment})`);
+            aiDetection.adjustments.push(`Camera validation passed: -${adjustment}% confidence`);
+          }
+          
+          // Adjust AI confidence based on validation results
+          if (validation.valid && validation.confidence >= 80 && aiDetection) {
+            const adjustment = Math.round(validation.confidence / 3); // 80-100 confidence = 27-33 point reduction
+            const originalAI = aiDetection.ai_confidence;
+            aiDetection.ai_confidence = Math.max(0, aiDetection.ai_confidence - adjustment);
+            console.log(`   📊 AI confidence adjusted for validation: ${originalAI}% → ${aiDetection.ai_confidence}% (-${adjustment})`);
+            aiDetection.adjustments.push(`Camera validation passed: -${adjustment}% confidence`);
+          }
         console.log(`✅ Validation: ${validation.valid ? 'PASSED' : 'FAILED'} (${validation.confidence}%)`);
         if (!validation.valid) console.log('   Warnings:', validation.all_warnings);
       } catch (e) { console.error('⚠️ Camera validation error:', e.message); }

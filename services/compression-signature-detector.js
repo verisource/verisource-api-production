@@ -21,7 +21,8 @@ async function analyzeCompressionSignature(imagePath, exifData) {
     quantization_signature: null,
     chroma_subsampling: null,
     matches_expected: false,
-    ai_likelihood: 0
+    ai_likelihood: 0,
+    exif_present: false
   };
 
   try {
@@ -40,6 +41,7 @@ async function analyzeCompressionSignature(imagePath, exifData) {
     const expectedManufacturer = exifData?.Make?.toLowerCase();
 
     if (expectedManufacturer) {
+      result.exif_present = true;
       // Check if compression matches known manufacturer patterns
       const signatureMatch = matchManufacturerSignature(
         expectedManufacturer,
@@ -390,7 +392,15 @@ function adjustForCompressionSignature(aiDetection, compressionAnalysis) {
 
   // Manufacturer signature matches = reduce AI confidence
   if (compressionAnalysis.matches_expected && compressionAnalysis.confidence >= 50) {
+    // Base adjustment
     adjustment = -Math.round(40 * (compressionAnalysis.confidence / 100));
+    
+    // PHASE 1: Extra leniency for EXIF-less photos (old/shared photos)
+    if (!compressionAnalysis.exif_present) {
+      const originalAdj = adjustment;
+      adjustment = Math.round(adjustment * 2.0);
+      console.log(`  ℹ️ No EXIF detected - applying extra leniency: ${originalAdj} → ${adjustment}`);
+    }
   }
 
   // AI compression patterns = increase AI confidence
