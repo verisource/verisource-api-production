@@ -1,4 +1,4 @@
-// VeriSource - Confidence Scoring System (Recalibrated v2)
+// VeriSource - Confidence Scoring System (Fixed Export)
 function calculateConfidenceScore(verificationData) {
   const {
     camera_verification,
@@ -37,9 +37,9 @@ function calculateConfidenceScore(verificationData) {
   // ========================================
   const aiConfidence = ai_detection?.ai_confidence || 0;
 
-  // RAISED THRESHOLDS - More conservative
-  if (aiConfidence >= 65) {
-    // Very high AI confidence (65%+)
+  // RAISED THRESHOLDS to reduce false positives
+  if (aiConfidence >= 70) {
+    // Very high AI confidence (70%+)
     return {
       name: 'LOW',
       label: 'AI-GENERATED IMAGE',
@@ -50,8 +50,20 @@ function calculateConfidenceScore(verificationData) {
       iconSvg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#9333EA" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><path d="M9 1v3M15 1v3M9 20v3M15 20v3M20 9h3M20 14h3M1 9h3M1 14h3"/></svg>',
       message: `AI generation detected (${aiConfidence}% confidence)`
     };
-  } else if (aiConfidence >= 50) {
-    // High-medium AI confidence (50-64%) - EDITED, not pure AI
+  } else if (aiConfidence >= 55) {
+    // High AI confidence (55-69%)
+    return {
+      name: 'MEDIUM',
+      label: 'LIKELY AI-GENERATED',
+      percentage: Math.max(score - 30, 20),
+      level: 'MEDIUM',
+      color: '#9333EA',
+      icon: 'cpu',
+      iconSvg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#9333EA" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><path d="M9 1v3M15 1v3M9 20v3M15 20v3M20 9h3M20 14h3M1 9h3M1 14h3"/></svg>',
+      message: `Likely AI-generated (${aiConfidence}% confidence)`
+    };
+  } else if (aiConfidence >= 40) {
+    // Medium AI confidence (40-54%) - EDITED, not pure AI
     score -= 15;
     return {
       name: 'MEDIUM',
@@ -63,16 +75,16 @@ function calculateConfidenceScore(verificationData) {
       iconSvg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#F59E0B" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>',
       message: `Photograph with AI enhancements or heavy editing (${aiConfidence}% AI indicators)`
     };
-  } else if (aiConfidence >= 35) {
-    // Medium AI confidence (35-49%)
+  } else if (aiConfidence >= 25) {
+    // Low-medium AI confidence (25-39%)
     score -= 10;
     messages.push(`Some AI indicators detected (${aiConfidence}%)`);
-  } else if (aiConfidence >= 20) {
-    // Low-medium AI confidence (20-34%)
+  } else if (aiConfidence >= 15) {
+    // Low AI confidence (15-24%)
     score -= 5;
     messages.push(`Minor AI indicators (${aiConfidence}%)`);
   } else {
-    // Very low AI confidence (<20%)
+    // Very low AI confidence (<15%)
     score += 10;
     messages.push('No significant AI patterns detected');
   }
@@ -180,4 +192,5 @@ function calculateConfidenceScore(verificationData) {
   }
 }
 
+// CRITICAL: Proper export
 module.exports = { calculateConfidenceScore };
