@@ -81,6 +81,9 @@ async function analyzeSensorNoise(imagePath) {
       result.ai_likelihood += 20;
     }
 
+    // Cap confidence at 100%
+    result.confidence = Math.min(result.confidence, 100);
+
   } catch (err) {
     console.error('Sensor noise analysis error:', err.message);
     result.indicators.push('Could not complete noise analysis');
@@ -280,10 +283,22 @@ function detectAINoiseAnomalies(noiseStats) {
  */
 function adjustForSensorNoise(aiDetection, noiseAnalysis) {
   if (!aiDetection) {
+  // Check if image has been recompressed (from JPEG forensics indicators)
     return aiDetection;
   }
 
   let adjustment = 0;
+  
+  // Check if image has been recompressed (from JPEG forensics indicators)
+  const hasMultipleCompressions = aiDetection.indicators?.some(ind => 
+    ind.includes('Multiple compressions detected') || 
+    ind.includes('double compress')
+  );
+  
+  if (hasMultipleCompressions) {
+    console.log('⚠️ Multiple compressions detected - skipping sensor noise adjustment');
+    return aiDetection;
+  }
   const originalConfidence = aiDetection.ai_confidence || 0;
 
   console.log('🔬 DEBUG Sensor Noise Adjustment:');
