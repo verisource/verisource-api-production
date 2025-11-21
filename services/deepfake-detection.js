@@ -149,7 +149,7 @@ class DeepfakeDetection {
     }
 
     return {
-      suspicious: suspicionScore > 20,
+      suspicious: suspicionScore > 50,
       suspicion_score: suspicionScore,
       indicators: indicators,
       confidence: face.detectionConfidence
