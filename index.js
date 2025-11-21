@@ -1,6 +1,7 @@
 require('dotenv').config();
 const express = require('express');
 const mime = require('mime-types');
+const sharp = require('sharp');
 const multer = require('multer');
 const rateLimit = require('express-rate-limit');
 const fs = require('fs');
@@ -13,6 +14,7 @@ const shadowPhysics = require('./services/shadow-physics-verification');
 const reverseImageSearch = require('./services/reverse-image-search');
 const deepfakeDetection = require('./services/deepfake-detection');
 const stockPhotoDetection = require('./services/stock-photo-detection');
+const CameraValidation = require('./services/camera-validation');
 const AudioSpectralAnalysis = require('./services/audio-spectral-analysis');
 const EnhancedAIDetector = require('./services/enhanced-ai-detector');
 const JPEGForensics = require('./services/jpeg-forensics');
@@ -796,6 +798,36 @@ if (kind === 'image') {
       console.error('⚠️ Database save error:', err.message);
     }
     
+    // Camera Validation - Temporal, Resolution, Features
+    if (cameraVerification?.camera_found && cameraVerification.details?.model && cameraVerification.details.model !== 'Unknown') {
+      try {
+        console.log('🔍 Running camera validation...');
+        const imgMeta = await sharp(req.file.path).metadata();
+        const validation = CameraValidation.validateCamera(
+          cameraVerification.details,
+          { date: cameraVerification.details.capture_date, width: imgMeta.width, height: imgMeta.height, claimed_features: [] }
+        );
+        cameraVerification.validation = validation;
+        console.log(`✅ Validation: ${validation.valid ? 'PASSED' : 'FAILED'} (${validation.confidence}%)`);
+        if (!validation.valid) console.log('   Warnings:', validation.all_warnings);
+      } catch (e) { console.error('⚠️ Camera validation error:', e.message); }
+    }
+
+    // Camera Validation - Temporal, Resolution, Features
+    if (cameraVerification?.camera_found && cameraVerification.details?.model && cameraVerification.details.model !== 'Unknown') {
+      try {
+        console.log('🔍 Running camera validation...');
+        const imgMeta = await sharp(req.file.path).metadata();
+        const validation = CameraValidation.validateCamera(
+          cameraVerification.details,
+          { date: cameraVerification.details.capture_date, width: imgMeta.width, height: imgMeta.height, claimed_features: [] }
+        );
+        cameraVerification.validation = validation;
+        console.log(`✅ Validation: ${validation.valid ? 'PASSED' : 'FAILED'} (${validation.confidence}%)`);
+        if (!validation.valid) console.log('   Warnings:', validation.all_warnings);
+      } catch (e) { console.error('⚠️ Camera validation error:', e.message); }
+    }
+
     res.json({
       kind: kind,
       filename: req.file.originalname,
