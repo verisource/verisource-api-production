@@ -48,3 +48,5 @@ test-videos/
 test-all-images/
 quick-test-images/
 faceforensics-testing/
+*.backup*
+debug-*/

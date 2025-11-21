@@ -20,6 +20,7 @@ const crypto = require('crypto');
 // Initialize cache (TTL: 1 hour, check period: 2 minutes)
 const detectionCache = new NodeCache({ stdTTL: 3600, checkperiod: 120 });
 const { analyzeTemporalConsistency } = require('./temporal-analyzer');
+const { analyzeForDeepfakes } = require('./deepfake-detector');
 
 
 /**
@@ -239,6 +240,10 @@ async function analyzeVideo(videoPath) {
       minFrames: 3
     });
 
+    
+    // Deepfake detection (face-focused analysis)
+    const deepfakeAnalysis = await analyzeForDeepfakes(framesToAnalyze, tempDir);
+
     console.log(`Analyzing ${framesToAnalyze.length} frames...`);
     
     // Analyze each frame
@@ -334,6 +339,13 @@ async function analyzeVideo(videoPath) {
           consistent: temporalAnalysis.consistent,
           inconsistencies: temporalAnalysis.inconsistencies,
           indicators: temporalAnalysis.indicators
+        },
+        deepfakeDetection: {
+          detected: deepfakeAnalysis.isDeepfake,
+          confidence: deepfakeAnalysis.confidence,
+          facesAnalyzed: deepfakeAnalysis.facesAnalyzed,
+          aiFacePercentage: deepfakeAnalysis.aiFacePercentage,
+          indicators: deepfakeAnalysis.indicators
         },
         frameResults: frameResults
       },

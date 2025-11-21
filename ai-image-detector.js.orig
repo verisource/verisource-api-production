@@ -31,14 +31,7 @@ async function detectAIGeneration(imagePath) {
     }
     
     // Check 2: EXIF
-
-    // Check for actual EXIF fields (not raw buffer)
-    const hasExif = metadata.exif && 
-                    typeof metadata.exif === 'object' &&
-                    !Buffer.isBuffer(metadata.exif) &&
-                    (metadata.exif.Make || metadata.exif.Model || 
-                     metadata.exif.DateTime || metadata.exif.Software ||
-                     (Object.keys(metadata.exif).some(k => isNaN(k))));
+    const hasExif = metadata.exif && Object.keys(metadata.exif).length >= 5;
     if (!hasExif) {
       suspicionScore += 4; // Reduced from 8 - many authentic photos lack EXIF
       indicators.push('Missing camera metadata');
@@ -89,7 +82,7 @@ async function detectAIGeneration(imagePath) {
         if (ratio > 0.95) {
           suspicionScore += 20;
           indicators.push('Unusually high JPEG quality');
-        } else if (ratio < 0.15) {  // More lenient
+        } else if (ratio < 0.3) {
           suspicionScore += 10;
           indicators.push('Suspiciously low compression');
         }

@@ -1,0 +1,24 @@
+--- ai-image-detector.js
++++ ai-image-detector.js
+@@ -33,7 +33,7 @@
+     
+     // Check 3: Missing EXIF
+     if (!hasExif && (metadata.format === 'jpeg' || metadata.format === 'jpg')) {
+-      suspicionScore += 15;
++      suspicionScore += 5;  // Reduced from 15 - many real photos lose EXIF
+       indicators.push('Missing camera metadata');
+     }
+     
+@@ -84,10 +84,10 @@
+         if (ratio > 0.95) {
+           suspicionScore += 20;
+           indicators.push('Unusually high JPEG quality');
+-        } else if (ratio < 0.3) {
+-          suspicionScore += 10;
++        } else if (ratio < 0.15) {  // More lenient threshold
++          suspicionScore += 5;  // Reduced from 10
+           indicators.push('Suspiciously low compression');
+         }
+ 
+ 
+ 

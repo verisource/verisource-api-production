@@ -100,7 +100,7 @@ function analyzeMetadata(verification) {
   
   // Bonus: Has camera EXIF (rare for web images, but nice to have)
   // Don't penalize if missing!
-  if (verification.metadata?.exif && Object.keys(verification.metadata.exif).length > 5) {
+  if (verification.metadata?.exif && verification.metadata?.exif?.Make || verification.metadata?.exif?.Model) {
     score += 5;
     details.push('✅ Rich camera metadata');
   }
