@@ -944,7 +944,7 @@ if (kind === 'image') {
               ...(reverseSearchResults && { reverse_image_search: reverseSearchResults }),
             };
           console.log('📊 Calculating confidence score...');
-          const score = ConfidenceScoring.calculate(confidenceData);
+          const score = ConfidenceScoring.calculateConfidenceScore(confidenceData);
           console.log(`✅ Confidence: ${score.level} (${score.percentage}%)`);
           return score;
         } catch (err) {
