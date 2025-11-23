@@ -19,6 +19,7 @@ const AudioSpectralAnalysis = require('./services/audio-spectral-analysis');
 const EnhancedAIDetector = require('./services/enhanced-ai-detector');
 const JPEGForensics = require('./services/jpeg-forensics');
 const BlockchainService = require('./services/opentimestamps-service');
+const PolygonService = require('./services/polygon-timestamp');
 const sightengineDetector = require('./services/sightengine-ai-detection');
 // Import canonicalization only (workers not needed for minimal endpoint)
 let canonicalizeImage;
@@ -343,6 +344,18 @@ try {
   console.log(`✅ Blockchain: ${blockchainVerification.status}`);
 } catch (error) {
   console.error('⚠️ Blockchain timestamping failed:', error.message);
+// Polygon blockchain (instant confirmation)
+let polygonVerification = null;
+try {
+  console.log('🔷 Timestamping to Polygon blockchain...');
+  polygonVerification = await PolygonService.timestamp(fingerprint, req.file.originalname);
+  if (polygonVerification.success) {
+    console.log(`✅ Polygon: Block ${polygonVerification.block_number}`);
+  }
+} catch (error) {
+  console.error('⚠️ Polygon timestamping failed:', error.message);
+  polygonVerification = { success: false, error: error.message };
+}
   blockchainVerification = { success: false, error: error.message };
 } 
     
@@ -913,6 +926,7 @@ if (kind === 'image') {
         version: 'v1'
       },
       blockchain_verification: blockchainVerification,  
+      polygon_verification: polygonVerification,
   ai_detection: aiDetection,
       verification: {
         status: searchResults.found ? 'PREVIOUSLY_VERIFIED' : 'NEW_UPLOAD',
