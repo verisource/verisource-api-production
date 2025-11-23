@@ -3,8 +3,7 @@
  * Instant blockchain confirmations (~2 seconds)
  * Low cost (~$0.0001-0.001 per timestamp)
  */
-
-const { ethers } = require('ethers');
+const ethers = require('ethers');
 
 class PolygonTimestampService {
   constructor() {
