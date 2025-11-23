@@ -77,7 +77,7 @@ function calculateTwoDetectorEnsemble(jpegResult, localResult) {
   console.log('🤖 Running ensemble with JPEG + Local detectors...');
   
   // Weights: JPEG is more reliable
-  const weights = { jpeg: 0.60, local: 0.40 };
+  const weights = { jpeg: 0.00, local: 1.00 };
   
   // Calculate weighted confidence
   const weightedConfidence = 

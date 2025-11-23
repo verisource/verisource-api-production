@@ -46,7 +46,7 @@ class JPEGArtifactAnalyzer {
       }
 
       // Extract JPEG data
-      const jpegData = jpeg.decode(buffer, { useTArray: true });
+      const jpegData = jpeg.decode(buffer, { useTArray: true, maxMemoryUsageInMB: 2048 });
       const metadata = await sharp(buffer).metadata();
 
       // Run all analysis methods
@@ -67,6 +67,7 @@ class JPEGArtifactAnalyzer {
       const isAI = confidence > 0.65; // Threshold for AI classification
 
       return {
+        ai_confidence: Math.round(confidence * 100),
         isAI,
         confidence,
         method: 'jpeg-artifact-analysis',

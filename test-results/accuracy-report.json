@@ -1,0 +1,682 @@
+{
+  "total": 92,
+  "correct": 20,
+  "byCategory": {
+    "real-dslr": {
+      "total": 25,
+      "correct": 9,
+      "falsePositives": 16,
+      "falseNegatives": 0,
+      "results": [
+        {
+          "file": "20940138233_9b2a583802_o.jpg",
+          "aiConfidence": 32,
+          "detectedAsAI": false,
+          "expectedAI": false,
+          "correct": true
+        },
+        {
+          "file": "54892631839_c153a697fe_o.jpg",
+          "aiConfidence": 53,
+          "detectedAsAI": true,
+          "expectedAI": false,
+          "correct": false
+        },
+        {
+          "file": "54939424926_f5516efeaf_o.jpg",
+          "aiConfidence": 54,
+          "detectedAsAI": true,
+          "expectedAI": false,
+          "correct": false
+        },
+        {
+          "file": "54939441921_f9e8fa1532_c.jpg",
+          "aiConfidence": 70,
+          "detectedAsAI": true,
+          "expectedAI": false,
+          "correct": false
+        },
+        {
+          "file": "54939675179_aaa7ffcc33_c.jpg",
+          "aiConfidence": 43,
+          "detectedAsAI": false,
+          "expectedAI": false,
+          "correct": true
+        },
+        {
+          "file": "abdullah-arain-3IGItSjf5OQ-unsplash.jpg",
+          "aiConfidence": 49,
+          "detectedAsAI": false,
+          "expectedAI": false,
+          "correct": true
+        },
+        {
+          "file": "abdullah-arain-V7roO_RLN90-unsplash.jpg",
+          "aiConfidence": 72,
+          "detectedAsAI": true,
+          "expectedAI": false,
+          "correct": false
+        },
+        {
+          "file": "abdullah-arain-XdouiS_iXYU-unsplash.jpg",
+          "aiConfidence": 51,
+          "detectedAsAI": true,
+          "expectedAI": false,
+          "correct": false
+        },
+        {
+          "file": "emilian-nemec-o1e3jtKXkSE-unsplash.jpg",
+          "aiConfidence": 62,
+          "detectedAsAI": true,
+          "expectedAI": false,
+          "correct": false
+        },
+        {
+          "file": "filipp-romanovski-CGKYNN3uuVo-unsplash.jpg",
+          "aiConfidence": 54,
+          "detectedAsAI": true,
+          "expectedAI": false,
+          "correct": false
+        },
+        {
+          "file": "girish-patil-9EbOqoQkQmI-unsplash.jpg",
+          "aiConfidence": 31,
+          "detectedAsAI": false,
+          "expectedAI": false,
+          "correct": true
+        },
+        {
+          "file": "jay-openiano-CxwBBqxBfuk-unsplash.jpg",
+          "aiConfidence": 43,
+          "detectedAsAI": false,
+          "expectedAI": false,
+          "correct": true
+        },
+        {
+          "file": "jay-openiano-tDX2BXtBeXM-unsplash.jpg",
+          "aiConfidence": 72,
+          "detectedAsAI": true,
+          "expectedAI": false,
+          "correct": false
+        },
+        {
+          "file": "kat-damant-p-MGj4dK4bo-unsplash.jpg",
+          "aiConfidence": 68,
+          "detectedAsAI": true,
+          "expectedAI": false,
+          "correct": false
+        },
+        {
+          "file": "katy-mccray-diq23Ht7UBg-unsplash.jpg",
+          "aiConfidence": 62,
+          "detectedAsAI": true,
+          "expectedAI": false,
+          "correct": false
+        },
+        {
+          "file": "lapuerta-gela-2_TS0K6CRXc-unsplash.jpg",
+          "aiConfidence": 34,
+          "detectedAsAI": false,
+          "expectedAI": false,
+          "correct": true
+        },
+        {
+          "file": "lapuerta-gela-NSkiWtEXD6g-unsplash.jpg",
+          "aiConfidence": 43,
+          "detectedAsAI": false,
+          "expectedAI": false,
+          "correct": true
+        },
+        {
+          "file": "lapuerta-gela-hyCTZkq3x6s-unsplash.jpg",
+          "aiConfidence": 62,
+          "detectedAsAI": true,
+          "expectedAI": false,
+          "correct": false
+        },
+        {
+          "file": "mandylin-E8xi3aunfCQ-unsplash.jpg",
+          "aiConfidence": 62,
+          "detectedAsAI": true,
+          "expectedAI": false,
+          "correct": false
+        },
+        {
+          "file": "mandylin-LW2WKZzswXM-unsplash.jpg",
+          "aiConfidence": 60,
+          "detectedAsAI": true,
+          "expectedAI": false,
+          "correct": false
+        },
+        {
+          "file": "mandylin-UATaNo3zH8E-unsplash.jpg",
+          "aiConfidence": 68,
+          "detectedAsAI": true,
+          "expectedAI": false,
+          "correct": false
+        },
+        {
+          "file": "paolo-feser-0kDM8Ul1ps4-unsplash.jpg",
+          "aiConfidence": 62,
+          "detectedAsAI": true,
+          "expectedAI": false,
+          "correct": false
+        },
+        {
+          "file": "rodrigo-bacellar-vAqwn7TWenc-unsplash.jpg",
+          "aiConfidence": 54,
+          "detectedAsAI": true,
+          "expectedAI": false,
+          "correct": false
+        },
+        {
+          "file": "tadeusz-zachwieja-nQBVuWUSRYI-unsplash.jpg",
+          "aiConfidence": 41,
+          "detectedAsAI": false,
+          "expectedAI": false,
+          "correct": true
+        },
+        {
+          "file": "vivienne-teh-nACMFRO-NT0-unsplash.jpg",
+          "aiConfidence": 37,
+          "detectedAsAI": false,
+          "expectedAI": false,
+          "correct": true
+        }
+      ]
+    },
+    "real-stock": {
+      "total": 21,
+      "correct": 2,
+      "falsePositives": 19,
+      "falseNegatives": 0,
+      "results": [
+        {
+          "file": "AP.jpg",
+          "aiConfidence": 44,
+          "detectedAsAI": false,
+          "expectedAI": false,
+          "correct": true
+        },
+        {
+          "file": "AP25317499493754.jpg",
+          "aiConfidence": 68,
+          "detectedAsAI": true,
+          "expectedAI": false,
+          "correct": false
+        },
+        {
+          "file": "AP25319285435655.jpg",
+          "aiConfidence": 62,
+          "detectedAsAI": true,
+          "expectedAI": false,
+          "correct": false
+        },
+        {
+          "file": "AP25320002409042.jpg",
+          "aiConfidence": 27,
+          "detectedAsAI": false,
+          "expectedAI": false,
+          "correct": true
+        },
+        {
+          "file": "AP25320002512662.jpg",
+          "aiConfidence": 50,
+          "detectedAsAI": true,
+          "expectedAI": false,
+          "correct": false
+        },
+        {
+          "file": "AdobeStock_180704843_Preview.jpeg",
+          "aiConfidence": 62,
+          "detectedAsAI": true,
+          "expectedAI": false,
+          "correct": false
+        },
+        {
+          "file": "AdobeStock_243765470_Preview.jpeg",
+          "aiConfidence": 66,
+          "detectedAsAI": true,
+          "expectedAI": false,
+          "correct": false
+        },
+        {
+          "file": "AdobeStock_285983137_Preview.jpeg",
+          "aiConfidence": 75,
+          "detectedAsAI": true,
+          "expectedAI": false,
+          "correct": false
+        },
+        {
+          "file": "AdobeStock_290888731_Preview.jpeg",
+          "aiConfidence": 66,
+          "detectedAsAI": true,
+          "expectedAI": false,
+          "correct": false
+        },
+        {
+          "file": "AdobeStock_292951705_Preview.jpeg",
+          "aiConfidence": 66,
+          "detectedAsAI": true,
+          "expectedAI": false,
+          "correct": false
+        },
+        {
+          "file": "AdobeStock_313373132_Preview.jpeg",
+          "aiConfidence": 62,
+          "detectedAsAI": true,
+          "expectedAI": false,
+          "correct": false
+        },
+        {
+          "file": "AdobeStock_314107086_Preview.jpeg",
+          "aiConfidence": 66,
+          "detectedAsAI": true,
+          "expectedAI": false,
+          "correct": false
+        },
+        {
+          "file": "AdobeStock_314824699_Preview.jpeg",
+          "aiConfidence": 75,
+          "detectedAsAI": true,
+          "expectedAI": false,
+          "correct": false
+        },
+        {
+          "file": "AdobeStock_322363271_Preview (1).jpeg",
+          "aiConfidence": 66,
+          "detectedAsAI": true,
+          "expectedAI": false,
+          "correct": false
+        },
+        {
+          "file": "AdobeStock_322363271_Preview.jpeg",
+          "aiConfidence": 66,
+          "detectedAsAI": true,
+          "expectedAI": false,
+          "correct": false
+        },
+        {
+          "file": "AdobeStock_383258331_Preview.jpeg",
+          "aiConfidence": 69,
+          "detectedAsAI": true,
+          "expectedAI": false,
+          "correct": false
+        },
+        {
+          "file": "AdobeStock_410127153_Preview.jpeg",
+          "aiConfidence": 72,
+          "detectedAsAI": true,
+          "expectedAI": false,
+          "correct": false
+        },
+        {
+          "file": "AdobeStock_487981204_Preview.jpeg",
+          "aiConfidence": 66,
+          "detectedAsAI": true,
+          "expectedAI": false,
+          "correct": false
+        },
+        {
+          "file": "AdobeStock_603210957_Preview.jpeg",
+          "aiConfidence": 66,
+          "detectedAsAI": true,
+          "expectedAI": false,
+          "correct": false
+        },
+        {
+          "file": "AdobeStock_620466573_Preview.jpeg",
+          "aiConfidence": 75,
+          "detectedAsAI": true,
+          "expectedAI": false,
+          "correct": false
+        },
+        {
+          "file": "AdobeStock_664214644_Preview.jpeg",
+          "aiConfidence": 57,
+          "detectedAsAI": true,
+          "expectedAI": false,
+          "correct": false
+        }
+      ]
+    },
+    "real-smartphone": {
+      "total": 24,
+      "correct": 8,
+      "falsePositives": 16,
+      "falseNegatives": 0,
+      "results": [
+        {
+          "file": "1000002079.jpg",
+          "aiConfidence": 25,
+          "detectedAsAI": false,
+          "expectedAI": false,
+          "correct": true
+        },
+        {
+          "file": "1000002615 copy.jpg",
+          "aiConfidence": 33,
+          "detectedAsAI": false,
+          "expectedAI": false,
+          "correct": true
+        },
+        {
+          "file": "1000002615.jpg",
+          "aiConfidence": 33,
+          "detectedAsAI": false,
+          "expectedAI": false,
+          "correct": true
+        },
+        {
+          "file": "1000002632 copy.jpg",
+          "aiConfidence": 72,
+          "detectedAsAI": true,
+          "expectedAI": false,
+          "correct": false
+        },
+        {
+          "file": "1000002632.jpg",
+          "aiConfidence": 62,
+          "detectedAsAI": true,
+          "expectedAI": false,
+          "correct": false
+        },
+        {
+          "file": "1000003060.jpg",
+          "aiConfidence": 50,
+          "detectedAsAI": true,
+          "expectedAI": false,
+          "correct": false
+        },
+        {
+          "file": "1cbb9352-5a7e-415f-815c-8e9fcf95a77f-1_all_6793.jpg",
+          "aiConfidence": 45,
+          "detectedAsAI": false,
+          "expectedAI": false,
+          "correct": true
+        },
+        {
+          "file": "20240105_115148.jpg",
+          "aiConfidence": 55,
+          "detectedAsAI": true,
+          "expectedAI": false,
+          "correct": false
+        },
+        {
+          "file": "20240105_115200.jpg",
+          "aiConfidence": 80,
+          "detectedAsAI": true,
+          "expectedAI": false,
+          "correct": false
+        },
+        {
+          "file": "20240105_115210.jpg",
+          "aiConfidence": 80,
+          "detectedAsAI": true,
+          "expectedAI": false,
+          "correct": false
+        },
+        {
+          "file": "20240105_115218.jpg",
+          "aiConfidence": 50,
+          "detectedAsAI": true,
+          "expectedAI": false,
+          "correct": false
+        },
+        {
+          "file": "20240105_115951.jpg",
+          "aiConfidence": 49,
+          "detectedAsAI": false,
+          "expectedAI": false,
+          "correct": true
+        },
+        {
+          "file": "20250518_123146.jpg",
+          "aiConfidence": 29,
+          "detectedAsAI": false,
+          "expectedAI": false,
+          "correct": true
+        },
+        {
+          "file": "20250525_140241(0).jpg",
+          "aiConfidence": 59,
+          "detectedAsAI": true,
+          "expectedAI": false,
+          "correct": false
+        },
+        {
+          "file": "20251025_144926.jpg",
+          "aiConfidence": 61,
+          "detectedAsAI": true,
+          "expectedAI": false,
+          "correct": false
+        },
+        {
+          "file": "IMG-1447.jpg",
+          "aiConfidence": 80,
+          "detectedAsAI": true,
+          "expectedAI": false,
+          "correct": false
+        },
+        {
+          "file": "IMG-1451.jpg",
+          "aiConfidence": 55,
+          "detectedAsAI": true,
+          "expectedAI": false,
+          "correct": false
+        },
+        {
+          "file": "IMG-1452.jpg",
+          "aiConfidence": 81,
+          "detectedAsAI": true,
+          "expectedAI": false,
+          "correct": false
+        },
+        {
+          "file": "IMG_20250920_094003 copy.jpg",
+          "aiConfidence": 69,
+          "detectedAsAI": true,
+          "expectedAI": false,
+          "correct": false
+        },
+        {
+          "file": "IMG_20250920_094003.jpg",
+          "aiConfidence": 63,
+          "detectedAsAI": true,
+          "expectedAI": false,
+          "correct": false
+        },
+        {
+          "file": "My Real Photo 1.jpg",
+          "aiConfidence": 31,
+          "detectedAsAI": false,
+          "expectedAI": false,
+          "correct": true
+        },
+        {
+          "file": "Savannah profile picture.jpg",
+          "aiConfidence": 67,
+          "detectedAsAI": true,
+          "expectedAI": false,
+          "correct": false
+        },
+        {
+          "file": "raw photo 1.jpg",
+          "aiConfidence": 51,
+          "detectedAsAI": true,
+          "expectedAI": false,
+          "correct": false
+        },
+        {
+          "file": "raw photo 2.jpg",
+          "aiConfidence": 45,
+          "detectedAsAI": false,
+          "expectedAI": false,
+          "correct": true
+        }
+      ]
+    },
+    "real-edited": {
+      "total": 22,
+      "correct": 1,
+      "falsePositives": 21,
+      "falseNegatives": 0,
+      "results": [
+        {
+          "file": "CHP-17.jpg",
+          "aiConfidence": 84,
+          "detectedAsAI": true,
+          "expectedAI": false,
+          "correct": false
+        },
+        {
+          "file": "CHP-39.jpg",
+          "aiConfidence": 84,
+          "detectedAsAI": true,
+          "expectedAI": false,
+          "correct": false
+        },
+        {
+          "file": "CHP-41.jpg",
+          "aiConfidence": 80,
+          "detectedAsAI": true,
+          "expectedAI": false,
+          "correct": false
+        },
+        {
+          "file": "CHP-42.jpg",
+          "aiConfidence": 84,
+          "detectedAsAI": true,
+          "expectedAI": false,
+          "correct": false
+        },
+        {
+          "file": "CHP-95.jpg",
+          "aiConfidence": 63,
+          "detectedAsAI": true,
+          "expectedAI": false,
+          "correct": false
+        },
+        {
+          "file": "Docusign Headshot.jpg",
+          "aiConfidence": 46,
+          "detectedAsAI": false,
+          "expectedAI": false,
+          "correct": true
+        },
+        {
+          "file": "HOL_6314.jpg",
+          "aiConfidence": 52,
+          "detectedAsAI": true,
+          "expectedAI": false,
+          "correct": false
+        },
+        {
+          "file": "SNW_6170.jpg",
+          "aiConfidence": 84,
+          "detectedAsAI": true,
+          "expectedAI": false,
+          "correct": false
+        },
+        {
+          "file": "SNW_6174.jpg",
+          "aiConfidence": 80,
+          "detectedAsAI": true,
+          "expectedAI": false,
+          "correct": false
+        },
+        {
+          "file": "SNW_6183-2.jpg",
+          "aiConfidence": 74,
+          "detectedAsAI": true,
+          "expectedAI": false,
+          "correct": false
+        },
+        {
+          "file": "SNW_6192-2.jpg",
+          "aiConfidence": 81,
+          "detectedAsAI": true,
+          "expectedAI": false,
+          "correct": false
+        },
+        {
+          "file": "SNW_6193-2.jpg",
+          "aiConfidence": 84,
+          "detectedAsAI": true,
+          "expectedAI": false,
+          "correct": false
+        },
+        {
+          "file": "SNW_6193.jpg",
+          "aiConfidence": 84,
+          "detectedAsAI": true,
+          "expectedAI": false,
+          "correct": false
+        },
+        {
+          "file": "SNW_6198.jpg",
+          "aiConfidence": 84,
+          "detectedAsAI": true,
+          "expectedAI": false,
+          "correct": false
+        },
+        {
+          "file": "SNW_6200.jpg",
+          "aiConfidence": 84,
+          "detectedAsAI": true,
+          "expectedAI": false,
+          "correct": false
+        },
+        {
+          "file": "SNW_6211.jpg",
+          "aiConfidence": 84,
+          "detectedAsAI": true,
+          "expectedAI": false,
+          "correct": false
+        },
+        {
+          "file": "SNW_6223.jpg",
+          "aiConfidence": 79,
+          "detectedAsAI": true,
+          "expectedAI": false,
+          "correct": false
+        },
+        {
+          "file": "SNW_6254.jpg",
+          "aiConfidence": 80,
+          "detectedAsAI": true,
+          "expectedAI": false,
+          "correct": false
+        },
+        {
+          "file": "SNW_6260.jpg",
+          "aiConfidence": 84,
+          "detectedAsAI": true,
+          "expectedAI": false,
+          "correct": false
+        },
+        {
+          "file": "SNW_6261.jpg",
+          "aiConfidence": 72,
+          "detectedAsAI": true,
+          "expectedAI": false,
+          "correct": false
+        },
+        {
+          "file": "ScheduleOnce Headshot.jpg",
+          "aiConfidence": 67,
+          "detectedAsAI": true,
+          "expectedAI": false,
+          "correct": false
+        },
+        {
+          "file": "Zoom Headshot.jpg",
+          "aiConfidence": 84,
+          "detectedAsAI": true,
+          "expectedAI": false,
+          "correct": false
+        }
+      ]
+    }
+  }
+}

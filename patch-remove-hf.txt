@@ -1,0 +1,6 @@
+We need to:
+1. Remove HF from detectors array
+2. Calculate average from only JPEG + Local
+3. Keep HF detection for logging but don't use it
+
+Location: ai-image-detector.js around line 450-470

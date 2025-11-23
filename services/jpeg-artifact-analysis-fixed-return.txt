@@ -1,0 +1,21 @@
+      return {
+        ai_confidence: Math.round(confidence * 100),
+        isAI,
+        confidence,
+        method: 'jpeg-artifact-analysis',
+        details: {
+          quantizationTables: qTableAnalysis,
+          dctCoefficients: dctAnalysis,
+          blockBoundaries: blockAnalysis,
+          compressionPattern: compressionAnalysis,
+          imageSize: `${metadata.width}x${metadata.height}`,
+          format: metadata.format
+        },
+        reasoning: this.generateReasoning({
+          isAI,
+          qTableAnalysis,
+          dctAnalysis,
+          blockAnalysis,
+          compressionAnalysis
+        })
+      };
