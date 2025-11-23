@@ -528,9 +528,16 @@ if (kind === 'image') {
         noise_level: finalResult.individual_results?.jpeg?.details?.noise || 'unknown'
       },
       
-      verdict: finalResult.likely_ai_generated ? 'AI-GENERATED' : 'LIKELY AUTHENTIC',
-      analysis_time_ms: 0
-    };
+ verdict: finalResult.likely_ai_generated ? 'AI-GENERATED' : 'LIKELY AUTHENTIC',
+      analysis_time_ms: 0,
+      
+      // Smart routing metadata
+      routing_decision: finalResult.routing_decision || 'unknown',
+      confidence_source: finalResult.confidence_source || 'local',
+      external_verification: finalResult.external_verification || null,
+      local_result: finalResult.local_result || null
+    };     
+    
     
     console.log(`✅ Ensemble detection: ${aiDetection.verdict} (${aiDetection.ai_confidence}%)`);
     
