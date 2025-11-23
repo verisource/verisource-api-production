@@ -50,3 +50,4 @@ The extension requires a VeriSource API endpoint at:
 
 ## License
 Proprietary
+# Polygon timestamping enabled
