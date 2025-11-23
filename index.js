@@ -19,6 +19,7 @@ const AudioSpectralAnalysis = require('./services/audio-spectral-analysis');
 const EnhancedAIDetector = require('./services/enhanced-ai-detector');
 const JPEGForensics = require('./services/jpeg-forensics');
 const BlockchainService = require('./services/opentimestamps-service');
+const sightengineDetector = require('./services/sightengine-ai-detection');
 // Import canonicalization only (workers not needed for minimal endpoint)
 let canonicalizeImage;
 try { 
@@ -448,17 +449,66 @@ try {
   
     }
 
-    // Detect AI-generated images with JPEG forensics
+   // Detect AI-generated images with smart routing (local + Sightengine)
 let aiDetection = null;
 if (kind === 'image') {
   try {
-   console.log('🤖 Running ensemble AI detection with forensics...');
-    const ensembleResult = await detectAIGeneration(req.file.path);
+   console.log('🤖 Running local AI detection...');
+    const localResult = await detectAIGeneration(req.file.path);
     
-    // Map ensemble result to expected format
+    // Smart routing: decide if we need Sightengine
+    let needsExternalCheck = false;
+    let confidenceLevel = 'high';
+    
+    // Trigger Sightengine for uncertain cases
+    if (localResult.ai_confidence > 20 && localResult.ai_confidence < 80) {
+      needsExternalCheck = true;
+      confidenceLevel = 'uncertain';
+      console.log(`⚠️ Local confidence: ${localResult.ai_confidence}% - calling Sightengine for verification`);
+    }
+    
+    let finalResult = localResult;
+    
+    // Call Sightengine if needed
+    if (needsExternalCheck && process.env.SIGHTENGINE_API_USER) {
+      try {
+        // Create temporary accessible URL or use file path
+        const sightengineResult = await sightengineDetector.detectAI(req.file.path);
+        
+        console.log(`✅ Sightengine result: ${sightengineResult.isAI ? 'AI' : 'Authentic'} (${(sightengineResult.confidence * 100).toFixed(1)}%)`);
+        
+        // Use Sightengine result (more accurate)
+        finalResult = {
+          ...localResult,
+          ai_confidence: sightengineResult.confidence * 100,
+          likely_ai_generated: sightengineResult.isAI,
+          external_verification: {
+            provider: 'sightengine',
+            confidence: sightengineResult.confidence,
+            isAI: sightengineResult.isAI,
+            score: sightengineResult.score
+          },
+          local_result: {
+            confidence: localResult.ai_confidence,
+            likely_ai: localResult.likely_ai_generated
+          },
+          routing_decision: 'external_used',
+          confidence_source: 'sightengine'
+        };
+      } catch (sightengineError) {
+        console.warn('⚠️ Sightengine failed, using local result:', sightengineError.message);
+        finalResult.routing_decision = 'external_failed';
+        finalResult.confidence_source = 'local';
+      }
+    } else {
+      finalResult.routing_decision = needsExternalCheck ? 'external_not_configured' : 'local_confident';
+      finalResult.confidence_source = 'local';
+    }
+    
+    // Map to expected format
     aiDetection = {
-      likely_ai_generated: ensembleResult.likely_ai_generated,
-      ai_confidence: ensembleResult.ai_confidence,
+      likely_ai_generated: finalResult.likely_ai_generated,
+      ai_confidence: finalResult.ai_confidence,
       ai_confidence_raw: ensembleResult.ai_confidence, // Store for portrait adjustment
       indicators: ensembleResult.indicators || [],
       warnings: [],
