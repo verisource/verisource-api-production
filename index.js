@@ -509,32 +509,32 @@ if (kind === 'image') {
     aiDetection = {
       likely_ai_generated: finalResult.likely_ai_generated,
       ai_confidence: finalResult.ai_confidence,
-      ai_confidence_raw: ensembleResult.ai_confidence, // Store for portrait adjustment
-      indicators: ensembleResult.indicators || [],
+      ai_confidence_raw: finalResult.ai_confidence, // Store for portrait adjustment
+      indicators: finalResult.indicators || [],
       warnings: [],
       recommendations: [],
       
       // Add ensemble-specific data
-      ensemble_results: ensembleResult.individual_results || null,
-      ensemble_agreement: ensembleResult.agreement || null,
-      detector_count: ensembleResult.detector_count || 1,
+      ensemble_results: finalResult.individual_results || null,
+      ensemble_agreement: finalResult.agreement || null,
+      detector_count: finalResult.detector_count || 1,
       
       forensic_analysis: {
-        manipulation_detected: ensembleResult.ai_confidence >= 50,
-        manipulation_confidence: ensembleResult.ai_confidence,
+        manipulation_detected: finalResult.ai_confidence >= 50,
+        manipulation_confidence: finalResult.ai_confidence,
         ela_performed: false, // ELA not part of ensemble yet
-        compression_quality: ensembleResult.individual_results?.jpeg?.details?.quality || 0,
-        double_compressed: ensembleResult.individual_results?.jpeg?.details?.doubleCompressed || false,
-        noise_level: ensembleResult.individual_results?.jpeg?.details?.noise || 'unknown'
+        compression_quality: finalResult.individual_results?.jpeg?.details?.quality || 0,
+        double_compressed: finalResult.individual_results?.jpeg?.details?.doubleCompressed || false,
+        noise_level: finalResult.individual_results?.jpeg?.details?.noise || 'unknown'
       },
       
-      verdict: ensembleResult.likely_ai_generated ? 'AI-GENERATED' : 'LIKELY AUTHENTIC',
+      verdict: finalResult.likely_ai_generated ? 'AI-GENERATED' : 'LIKELY AUTHENTIC',
       analysis_time_ms: 0
     };
     
     console.log(`✅ Ensemble detection: ${aiDetection.verdict} (${aiDetection.ai_confidence}%)`);
     
-    console.log(`✅ Ensemble detection: ${ensembleResult.likely_ai_generated ? 'AI-GENERATED' : 'AUTHENTIC'} (${ensembleResult.ai_confidence}%)`);
+    console.log(`✅ Ensemble detection: ${finalResult.likely_ai_generated ? 'AI-GENERATED' : 'AUTHENTIC'} (${finalResult.ai_confidence}%)`);
     
   } catch (err) {
     console.error('⚠️ AI detection error:', err.message);
