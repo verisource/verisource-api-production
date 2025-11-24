@@ -3,7 +3,13 @@
  * Instant blockchain confirmations (~2 seconds)
  * Low cost (~$0.0001-0.001 per timestamp)
  */
+
 const ethers = require('ethers');
+
+// Debug: Check what ethers exports
+console.log('🔍 Ethers module loaded:', typeof ethers);
+console.log('🔍 Ethers.providers:', typeof ethers?.providers);
+console.log('🔍 Ethers.Wallet:', typeof ethers?.Wallet);
 
 class PolygonTimestampService {
   constructor() {
@@ -32,12 +38,6 @@ class PolygonTimestampService {
     }
   }
 
-  /**
-   * Timestamp a file hash to Polygon blockchain
-   * @param {string} fileHash - SHA-256 hash of the file
-   * @param {string} filename - Original filename for reference
-   * @returns {Object} Transaction result
-   */
   async timestamp(fileHash, filename = 'unknown') {
     if (!this.enabled) {
       return {
@@ -49,34 +49,28 @@ class PolygonTimestampService {
     try {
       console.log(`🔗 Timestamping to Polygon: ${filename}`);
       
-      // Get current gas price
       const gasPrice = await this.provider.getGasPrice();
       
-      // Create transaction with hash in data field
       const tx = await this.wallet.sendTransaction({
-        to: this.wallet.address, // Send to self
-        value: ethers.utils.parseEther('0'), // No value transfer
-        data: '0x' + fileHash, // File hash as data
-        gasLimit: 21000 + (fileHash.length / 2), // Base + data
+        to: this.wallet.address,
+        value: ethers.utils.parseEther('0'),
+        data: '0x' + fileHash,
+        gasLimit: 21000 + (fileHash.length / 2),
         gasPrice: gasPrice
       });
 
       console.log(`📤 Transaction sent: ${tx.hash}`);
 
-      // Wait for confirmation
-      const receipt = await tx.wait(1); // 1 confirmation
+      const receipt = await tx.wait(1);
       
       console.log(`✅ Confirmed in block ${receipt.blockNumber}`);
 
-      // Get block timestamp
       const block = await this.provider.getBlock(receipt.blockNumber);
       
-      // Calculate cost
       const gasCost = receipt.gasUsed.mul(receipt.effectiveGasPrice);
       const maticCost = ethers.utils.formatEther(gasCost);
       
-      // Estimate USD cost (approximate - would need price oracle for real-time)
-      const maticPriceUSD = 0.45; // Approximate
+      const maticPriceUSD = 0.45;
       const costUSD = (parseFloat(maticCost) * maticPriceUSD).toFixed(6);
 
       return {
@@ -101,11 +95,6 @@ class PolygonTimestampService {
     }
   }
 
-  /**
-   * Verify a timestamp on Polygon
-   * @param {string} txHash - Transaction hash
-   * @returns {Object} Verification result
-   */
   async verify(txHash) {
     if (!this.enabled) {
       return { success: false, error: 'Polygon service not configured' };
@@ -122,7 +111,7 @@ class PolygonTimestampService {
 
       return {
         success: true,
-        hash: tx.data.substring(2), // Remove 0x prefix
+        hash: tx.data.substring(2),
         block_number: receipt.blockNumber,
         timestamp: new Date(block.timestamp * 1000).toISOString(),
         confirmations: await this.provider.getBlockNumber() - receipt.blockNumber
@@ -133,9 +122,6 @@ class PolygonTimestampService {
     }
   }
 
-  /**
-   * Check wallet balance
-   */
   async getBalance() {
     if (!this.enabled) return null;
     
@@ -149,5 +135,4 @@ class PolygonTimestampService {
   }
 }
 
-// Export singleton instance
 module.exports = new PolygonTimestampService();
