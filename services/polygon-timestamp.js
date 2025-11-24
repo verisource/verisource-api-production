@@ -75,7 +75,7 @@ class PolygonTimestampService {
 
       const block = await this.provider.getBlock(receipt.blockNumber);
       
-      const gasCost = receipt.gasUsed * receipt.effectiveGasPrice;
+      const gasCost = BigInt(receipt.gasUsed) * BigInt(receipt.effectiveGasPrice);
       
       // formatEther works in both versions
       const formatEther = ethers.formatEther || ethers.utils?.formatEther;
