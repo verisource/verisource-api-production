@@ -6,11 +6,6 @@
 
 const ethers = require('ethers');
 
-// Debug: Check what ethers exports
-console.log('🔍 Ethers module loaded:', typeof ethers);
-console.log('🔍 Ethers.providers:', typeof ethers?.providers);
-console.log('🔍 Ethers.Wallet:', typeof ethers?.Wallet);
-
 class PolygonTimestampService {
   constructor() {
     this.provider = null;
@@ -29,8 +24,16 @@ class PolygonTimestampService {
     }
 
     try {
-      this.provider = new ethers.providers.JsonRpcProvider(rpcUrl);
-      this.wallet = new ethers.Wallet(privateKey, this.provider);
+      // Use ethers.JsonRpcProvider for v6 or ethers.providers.JsonRpcProvider for v5
+      const JsonRpcProvider = ethers.JsonRpcProvider || ethers.providers?.JsonRpcProvider;
+      const Wallet = ethers.Wallet;
+      
+      if (!JsonRpcProvider) {
+        throw new Error('JsonRpcProvider not available in ethers module');
+      }
+
+      this.provider = new JsonRpcProvider(rpcUrl);
+      this.wallet = new Wallet(privateKey, this.provider);
       this.enabled = true;
       console.log('✅ Polygon service initialized:', this.wallet.address);
     } catch (error) {
@@ -49,11 +52,16 @@ class PolygonTimestampService {
     try {
       console.log(`🔗 Timestamping to Polygon: ${filename}`);
       
-      const gasPrice = await this.provider.getGasPrice();
+      // Get gas price - compatible with both v5 and v6
+      const feeData = await this.provider.getFeeData();
+      const gasPrice = feeData.gasPrice;
+      
+      // parseEther works in both versions
+      const parseEther = ethers.parseEther || ethers.utils?.parseEther;
       
       const tx = await this.wallet.sendTransaction({
         to: this.wallet.address,
-        value: ethers.utils.parseEther('0'),
+        value: parseEther('0'),
         data: '0x' + fileHash,
         gasLimit: 21000 + (fileHash.length / 2),
         gasPrice: gasPrice
@@ -67,21 +75,24 @@ class PolygonTimestampService {
 
       const block = await this.provider.getBlock(receipt.blockNumber);
       
-      const gasCost = receipt.gasUsed.mul(receipt.effectiveGasPrice);
-      const maticCost = ethers.utils.formatEther(gasCost);
+      const gasCost = receipt.gasUsed * receipt.effectiveGasPrice;
+      
+      // formatEther works in both versions
+      const formatEther = ethers.formatEther || ethers.utils?.formatEther;
+      const maticCost = formatEther(gasCost);
       
       const maticPriceUSD = 0.45;
       const costUSD = (parseFloat(maticCost) * maticPriceUSD).toFixed(6);
 
       return {
         success: true,
-        transaction_hash: receipt.transactionHash,
+        transaction_hash: receipt.hash,
         block_number: receipt.blockNumber,
         timestamp: new Date(block.timestamp * 1000).toISOString(),
         gas_used: receipt.gasUsed.toString(),
         gas_cost_matic: maticCost,
         gas_cost_usd: costUSD,
-        explorer_url: `https://polygonscan.com/tx/${receipt.transactionHash}`,
+        explorer_url: `https://polygonscan.com/tx/${receipt.hash}`,
         confirmations: 1,
         network: 'polygon'
       };
@@ -126,8 +137,9 @@ class PolygonTimestampService {
     if (!this.enabled) return null;
     
     try {
-      const balance = await this.wallet.getBalance();
-      return ethers.utils.formatEther(balance);
+      const balance = await this.provider.getBalance(this.wallet.address);
+      const formatEther = ethers.formatEther || ethers.utils?.formatEther;
+      return formatEther(balance);
     } catch (error) {
       console.error('Error getting balance:', error.message);
       return null;
