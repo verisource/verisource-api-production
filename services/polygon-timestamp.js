@@ -24,7 +24,6 @@ class PolygonTimestampService {
     }
 
     try {
-      // Use ethers.JsonRpcProvider for v6 or ethers.providers.JsonRpcProvider for v5
       const JsonRpcProvider = ethers.JsonRpcProvider || ethers.providers?.JsonRpcProvider;
       const Wallet = ethers.Wallet;
       
@@ -52,11 +51,9 @@ class PolygonTimestampService {
     try {
       console.log(`🔗 Timestamping to Polygon: ${filename}`);
       
-      // Get gas price - compatible with both v5 and v6
       const feeData = await this.provider.getFeeData();
       const gasPrice = feeData.gasPrice;
       
-      // parseEther works in both versions
       const parseEther = ethers.parseEther || ethers.utils?.parseEther;
       
       const tx = await this.wallet.sendTransaction({
@@ -75,11 +72,20 @@ class PolygonTimestampService {
 
       const block = await this.provider.getBlock(receipt.blockNumber);
       
-      const gasCost = BigInt(receipt.gasUsed) * BigInt(receipt.effectiveGasPrice);
-      
-      // formatEther works in both versions
-      const formatEther = ethers.formatEther || ethers.utils?.formatEther;
-      const maticCost = formatEther(gasCost);
+      // Safe gas cost calculation - handle both v5 and v6
+      let maticCost = '0';
+      try {
+        const gasUsed = receipt.gasUsed;
+        const gasPrice = receipt.gasPrice || receipt.effectiveGasPrice || feeData.gasPrice;
+        
+        if (gasUsed && gasPrice) {
+          const gasCost = BigInt(gasUsed.toString()) * BigInt(gasPrice.toString());
+          const formatEther = ethers.formatEther || ethers.utils?.formatEther;
+          maticCost = formatEther(gasCost);
+        }
+      } catch (costErr) {
+        console.log('⚠️ Could not calculate gas cost:', costErr.message);
+      }
       
       const maticPriceUSD = 0.45;
       const costUSD = (parseFloat(maticCost) * maticPriceUSD).toFixed(6);
