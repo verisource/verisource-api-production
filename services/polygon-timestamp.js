@@ -63,7 +63,7 @@ class PolygonTimestampService {
         to: this.wallet.address,
         value: parseEther('0'),
         data: '0x' + fileHash,
-        gasLimit: 21000 + (fileHash.length / 2),
+        gasLimit: 22000 + (fileHash.length * 2),
         gasPrice: gasPrice
       });
 
