@@ -31,7 +31,7 @@ class BingVisualSearchService {
     } = options;
 
     if (this.sandboxMode) {
-      return this.getMockResults(imageBuffer);
+      return { status: "unavailable", message: "Bing Visual Search API not configured", total_results: 0, pages_with_image: [] };
     }
 
     try {
@@ -78,7 +78,7 @@ class BingVisualSearchService {
     } = options;
 
     if (this.sandboxMode) {
-      return this.getMockResults(null, imageUrl);
+      return { status: "unavailable", message: "Bing Visual Search API not configured", total_results: 0, pages_with_image: [] };
     }
 
     try {
