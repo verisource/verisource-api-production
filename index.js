@@ -339,27 +339,26 @@ app.post('/verify', upload.single('file'), async (req, res) => {
    // NEW: Timestamp to blockchain
 let blockchainVerification = null;
 try {
-  console.log('🔗 Timestamping to Bitcoin blockchain...');
+  console.log("�� Timestamping to Bitcoin blockchain...");
   blockchainVerification = await BlockchainService.timestamp(fingerprint, req.file.originalname);
   console.log(`✅ Blockchain: ${blockchainVerification.status}`);
 } catch (error) {
-  console.error('⚠️ Blockchain timestamping failed:', error.message);
+  console.error("⚠️ Blockchain timestamping failed:", error.message);
+  blockchainVerification = { success: false, error: error.message };
+} 
+
 // Polygon blockchain (instant confirmation)
 let polygonVerification = null;
 try {
-  console.log('🔷 Timestamping to Polygon blockchain...');
+  console.log("🔷 Timestamping to Polygon blockchain...");
   polygonVerification = await PolygonService.timestamp(fingerprint, req.file.originalname);
   if (polygonVerification.success) {
-    console.log(`✅ Polygon: Block ${polygonVerification.block_number}`);
+    console.log(`✅ Polygon: Block: ${polygonVerification.block_number}`);
   }
 } catch (error) {
-  console.error('⚠️ Polygon timestamping failed:', error.message);
+  console.error("⚠️ Polygon timestamping failed:", error.message);
   polygonVerification = { success: false, error: error.message };
 }
-  blockchainVerification = { success: false, error: error.message };
-} 
-    
-    // Detect file type
     const dm = req.file.mimetype || mime.lookup(req.file.originalname) || 'application/octet-stream';
     const isImg = /^image\//i.test(dm) || /\.(png|jpe?g|gif|webp)$/i.test(req.file.originalname);
     const isVid = /^video\//i.test(dm) || /\.(mp4|mov|avi|mkv)$/i.test(req.file.originalname);
