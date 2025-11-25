@@ -35,28 +35,19 @@ const KNOWN_CAMERAS = {
       'iPhone 5s': 2013, 'iPhone 5c': 2013, 'iPhone 5': 2012, 'iPhone 4S': 2011, 'iPhone 4': 2010
     }
   },
-  
+
   // Canon cameras
   'Canon': {
     models: [
-      // RF Mount Mirrorless (2018+)
       'EOS R5', 'EOS R6', 'EOS R3', 'EOS R', 'EOS RP', 'EOS R7', 'EOS R8', 'EOS R10', 'EOS R50',
-      // EF Mount Full Frame (5D series)
       'EOS 5D Mark IV', 'EOS 5D Mark III', 'EOS 5D Mark II', 'EOS 5D',
-      // EF Mount Full Frame (6D series)
       'EOS 6D Mark II', 'EOS 6D',
-      // EF Mount Full Frame (1D series)
       'EOS-1D X Mark III', 'EOS-1D X Mark II', 'EOS-1D X', 'EOS-1D Mark IV', 'EOS-1Ds Mark III',
-      // EF Mount APS-C (7D series)
       'EOS 7D Mark II', 'EOS 7D',
-      // EF Mount APS-C (XXD series)
       'EOS 90D', 'EOS 80D', 'EOS 70D', 'EOS 60D', 'EOS 50D', 'EOS 40D', 'EOS 30D', 'EOS 20D',
-      // EF Mount APS-C (Rebel/XXXD series)
       'EOS Rebel T8i', 'EOS Rebel T7i', 'EOS Rebel T7', 'EOS Rebel T6i', 'EOS Rebel T6', 'EOS Rebel T5i', 'EOS Rebel T5',
       'EOS Rebel SL3', 'EOS Rebel SL2', 'EOS 850D', 'EOS 800D', 'EOS 750D', 'EOS 700D', 'EOS 650D', 'EOS 600D', 'EOS 550D',
-      // EF-M Mount Mirrorless
       'EOS M50 Mark II', 'EOS M50', 'EOS M6 Mark II', 'EOS M6', 'EOS M5', 'EOS M3', 'EOS M',
-      // PowerShot Compact
       'PowerShot G7 X Mark III', 'PowerShot G7 X Mark II', 'PowerShot G5 X Mark II', 'PowerShot G1 X Mark III'
     ],
     releaseYears: {
@@ -72,30 +63,13 @@ const KNOWN_CAMERAS = {
       'PowerShot G7 X Mark III': 2019, 'PowerShot G7 X Mark II': 2016, 'PowerShot G5 X Mark II': 2019, 'PowerShot G1 X Mark III': 2017
     }
   },
-  'Sony': {
-    models: ['α7 IV', 'α7R V', 'α1', 'α7R IV', 'α7 III', 'α7R III', 'α6600', 'α6400', 'ZV-E10'],
-    releaseYears: {
-      'α7 IV': 2021, 'α7R V': 2022, 'α1': 2021, 'α7R IV': 2019,
-      'α7 III': 2018, 'α7R III': 2017, 'α6600': 2019, 'α6400': 2019, 'ZV-E10': 2021
-    }
-  },
-  
-  // Nikon cameras
-  'Nikon': {
-    models: ['Z9', 'Z8', 'Z7 II', 'Z6 II', 'Z5', 'D850', 'D780', 'D500'],
-    releaseYears: {
-      'Z9': 2021, 'Z8': 2023, 'Z7 II': 2020, 'Z6 II': 2020,
-      'Z5': 2020, 'D850': 2017, 'D780': 2020, 'D500': 2016
+
   // Nikon cameras
   'Nikon': {
     models: [
-      // Z Mount Mirrorless
       'Z9', 'Z8', 'Z7 II', 'Z7', 'Z6 III', 'Z6 II', 'Z6', 'Z5', 'Z50', 'Z30', 'Zfc',
-      // FX Full Frame DSLRs (D series)
       'D850', 'D810', 'D800', 'D780', 'D750', 'D700', 'D610', 'D600',
-      // FX Pro DSLRs
       'D6', 'D5', 'D4S', 'D4', 'D3X', 'D3S', 'D3',
-      // DX APS-C DSLRs
       'D500', 'D7500', 'D7200', 'D7100', 'D7000', 'D5600', 'D5500', 'D5300', 'D5200', 'D5100',
       'D3500', 'D3400', 'D3300', 'D3200', 'D3100', 'D90', 'D80', 'D70', 'D60', 'D50', 'D40'
     ],
@@ -104,33 +78,47 @@ const KNOWN_CAMERAS = {
       'D850': 2017, 'D810': 2014, 'D800': 2012, 'D780': 2020, 'D750': 2014, 'D700': 2008, 'D610': 2013, 'D600': 2012,
       'D6': 2020, 'D5': 2016, 'D4S': 2014, 'D4': 2012, 'D3X': 2008, 'D3S': 2009, 'D3': 2007,
       'D500': 2016, 'D7500': 2017, 'D7200': 2015, 'D7100': 2013, 'D7000': 2010, 'D5600': 2016, 'D5500': 2015, 'D5300': 2013, 'D5200': 2012, 'D5100': 2011,
+      'D3500': 2018, 'D3400': 2016, 'D3300': 2014, 'D3200': 2012, 'D3100': 2010, 'D90': 2008, 'D80': 2006, 'D70': 2004, 'D60': 2008, 'D50': 2005, 'D40': 2006
+    }
+  },
+
   // Sony cameras
   'Sony': {
     models: [
-      // Alpha Full Frame Mirrorless
       'α7 IV', 'α7 III', 'α7 II', 'α7', 'α7R V', 'α7R IV', 'α7R III', 'α7R II', 'α7R',
       'α7S III', 'α7S II', 'α7S', 'α1', 'α9 II', 'α9',
-      // Alpha APS-C Mirrorless
+      'α6700', 'α6600', 'α6500', 'α6400', 'α6300', 'α6100', 'α6000', 'α5100',
+      'ZV-E1', 'ZV-E10', 'ZV-1', 'ZV-1F',
+      'α99 II', 'α77 II', 'α68', 'α58',
+      'RX100 VII', 'RX100 VI', 'RX100 V', 'RX100 IV', 'RX100 III', 'RX10 IV',
+      'ILCE-7M4', 'ILCE-7RM5', 'ILCE-7M3', 'ILCE-6400', 'ILCE-6000'
+    ],
+    releaseYears: {
+      'α7 IV': 2021, 'α7 III': 2018, 'α7 II': 2014, 'α7': 2013, 'α7R V': 2022, 'α7R IV': 2019, 'α7R III': 2017, 'α7R II': 2015, 'α7R': 2013,
+      'α7S III': 2020, 'α7S II': 2015, 'α7S': 2014, 'α1': 2021, 'α9 II': 2019, 'α9': 2017,
+      'α6700': 2023, 'α6600': 2019, 'α6500': 2016, 'α6400': 2019, 'α6300': 2016, 'α6100': 2019, 'α6000': 2014, 'α5100': 2014,
+      'ZV-E1': 2023, 'ZV-E10': 2021, 'ZV-1': 2020, 'ZV-1F': 2022,
+      'α99 II': 2016, 'α77 II': 2014, 'α68': 2016, 'α58': 2014,
+      'RX100 VII': 2019, 'RX100 VI': 2018, 'RX100 V': 2016, 'RX100 IV': 2015, 'RX100 III': 2014, 'RX10 IV': 2017,
+      'ILCE-7M4': 2021, 'ILCE-7RM5': 2022, 'ILCE-7M3': 2018, 'ILCE-6400': 2019, 'ILCE-6000': 2014
+    }
+  },
+
   // Samsung phones
   'Samsung': {
     models: [
-      // Galaxy S Series
       'Galaxy S24', 'Galaxy S24+', 'Galaxy S24 Ultra',
       'Galaxy S23', 'Galaxy S23+', 'Galaxy S23 Ultra', 'Galaxy S23 FE',
       'Galaxy S22', 'Galaxy S22+', 'Galaxy S22 Ultra',
       'Galaxy S21', 'Galaxy S21+', 'Galaxy S21 Ultra', 'Galaxy S21 FE',
       'Galaxy S20', 'Galaxy S20+', 'Galaxy S20 Ultra', 'Galaxy S20 FE',
-      'Galaxy S10', 'Galaxy S10+', 'Galaxy S10e', 'Galaxy S10 5G',
+      'Galaxy S10', 'Galaxy S10+', 'Galaxy S10e',
       'Galaxy S9', 'Galaxy S9+', 'Galaxy S8', 'Galaxy S8+', 'Galaxy S7', 'Galaxy S7 Edge',
-      // Galaxy Note Series
       'Galaxy Note 20', 'Galaxy Note 20 Ultra', 'Galaxy Note 10', 'Galaxy Note 10+',
-      'Galaxy Note 9', 'Galaxy Note 8', 'Galaxy Note 7',
-      // Galaxy A Series
+      'Galaxy Note 9', 'Galaxy Note 8',
       'Galaxy A54', 'Galaxy A53', 'Galaxy A52', 'Galaxy A51', 'Galaxy A50',
-      'Galaxy A34', 'Galaxy A33', 'Galaxy A32', 'Galaxy A14',
-      // Galaxy Z Fold/Flip
-      'Galaxy Z Fold 5', 'Galaxy Z Fold 4', 'Galaxy Z Fold 3', 'Galaxy Z Fold 2',
-      'Galaxy Z Flip 5', 'Galaxy Z Flip 4', 'Galaxy Z Flip 3', 'Galaxy Z Flip'
+      'Galaxy Z Fold 5', 'Galaxy Z Fold 4', 'Galaxy Z Fold 3',
+      'Galaxy Z Flip 5', 'Galaxy Z Flip 4', 'Galaxy Z Flip 3'
     ],
     releaseYears: {
       'Galaxy S24': 2024, 'Galaxy S24+': 2024, 'Galaxy S24 Ultra': 2024,
@@ -138,48 +126,101 @@ const KNOWN_CAMERAS = {
       'Galaxy S22': 2022, 'Galaxy S22+': 2022, 'Galaxy S22 Ultra': 2022,
       'Galaxy S21': 2021, 'Galaxy S21+': 2021, 'Galaxy S21 Ultra': 2021, 'Galaxy S21 FE': 2022,
       'Galaxy S20': 2020, 'Galaxy S20+': 2020, 'Galaxy S20 Ultra': 2020, 'Galaxy S20 FE': 2020,
-      'Galaxy S10': 2019, 'Galaxy S10+': 2019, 'Galaxy S10e': 2019, 'Galaxy S10 5G': 2019,
+      'Galaxy S10': 2019, 'Galaxy S10+': 2019, 'Galaxy S10e': 2019,
       'Galaxy S9': 2018, 'Galaxy S9+': 2018, 'Galaxy S8': 2017, 'Galaxy S8+': 2017, 'Galaxy S7': 2016, 'Galaxy S7 Edge': 2016,
       'Galaxy Note 20': 2020, 'Galaxy Note 20 Ultra': 2020, 'Galaxy Note 10': 2019, 'Galaxy Note 10+': 2019,
-      'Galaxy Note 9': 2018, 'Galaxy Note 8': 2017, 'Galaxy Note 7': 2016,
+      'Galaxy Note 9': 2018, 'Galaxy Note 8': 2017,
       'Galaxy A54': 2023, 'Galaxy A53': 2022, 'Galaxy A52': 2021, 'Galaxy A51': 2020, 'Galaxy A50': 2019,
-      'Galaxy A34': 2023, 'Galaxy A33': 2022, 'Galaxy A32': 2021, 'Galaxy A14': 2023,
-      'Galaxy Z Fold 5': 2023, 'Galaxy Z Fold 4': 2022, 'Galaxy Z Fold 3': 2021, 'Galaxy Z Fold 2': 2020,
-      'Galaxy Z Flip 5': 2023, 'Galaxy Z Flip 4': 2022, 'Galaxy Z Flip 3': 2021, 'Galaxy Z Flip': 2020
+      'Galaxy Z Fold 5': 2023, 'Galaxy Z Fold 4': 2022, 'Galaxy Z Fold 3': 2021,
+      'Galaxy Z Flip 5': 2023, 'Galaxy Z Flip 4': 2022, 'Galaxy Z Flip 3': 2021
     }
   },
-      'α7 IV': 2021, 'α7 III': 2018, 'α7 II': 2014, 'α7': 2013, 'α7R V': 2022, 'α7R IV': 2019, 'α7R III': 2017, 'α7R II': 2015, 'α7R': 2013,
-      'α7S III': 2020, 'α7S II': 2015, 'α7S': 2013, 'α1': 2021, 'α9 II': 2019, 'α9': 2017,
-      'α6700': 2023, 'α6600': 2019, 'α6500': 2016, 'α6400': 2019, 'α6300': 2016, 'α6100': 2019, 'α6000': 2014, 'α5100': 2014,
+
   // Google Pixel
   'Google': {
     models: [
-      'Pixel 9', 'Pixel 9 Pro', 'Pixel 9 Pro XL', 'Pixel 9 Pro Fold',
+      'Pixel 9', 'Pixel 9 Pro', 'Pixel 9 Pro XL',
       'Pixel 8', 'Pixel 8 Pro', 'Pixel 8a',
       'Pixel 7', 'Pixel 7 Pro', 'Pixel 7a',
       'Pixel 6', 'Pixel 6 Pro', 'Pixel 6a',
       'Pixel 5', 'Pixel 5a',
-      'Pixel 4', 'Pixel 4 XL', 'Pixel 4a', 'Pixel 4a 5G',
+      'Pixel 4', 'Pixel 4 XL', 'Pixel 4a',
       'Pixel 3', 'Pixel 3 XL', 'Pixel 3a', 'Pixel 3a XL',
       'Pixel 2', 'Pixel 2 XL',
-      'Pixel', 'Pixel XL',
-      'Pixel Fold'
+      'Pixel', 'Pixel XL'
     ],
     releaseYears: {
-      'Pixel 9': 2024, 'Pixel 9 Pro': 2024, 'Pixel 9 Pro XL': 2024, 'Pixel 9 Pro Fold': 2024,
+      'Pixel 9': 2024, 'Pixel 9 Pro': 2024, 'Pixel 9 Pro XL': 2024,
       'Pixel 8': 2023, 'Pixel 8 Pro': 2023, 'Pixel 8a': 2024,
       'Pixel 7': 2022, 'Pixel 7 Pro': 2022, 'Pixel 7a': 2023,
       'Pixel 6': 2021, 'Pixel 6 Pro': 2021, 'Pixel 6a': 2022,
       'Pixel 5': 2020, 'Pixel 5a': 2021,
-      'Pixel 4': 2019, 'Pixel 4 XL': 2019, 'Pixel 4a': 2020, 'Pixel 4a 5G': 2020,
+      'Pixel 4': 2019, 'Pixel 4 XL': 2019, 'Pixel 4a': 2020,
       'Pixel 3': 2018, 'Pixel 3 XL': 2018, 'Pixel 3a': 2019, 'Pixel 3a XL': 2019,
       'Pixel 2': 2017, 'Pixel 2 XL': 2017,
-      'Pixel': 2016, 'Pixel XL': 2016,
-      'Pixel Fold': 2023
+      'Pixel': 2016, 'Pixel XL': 2016
     }
-  }
-      'Pixel 8': 2023, 'Pixel 8 Pro': 2023, 'Pixel 7': 2022, 'Pixel 7 Pro': 2022,
-      'Pixel 6': 2021, 'Pixel 6 Pro': 2021, 'Pixel 5': 2020
+  },
+
+  // Fujifilm cameras
+  'FUJIFILM': {
+    models: [
+      'X-T5', 'X-T4', 'X-T3', 'X-T2', 'X-T30 II', 'X-T30', 'X-T20',
+      'X-H2', 'X-H2S', 'X-H1',
+      'X-Pro3', 'X-Pro2', 'X-E4', 'X-E3',
+      'X100V', 'X100F', 'X100T',
+      'GFX100S', 'GFX 50S II', 'GFX 50R'
+    ],
+    releaseYears: {
+      'X-T5': 2022, 'X-T4': 2020, 'X-T3': 2018, 'X-T2': 2016, 'X-T30 II': 2021, 'X-T30': 2019, 'X-T20': 2017,
+      'X-H2': 2022, 'X-H2S': 2022, 'X-H1': 2018,
+      'X-Pro3': 2019, 'X-Pro2': 2016, 'X-E4': 2021, 'X-E3': 2017,
+      'X100V': 2020, 'X100F': 2017, 'X100T': 2014,
+      'GFX100S': 2021, 'GFX 50S II': 2021, 'GFX 50R': 2018
+    }
+  },
+
+  // Panasonic cameras
+  'Panasonic': {
+    models: [
+      'LUMIX S5 II', 'LUMIX S5', 'LUMIX S1', 'LUMIX S1R', 'LUMIX S1H',
+      'LUMIX GH6', 'LUMIX GH5 II', 'LUMIX GH5', 'LUMIX G9',
+      'LUMIX G100', 'LUMIX GX9', 'LUMIX GX85'
+    ],
+    releaseYears: {
+      'LUMIX S5 II': 2023, 'LUMIX S5': 2020, 'LUMIX S1': 2019, 'LUMIX S1R': 2019, 'LUMIX S1H': 2019,
+      'LUMIX GH6': 2022, 'LUMIX GH5 II': 2021, 'LUMIX GH5': 2017, 'LUMIX G9': 2018,
+      'LUMIX G100': 2020, 'LUMIX GX9': 2018, 'LUMIX GX85': 2016
+    }
+  },
+
+  // DJI drones
+  'DJI': {
+    models: [
+      'Mavic 3 Pro', 'Mavic 3', 'Mavic Air 2S', 'Mavic Air 2', 'Mavic Mini',
+      'Mini 4 Pro', 'Mini 3 Pro', 'Mini 3', 'Mini 2',
+      'Phantom 4 Pro V2.0', 'Phantom 4 Pro', 'Phantom 4',
+      'Air 3', 'Air 2S'
+    ],
+    releaseYears: {
+      'Mavic 3 Pro': 2023, 'Mavic 3': 2021, 'Mavic Air 2S': 2021, 'Mavic Air 2': 2020, 'Mavic Mini': 2019,
+      'Mini 4 Pro': 2023, 'Mini 3 Pro': 2022, 'Mini 3': 2022, 'Mini 2': 2020,
+      'Phantom 4 Pro V2.0': 2018, 'Phantom 4 Pro': 2016, 'Phantom 4': 2016,
+      'Air 3': 2023, 'Air 2S': 2021
+    }
+  },
+
+  // GoPro cameras
+  'GoPro': {
+    models: [
+      'HERO12 Black', 'HERO11 Black', 'HERO10 Black', 'HERO9 Black', 'HERO8 Black',
+      'HERO7 Black', 'HERO6 Black', 'HERO5 Black', 'HERO5 Session',
+      'MAX'
+    ],
+    releaseYears: {
+      'HERO12 Black': 2023, 'HERO11 Black': 2022, 'HERO10 Black': 2021, 'HERO9 Black': 2020, 'HERO8 Black': 2019,
+      'HERO7 Black': 2018, 'HERO6 Black': 2017, 'HERO5 Black': 2016, 'HERO5 Session': 2016,
+      'MAX': 2019
     }
   }
 };
@@ -187,8 +228,8 @@ const KNOWN_CAMERAS = {
 function verifyCameraModel(exifData) {
   const result = {
     camera_found: false,
-    is_valid: null,  // Changed from true - unknown until proven
-    confidence: 0,   // Added confidence scoring
+    is_valid: null,
+    confidence: 0,
     warnings: [],
     details: {}
   };
@@ -283,6 +324,11 @@ function verifyCameraModel(exifData) {
   
   return result;
 }
+
+function extractYear(dateTime) {
+  if (!dateTime) return null;
+  
+  // Handle Unix timestamp
   if (typeof dateTime === 'number') {
     return new Date(dateTime * 1000).getFullYear();
   }
