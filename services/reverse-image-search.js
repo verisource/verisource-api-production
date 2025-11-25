@@ -118,9 +118,24 @@ class ReverseImageSearchService {
       const waybackStart = Date.now();
       try {
         // Collect URLs from TinEye results
-        const urlsToCheck = results.tineye.top_matches
+        // Collect and prioritize URLs from TinEye results
+        const allUrls = results.tineye.top_matches
           .flatMap(match => match.backlinks?.map(bl => bl.backlink) || [])
-          .filter(url => url)
+          .filter(url => url);
+        
+        // Deduplicate
+        const uniqueUrls = [...new Set(allUrls)];
+        
+        // Prioritize: news/blogs first, then others, social media last
+        const socialDomains = ['twitter.com', 'facebook.com', 'instagram.com', 'reddit.com'];
+        const urlsToCheck = uniqueUrls
+          .sort((a, b) => {
+            const aIsSocial = socialDomains.some(d => a.includes(d));
+            const bIsSocial = socialDomains.some(d => b.includes(d));
+            if (aIsSocial && !bIsSocial) return 1;
+            if (!aIsSocial && bIsSocial) return -1;
+            return 0;
+          })
           .slice(0, 2);
 
         if (urlsToCheck.length > 0) {
