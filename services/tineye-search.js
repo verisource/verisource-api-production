@@ -176,9 +176,26 @@ class TinEyeSearchService {
       other: 0
     };
 
-    const socialMediaDomains = ['twitter.com', 'facebook.com', 'instagram.com', 'reddit.com', 'tiktok.com', 'linkedin.com'];
-    const stockPhotoDomains = ['shutterstock.com', 'gettyimages.com', 'istockphoto.com', 'stock.adobe.com', 'depositphotos.com'];
-    const newsDomains = ['reuters.com', 'bbc.com', 'cnn.com', 'apnews.com', 'nytimes.com', 'theguardian.com'];
+    const socialMediaDomains = [
+      'twitter.com', 'x.com', 'facebook.com', 'instagram.com', 'reddit.com', 'tiktok.com', 'linkedin.com',
+      'pinterest.com', 'tumblr.com', 'snapchat.com', 'youtube.com', 'vimeo.com',
+      'threads.net', 'mastodon.social', 'bsky.app', 'discord.com', 'telegram.org',
+      'whatsapp.com', 'weibo.com', 'vk.com', 'flickr.com', 'imgur.com'
+    ];
+    const stockPhotoDomains = [
+      'shutterstock.com', 'gettyimages.com', 'istockphoto.com', 'stock.adobe.com', 'depositphotos.com',
+      'dreamstime.com', 'alamy.com', '123rf.com', 'bigstockphoto.com', 'canstockphoto.com',
+      'pond5.com', 'stocksy.com', 'eyeem.com', 'envato.com', 'elements.envato.com',
+      'unsplash.com', 'pexels.com', 'pixabay.com', 'freepik.com', 'vectorstock.com',
+      'fotosearch.com', 'superstock.com', 'agefotostock.com', 'masterfile.com'
+    ];
+    const newsDomains = [
+      'reuters.com', 'bbc.com', 'cnn.com', 'apnews.com', 'nytimes.com', 'theguardian.com',
+      'washingtonpost.com', 'nbcnews.com', 'cbsnews.com', 'abcnews.go.com', 'foxnews.com',
+      'usatoday.com', 'latimes.com', 'wsj.com', 'bloomberg.com', 'politico.com',
+      'npr.org', 'pbs.org', 'time.com', 'newsweek.com', 'theatlantic.com',
+      'forbes.com', 'businessinsider.com', 'huffpost.com', 'dailymail.co.uk', 'sky.com'
+    ];
 
     matches.forEach(match => {
       const domain = match.domain || this.extractDomain(match.page_url);
