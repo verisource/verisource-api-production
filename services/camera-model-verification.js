@@ -35,9 +35,7 @@ const KNOWN_CAMERAS = {
       'iPhone 5s': 2013, 'iPhone 5c': 2013, 'iPhone 5': 2012, 'iPhone 4S': 2011, 'iPhone 4': 2010
     }
   },
-  },
   
-  // Canon cameras
   // Canon cameras
   'Canon': {
     models: [
