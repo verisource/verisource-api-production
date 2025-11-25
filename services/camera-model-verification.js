@@ -187,7 +187,8 @@ const KNOWN_CAMERAS = {
 function verifyCameraModel(exifData) {
   const result = {
     camera_found: false,
-    is_valid: true,
+    is_valid: null,  // Changed from true - unknown until proven
+    confidence: 0,   // Added confidence scoring
     warnings: [],
     details: {}
   };
@@ -239,29 +240,49 @@ function verifyCameraModel(exifData) {
   result.details.recognized_model = knownModel;
   result.details.manufacturer = knownMake;
   
-  // Check release year vs capture date
-  const releaseYear = cameraData.releaseYears[knownModel];
-  if (releaseYear && dateTime) {
+  // Start with valid assumption if camera recognized
+  result.is_valid = true;
+  result.confidence = 100;
+  
+  // Check capture date validity
+  if (dateTime) {
     const captureYear = extractYear(dateTime);
+    const currentYear = new Date().getFullYear();
     
-    if (captureYear && captureYear < releaseYear) {
-      result.is_valid = false;
-      result.warnings.push(
-        `IMPOSSIBLE: Photo dated ${captureYear} but ${knownModel} was released in ${releaseYear}`
-      );
+    // Check for suspicious default dates
+    if (captureYear === 1970 || captureYear === 2000 || captureYear === 1980) {
+      result.warnings.push(`Suspicious date: ${captureYear} (likely default/unset EXIF date)`);
+      result.confidence = Math.max(0, result.confidence - 30);
     }
     
-    result.details.release_year = releaseYear;
-    result.details.capture_year = captureYear;
+    // Check for future dates (more than 2 days ahead)
+    const captureDateObj = typeof dateTime === 'number' ? new Date(dateTime * 1000) : new Date(dateTime);
+    const twoDaysFromNow = new Date();
+    twoDaysFromNow.setDate(twoDaysFromNow.getDate() + 2);
+    
+    if (captureDateObj > twoDaysFromNow) {
+      result.warnings.push(`SUSPICIOUS: Photo dated in the future (${captureDateObj.toISOString().split('T')[0]})`);
+      result.confidence = Math.max(0, result.confidence - 40);
+    }
+    
+    // Check release year vs capture date
+    const releaseYear = cameraData.releaseYears[knownModel];
+    if (releaseYear && captureYear) {
+      if (captureYear < releaseYear) {
+        result.is_valid = false;
+        result.confidence = 0;
+        result.warnings.push(
+          `IMPOSSIBLE: Photo dated ${captureYear} but ${knownModel} was released in ${releaseYear}`
+        );
+      }
+      
+      result.details.release_year = releaseYear;
+      result.details.capture_year = captureYear;
+    }
   }
   
   return result;
 }
-
-function extractYear(dateTime) {
-  if (!dateTime) return null;
-  
-  // Handle Unix timestamp
   if (typeof dateTime === 'number') {
     return new Date(dateTime * 1000).getFullYear();
   }
