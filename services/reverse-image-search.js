@@ -141,7 +141,6 @@ class ReverseImageSearchService {
       }
       results.performance.services_timing.wayback = Date.now() - waybackStart;
     }
-    }
 
     // Perform combined analysis
     if (includeAnalysis) {
