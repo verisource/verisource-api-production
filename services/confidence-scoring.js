@@ -33,7 +33,6 @@ function calculateConfidenceScore(verificationData) {
     score -= 5;
     messages.push('Camera warnings detected');
   }
-  }
 
   // ========================================
   // EXIF METADATA BONUS
