@@ -12,16 +12,27 @@ function calculateConfidenceScore(verificationData) {
   // Base scoring
   let score = 50;
   let messages = [];
-
   // ========================================
   // CAMERA VERIFICATION (HIGH WEIGHT)
   // ========================================
-  if (camera_verification?.camera_found) {
+  if (camera_verification?.camera_found && camera_verification?.confidence !== undefined) {
+    // Use the camera confidence score (0-100) to determine bonus
+    const cameraBonus = Math.round((camera_verification.confidence / 100) * 25);
+    score += cameraBonus;
+    messages.push(`Camera verified: ${camera_verification.details.model} (${camera_verification.confidence}% confidence)`);
+    
+    // Extra penalty if camera found but low confidence
+    if (camera_verification.confidence < 50) {
+      messages.push('Camera date/release validation issues detected');
+    }
+  } else if (camera_verification?.camera_found) {
+    // Fallback for old format without confidence
     score += 25;
     messages.push(`Camera verified: ${camera_verification.details.model}`);
-  } else if (camera_verification?.details?.warnings?.length > 0) {
+  } else if (camera_verification?.warnings?.length > 0) {
     score -= 5;
     messages.push('Camera warnings detected');
+  }
   }
 
   // ========================================
