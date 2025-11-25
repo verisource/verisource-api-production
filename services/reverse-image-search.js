@@ -121,7 +121,7 @@ class ReverseImageSearchService {
         const urlsToCheck = results.tineye.top_matches
           .flatMap(match => match.backlinks?.map(bl => bl.backlink) || [])
           .filter(url => url)
-          .slice(0, 5);
+          .slice(0, 2);
         
         if (urlsToCheck.length > 0) {
           results.wayback = await this.services.wayback.checkMultipleUrls(urlsToCheck);
