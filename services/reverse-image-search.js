@@ -122,17 +122,25 @@ class ReverseImageSearchService {
           .flatMap(match => match.backlinks?.map(bl => bl.backlink) || [])
           .filter(url => url)
           .slice(0, 2);
-        
+
         if (urlsToCheck.length > 0) {
-          results.wayback = await this.services.wayback.checkMultipleUrls(urlsToCheck);
+          // Hard timeout wrapper: fail fast if Wayback is slow
+          const waybackPromise = this.services.wayback.checkMultipleUrls(urlsToCheck);
+          const timeoutPromise = new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('Wayback timeout')), 5000)
+          );
+          
+          results.wayback = await Promise.race([waybackPromise, timeoutPromise]);
           results.wayback.service = "Internet Archive Wayback Machine";
         } else {
           results.wayback = { status: "no_urls", message: "No URLs to check" };
         }
       } catch (error) {
+        console.error('Wayback error:', error.message);
         results.wayback = { status: "error", error: error.message };
       }
       results.performance.services_timing.wayback = Date.now() - waybackStart;
+    }
     }
 
     // Perform combined analysis
