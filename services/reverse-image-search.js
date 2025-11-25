@@ -7,13 +7,15 @@
 const TinEyeService = require('./tineye-search');
 const BingVisualSearchService = require('./bing-visual-search');
 const GoogleReverseSearchService = require('./google-reverse-search');
+const WaybackMachineService = require('./wayback-machine');
 
 class ReverseImageSearchService {
   constructor() {
     this.services = {
       tineye: TinEyeService,  // Already an instance, no 'new'
       bing: BingVisualSearchService,  // Already an instance, no 'new'
-      google: new GoogleReverseSearchService()  // This one needs 'new'
+      google: new GoogleReverseSearchService(),  // This one needs 'new'
+      wayback: WaybackMachineService  // Already an instance
     };
   }
   
@@ -40,6 +42,7 @@ class ReverseImageSearchService {
       tineye: null,
       bing: null,
       google: null,
+      wayback: null,
       
       // Combined analysis
       combined_analysis: null,
@@ -109,6 +112,28 @@ class ReverseImageSearchService {
     await Promise.all(searchPromises);
 
     results.performance.total_time_ms = Date.now() - startTime;
+
+    // Check Wayback Machine for historical archives of found URLs
+    if (results.tineye?.status === "found" && results.tineye?.top_matches?.length > 0) {
+      const waybackStart = Date.now();
+      try {
+        // Collect URLs from TinEye results
+        const urlsToCheck = results.tineye.top_matches
+          .flatMap(match => match.backlinks?.map(bl => bl.backlink) || [])
+          .filter(url => url)
+          .slice(0, 5);
+        
+        if (urlsToCheck.length > 0) {
+          results.wayback = await this.services.wayback.checkMultipleUrls(urlsToCheck);
+          results.wayback.service = "Internet Archive Wayback Machine";
+        } else {
+          results.wayback = { status: "no_urls", message: "No URLs to check" };
+        }
+      } catch (error) {
+        results.wayback = { status: "error", error: error.message };
+      }
+      results.performance.services_timing.wayback = Date.now() - waybackStart;
+    }
 
     // Perform combined analysis
     if (includeAnalysis) {
