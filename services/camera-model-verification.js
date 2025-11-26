@@ -325,27 +325,6 @@ function validateResolution(recognizedModel, imageWidth, imageHeight) {
     result.indicators.push(`Full resolution image (${(imagePixels/1000000).toFixed(1)}MP)`);
   }
   
-
-  // Check resolution validity if dimensions provided
-  if (imageDimensions && imageDimensions.width && imageDimensions.height && result.camera_found) {
-    const resolutionCheck = validateResolution(
-      result.details.recognized_model,
-      imageDimensions.width,
-      imageDimensions.height
-    );
-    
-    result.resolution_validation = resolutionCheck;
-    
-    if (resolutionCheck.valid === false) {
-      result.is_valid = false;
-      result.confidence = 0;
-    } else if (resolutionCheck.confidence < 100) {
-      result.confidence = Math.min(result.confidence, resolutionCheck.confidence);
-    }
-    
-    result.warnings.push(...resolutionCheck.warnings);
-    result.details.resolution_indicators = resolutionCheck.indicators;
-  }
   return result;
 }
 function verifyCameraModel(exifData, imageDimensions = null) {
