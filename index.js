@@ -813,6 +813,33 @@ if (kind === 'image') {
           };
         }
       }
+
+      // Stock Photo Rescue Logic - reduce AI false positives
+      if (reverseSearchResults?.tineye?.is_stock_photo && aiDetection) {
+        const stockSites = reverseSearchResults.tineye.domain_breakdown?.stock_photo_sites || 0;
+        const totalMatches = reverseSearchResults.tineye.total_matches || 0;
+        
+        if (stockSites >= 3) {
+          const originalAI = aiDetection.ai_confidence;
+          // More stock sites = more confidence it's real
+          // 3 sites = -30%, 5+ sites = -40%, 10+ sites = -50%
+          let reduction = 30;
+          if (stockSites >= 10) reduction = 50;
+          else if (stockSites >= 5) reduction = 40;
+          
+          aiDetection.ai_confidence = Math.max(0, aiDetection.ai_confidence - reduction);
+          aiDetection.adjustments = aiDetection.adjustments || [];
+          aiDetection.adjustments.push(`Stock photo rescue: found on ${stockSites} stock sites (-${reduction}%)`);
+          
+          console.log(`📸 Stock photo rescue: ${stockSites} stock sites, AI confidence ${originalAI}% → ${aiDetection.ai_confidence}%`);
+          
+          // Update verdict if confidence dropped below threshold
+          if (aiDetection.ai_confidence < 50 && aiDetection.verdict === 'AI-GENERATED') {
+            aiDetection.verdict = 'UNCERTAIN';
+            aiDetection.adjustments.push('Verdict changed: AI-GENERATED → UNCERTAIN');
+          }
+        }
+      }
       // Analyze audio for AI detection
       let videoAnalysis = null;
       if (kind === 'video') {
