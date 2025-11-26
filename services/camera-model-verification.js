@@ -225,7 +225,130 @@ const KNOWN_CAMERAS = {
   }
 };
 
-function verifyCameraModel(exifData) {
+// Add max resolutions to cameras (max megapixels the sensor can produce)
+const CAMERA_MAX_RESOLUTIONS = {
+  // Canon
+  'EOS R5': { maxWidth: 8192, maxHeight: 5464, megapixels: 45 },
+  'EOS R6': { maxWidth: 5472, maxHeight: 3648, megapixels: 20 },
+  'EOS 5D Mark IV': { maxWidth: 6720, maxHeight: 4480, megapixels: 30 },
+  'EOS 5D Mark III': { maxWidth: 5760, maxHeight: 3840, megapixels: 22 },
+  'EOS 5D Mark II': { maxWidth: 5616, maxHeight: 3744, megapixels: 21 },
+  'EOS 40D': { maxWidth: 3888, maxHeight: 2592, megapixels: 10 },
+  'EOS 7D': { maxWidth: 5184, maxHeight: 3456, megapixels: 18 },
+  'EOS 90D': { maxWidth: 6960, maxHeight: 4640, megapixels: 32 },
+  
+  // Nikon
+  'D850': { maxWidth: 8256, maxHeight: 5504, megapixels: 45 },
+  'D750': { maxWidth: 6016, maxHeight: 4016, megapixels: 24 },
+  'D7500': { maxWidth: 5568, maxHeight: 3712, megapixels: 20 },
+  
+  // Sony
+  'α7R V': { maxWidth: 9504, maxHeight: 6336, megapixels: 60 },
+  'α7 IV': { maxWidth: 7008, maxHeight: 4672, megapixels: 33 },
+  'α7 III': { maxWidth: 6000, maxHeight: 4000, megapixels: 24 },
+  
+  // iPhones (48MP sensors on Pro models, but default to 12MP)
+  'iPhone 15 Pro': { maxWidth: 8064, maxHeight: 6048, megapixels: 48 },
+  'iPhone 15 Pro Max': { maxWidth: 8064, maxHeight: 6048, megapixels: 48 },
+  'iPhone 14 Pro': { maxWidth: 8064, maxHeight: 6048, megapixels: 48 },
+  'iPhone 13 Pro': { maxWidth: 4032, maxHeight: 3024, megapixels: 12 },
+  'iPhone 12 Pro': { maxWidth: 4032, maxHeight: 3024, megapixels: 12 },
+  'iPhone 11': { maxWidth: 4032, maxHeight: 3024, megapixels: 12 },
+  
+  // Samsung
+  'Galaxy S24 Ultra': { maxWidth: 9248, maxHeight: 6936, megapixels: 200 },
+  'Galaxy S23 Ultra': { maxWidth: 9248, maxHeight: 6936, megapixels: 200 },
+  
+  // Default for unknown models (generous limit)
+  '_default': { maxWidth: 12000, maxHeight: 9000, megapixels: 108 }
+};
+
+// Common aspect ratios
+const COMMON_ASPECT_RATIOS = [
+  { name: '4:3', ratio: 4/3 },
+  { name: '3:2', ratio: 3/2 },
+  { name: '16:9', ratio: 16/9 },
+  { name: '1:1', ratio: 1 },
+  { name: '3:4', ratio: 3/4 },
+  { name: '2:3', ratio: 2/3 },
+  { name: '9:16', ratio: 9/16 }
+];
+
+function validateResolution(recognizedModel, imageWidth, imageHeight) {
+  const result = {
+    valid: true,
+    confidence: 100,
+    warnings: [],
+    indicators: []
+  };
+  
+  if (!imageWidth || !imageHeight) {
+    result.valid = null;
+    result.confidence = 0;
+    result.warnings.push('No image dimensions available');
+    return result;
+  }
+  
+  const specs = CAMERA_MAX_RESOLUTIONS[recognizedModel] || CAMERA_MAX_RESOLUTIONS['_default'];
+  
+  // Check if resolution exceeds camera's physical limits
+  const imagePixels = imageWidth * imageHeight;
+  const maxPixels = specs.maxWidth * specs.maxHeight;
+  
+  // Allow 5% tolerance for slight variations
+  if (imagePixels > maxPixels * 1.05) {
+    result.valid = false;
+    result.confidence = 0;
+    result.warnings.push(
+      `IMPOSSIBLE: Image resolution ${imageWidth}x${imageHeight} (${(imagePixels/1000000).toFixed(1)}MP) exceeds ${recognizedModel} maximum (${specs.megapixels}MP)`
+    );
+    return result;
+  }
+  
+  // Check aspect ratio is reasonable
+  const imageRatio = Math.max(imageWidth, imageHeight) / Math.min(imageWidth, imageHeight);
+  const isCommonRatio = COMMON_ASPECT_RATIOS.some(ar => {
+    const targetRatio = Math.max(ar.ratio, 1/ar.ratio);
+    return Math.abs(imageRatio - targetRatio) < 0.1; // 10% tolerance
+  });
+  
+  if (!isCommonRatio && imageRatio > 3) {
+    // Very unusual aspect ratio (not panorama)
+    result.warnings.push(`Unusual aspect ratio: ${imageRatio.toFixed(2)}:1`);
+    result.confidence = Math.max(70, result.confidence - 15);
+  }
+  
+  // Downscaled images are fine - add positive indicator
+  if (imagePixels < maxPixels * 0.5) {
+    result.indicators.push(`Downscaled from original (${(imagePixels/1000000).toFixed(1)}MP of ${specs.megapixels}MP max)`);
+  } else if (imagePixels >= maxPixels * 0.9) {
+    result.indicators.push(`Full resolution image (${(imagePixels/1000000).toFixed(1)}MP)`);
+  }
+  
+
+  // Check resolution validity if dimensions provided
+  if (imageDimensions && imageDimensions.width && imageDimensions.height && result.camera_found) {
+    const resolutionCheck = validateResolution(
+      result.details.recognized_model,
+      imageDimensions.width,
+      imageDimensions.height
+    );
+    
+    result.resolution_validation = resolutionCheck;
+    
+    if (resolutionCheck.valid === false) {
+      result.is_valid = false;
+      result.confidence = 0;
+    } else if (resolutionCheck.confidence < 100) {
+      result.confidence = Math.min(result.confidence, resolutionCheck.confidence);
+    }
+    
+    result.warnings.push(...resolutionCheck.warnings);
+    result.details.resolution_indicators = resolutionCheck.indicators;
+  }
+  return result;
+}
+function verifyCameraModel(exifData, imageDimensions = null) {
   const result = {
     camera_found: false,
     is_valid: null,
@@ -322,6 +445,27 @@ function verifyCameraModel(exifData) {
     }
   }
   
+
+  // Check resolution validity if dimensions provided
+  if (imageDimensions && imageDimensions.width && imageDimensions.height && result.camera_found) {
+    const resolutionCheck = validateResolution(
+      result.details.recognized_model,
+      imageDimensions.width,
+      imageDimensions.height
+    );
+    
+    result.resolution_validation = resolutionCheck;
+    
+    if (resolutionCheck.valid === false) {
+      result.is_valid = false;
+      result.confidence = 0;
+    } else if (resolutionCheck.confidence < 100) {
+      result.confidence = Math.min(result.confidence, resolutionCheck.confidence);
+    }
+    
+    result.warnings.push(...resolutionCheck.warnings);
+    result.details.resolution_indicators = resolutionCheck.indicators;
+  }
   return result;
 }
 

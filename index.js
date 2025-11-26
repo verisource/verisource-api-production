@@ -702,7 +702,9 @@ if (kind === 'image') {
               }
 
               console.log(`\n📊 FINAL AI CONFIDENCE: ${aiDetection.ai_confidence}% (started at ${aiDetection.ai_confidence_raw || aiDetection.original_ai_confidence || 'unknown'}%)\n`);
-              cameraVerification = verifyCameraModel(exifData);
+              // Get image dimensions for resolution validation
+              const imgMeta = await sharp(req.file.path).metadata();
+              cameraVerification = verifyCameraModel(exifData, { width: imgMeta.width, height: imgMeta.height });
               if (cameraVerification.camera_found) {
                 console.log(`📷 Camera: ${cameraVerification.details.manufacturer} ${cameraVerification.details.recognized_model}`);
               }
