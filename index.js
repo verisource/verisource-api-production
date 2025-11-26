@@ -712,6 +712,29 @@ if (kind === 'image') {
                 console.log('⚠️ Camera warnings:', cameraVerification.warnings);
               }
               
+
+              // Camera EXIF Validation Rescue - reduce AI false positives for validated cameras
+              if (cameraVerification.camera_found && cameraVerification.is_valid && aiDetection) {
+                const camConf = cameraVerification.confidence || 0;
+                
+                if (camConf >= 80) {
+                  const originalAI = aiDetection.ai_confidence;
+                  // Camera confidence 100% = -25%, 80-99% = -15%
+                  const reduction = camConf === 100 ? 25 : 15;
+                  
+                  aiDetection.ai_confidence = Math.max(0, aiDetection.ai_confidence - reduction);
+                  aiDetection.adjustments = aiDetection.adjustments || [];
+                  aiDetection.adjustments.push(`Camera EXIF rescue: ${cameraVerification.details.recognized_model} validated (${camConf}% confidence, -${reduction}%)`);
+                  
+                  console.log(`📷 Camera EXIF rescue: ${cameraVerification.details.recognized_model} @ ${camConf}% confidence, AI ${originalAI}% → ${aiDetection.ai_confidence}%`);
+                  
+                  // Update verdict if confidence dropped below threshold
+                  if (aiDetection.ai_confidence < 50 && aiDetection.verdict === 'AI-GENERATED') {
+                    aiDetection.verdict = 'UNCERTAIN';
+                    aiDetection.adjustments.push('Verdict changed: AI-GENERATED → UNCERTAIN');
+                  }
+                }
+              }
               const gpsAndDate = LandmarkVerification.extractGPSAndDate(exifData);
               
               if (gpsAndDate.gps || gpsAndDate.date) {
