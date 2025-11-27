@@ -119,6 +119,17 @@ function scorePlatformMatch(platform, config, metadata) {
 }
 
 async function detectPlatform(filePath, metadata) {
+  // Check for Facebook metadata signature (definitive)
+  if ((metadata.iptcData && Buffer.from(metadata.iptcData).toString().includes("FBMD")) || 
+      metadata.exifData?.["Special Instructions"]?.includes("FBMD")) {
+    return {
+      detected: true,
+      platform: "facebook",
+      confidence: 95,
+      indicators: ["Facebook metadata signature (FBMD) detected"]
+    };
+  }
+
   const { hasExif } = metadata;
   
   if (hasExif) {

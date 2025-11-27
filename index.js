@@ -742,7 +742,9 @@ if (kind === 'image') {
                   width: imgMeta.width,
                   height: imgMeta.height,
                   jpegQuality: null,
-                  hasExif: !!(exifData?.Make || exifData?.Model || exifData?.DateTimeOriginal)
+                  hasExif: !!(exifData?.Make || exifData?.Model || exifData?.DateTimeOriginal),
+                  exifData: exifData,
+                  iptcData: imgMeta.iptc
                 });
                 
                 if (platformDetection.detected) {
