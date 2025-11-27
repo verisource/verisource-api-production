@@ -338,43 +338,52 @@ app.post('/verify', upload.single('file'), async (req, res) => {
     const crypto = require('crypto');
     const fingerprint = crypto.createHash('sha256').update(buf).digest('hex');
 
-   // NEW: Timestamp to blockchain
-let blockchainVerification = null;
-try {
-  console.log("�� Timestamping to Bitcoin blockchain...");
-  blockchainVerification = await BlockchainService.timestamp(fingerprint, req.file.originalname);
-  console.log(`✅ Blockchain: ${blockchainVerification.status}`);
-} catch (error) {
-  console.error("⚠️ Blockchain timestamping failed:", error.message);
-  blockchainVerification = { success: false, error: error.message };
-} 
+    // Search database FIRST for existing verifications
+    let searchResults = { found: false, is_first_verification: true };
+    try {
+      searchResults = await searchByFingerprint(fingerprint);
+      if (searchResults.found) {
+        console.log(`✅ Previously verified: ${searchResults.total_verifications} times`);
+      }
+    } catch (err) {
+      console.error('⚠️ Database search error:', err.message);
+    }
 
-// Polygon blockchain (instant confirmation)
-let polygonVerification = null;
-try {
-  console.log("🔷 Timestamping to Polygon blockchain...");
-  polygonVerification = await PolygonService.timestamp(fingerprint, req.file.originalname);
-  if (polygonVerification.success) {
-    console.log(`✅ Polygon: Block: ${polygonVerification.block_number}`);
-  }
-} catch (error) {
-  console.error("⚠️ Polygon timestamping failed:", error.message);
-  polygonVerification = { success: false, error: error.message };
-}
+    // Only timestamp if NEW (not previously verified)
+    let blockchainVerification = null;
+    let polygonVerification = null;
+    
+    if (!searchResults.found) {
+      try {
+        console.log("📦 Timestamping to Bitcoin blockchain...");
+        blockchainVerification = await BlockchainService.timestamp(fingerprint, req.file.originalname);
+        console.log(`✅ Blockchain: ${blockchainVerification.status}`);
+      } catch (error) {
+        console.error("⚠️ Blockchain timestamping failed:", error.message);
+        blockchainVerification = { success: false, error: error.message };
+      }
+      
+      try {
+        console.log("🔷 Timestamping to Polygon blockchain...");
+        polygonVerification = await PolygonService.timestamp(fingerprint, req.file.originalname);
+        if (polygonVerification.success) {
+          console.log(`✅ Polygon: Block: ${polygonVerification.block_number}`);
+        }
+      } catch (error) {
+        console.error("⚠️ Polygon timestamping failed:", error.message);
+        polygonVerification = { success: false, error: error.message };
+      }
+    } else {
+      console.log("⏭️ Skipping blockchain - already timestamped");
+      blockchainVerification = { success: true, status: 'previously_timestamped', skipped: true };
+      polygonVerification = { success: true, status: 'previously_timestamped', skipped: true };
+    }
+
     const dm = req.file.mimetype || mime.lookup(req.file.originalname) || 'application/octet-stream';
     const isImg = /^image\//i.test(dm) || /\.(png|jpe?g|gif|webp)$/i.test(req.file.originalname);
     const isVid = /^video\//i.test(dm) || /\.(mp4|mov|avi|mkv)$/i.test(req.file.originalname);
     const isAud = /^audio\//i.test(dm) || /\.(mp3|wav|m4a|flac)$/i.test(req.file.originalname);
     const kind = isImg ? 'image' : (isVid ? 'video' : (isAud ? 'audio' : 'unknown'));
-    
-    // Search database for existing verifications
-    let searchResults = { found: false, is_first_verification: true };
-    try {
-      searchResults = await searchByFingerprint(fingerprint);
-    } catch (err) {
-      console.error('⚠️ Database search error:', err.message);
-    }
-    
     // Generate Chromaprint for audio files
     let chromaprint = null;
     let audioDuration = null;
