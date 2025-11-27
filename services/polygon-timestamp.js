@@ -92,13 +92,13 @@ class PolygonTimestampService {
 
       return {
         success: true,
-        transaction_hash: receipt.hash,
+        transaction_hash: tx.hash || receipt.hash,
         block_number: receipt.blockNumber,
         timestamp: new Date(block.timestamp * 1000).toISOString(),
         gas_used: receipt.gasUsed.toString(),
         gas_cost_matic: maticCost,
         gas_cost_usd: costUSD,
-        explorer_url: `https://polygonscan.com/tx/${receipt.hash}`,
+        explorer_url: `https://polygonscan.com/tx/${tx.hash || receipt.hash}`,
         confirmations: 1,
         network: 'polygon'
       };
