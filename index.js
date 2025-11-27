@@ -375,8 +375,25 @@ app.post('/verify', upload.single('file'), async (req, res) => {
       }
     } else {
       console.log("⏭️ Skipping blockchain - already timestamped");
-      blockchainVerification = { success: true, status: 'previously_timestamped', skipped: true };
-      polygonVerification = { success: true, status: 'previously_timestamped', skipped: true };
+      // Return existing proof info
+      const proofPath = `blockchain-stamps/${fingerprint}.ots`;
+      const proofExists = require('fs').existsSync(proofPath);
+      blockchainVerification = { 
+        success: true, 
+        status: 'previously_timestamped', 
+        skipped: true,
+        hash: fingerprint,
+        proof_file: proofExists ? proofPath : null,
+        first_timestamped: searchResults.first_seen,
+        message: 'File was previously timestamped. Original proof preserved.'
+      };
+      polygonVerification = { 
+        success: true, 
+        status: 'previously_timestamped', 
+        skipped: true,
+        first_timestamped: searchResults.first_seen,
+        message: 'File was previously timestamped on Polygon.'
+      };
     }
 
     const dm = req.file.mimetype || mime.lookup(req.file.originalname) || 'application/octet-stream';
