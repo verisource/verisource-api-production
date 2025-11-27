@@ -375,7 +375,7 @@ app.post('/verify', upload.single('file'), async (req, res) => {
       }
     } else {
       console.log("⏭️ Skipping blockchain - already timestamped");
-      // Return existing proof info
+      // Return existing proof info from database
       const proofPath = `blockchain-stamps/${fingerprint}.ots`;
       const proofExists = require('fs').existsSync(proofPath);
       blockchainVerification = { 
@@ -385,12 +385,16 @@ app.post('/verify', upload.single('file'), async (req, res) => {
         hash: fingerprint,
         proof_file: proofExists ? proofPath : null,
         first_timestamped: searchResults.first_seen,
+        submitted_at: searchResults.bitcoin_submitted_at,
         message: 'File was previously timestamped. Original proof preserved.'
       };
       polygonVerification = { 
         success: true, 
         status: 'previously_timestamped', 
         skipped: true,
+        block_number: searchResults.polygon_block_number,
+        transaction_hash: searchResults.polygon_tx_hash,
+        timestamp: searchResults.polygon_timestamp,
         first_timestamped: searchResults.first_seen,
         message: 'File was previously timestamped on Polygon.'
       };
@@ -974,7 +978,12 @@ if (kind === 'image') {
         file_size: req.file.size,
         file_type: req.file.mimetype,
         media_kind: kind,
-        ip_address: ipAddress
+        ip_address: ipAddress,
+        polygon_block_number: polygonVerification?.block_number || null,
+        polygon_tx_hash: polygonVerification?.transaction_hash || null,
+        polygon_timestamp: polygonVerification?.timestamp || null,
+        bitcoin_proof_status: blockchainVerification?.status || null,
+        bitcoin_submitted_at: blockchainVerification?.submitted_at || null
       });
     } catch (err) {
       console.error('⚠️ Database save error:', err.message);
@@ -1168,6 +1177,18 @@ app.get('/admin/migrate-audio', async (req, res) => {
       WHERE audio_fingerprint IS NOT NULL
     `);
     console.log('✅ Index created');
+
+    // Add blockchain columns
+    console.log('🔨 Adding blockchain columns...');
+    await db.query(`
+      ALTER TABLE verifications 
+      ADD COLUMN IF NOT EXISTS polygon_block_number INTEGER,
+      ADD COLUMN IF NOT EXISTS polygon_tx_hash VARCHAR(66),
+      ADD COLUMN IF NOT EXISTS polygon_timestamp TIMESTAMP,
+      ADD COLUMN IF NOT EXISTS bitcoin_proof_status VARCHAR(20),
+      ADD COLUMN IF NOT EXISTS bitcoin_submitted_at TIMESTAMP
+    `);
+    console.log('✅ Blockchain columns added');
     
     res.json({ success: true, message: 'Migration complete!' });
   } catch (err) {
