@@ -21,6 +21,7 @@ const JPEGForensics = require('./services/jpeg-forensics');
 const BlockchainService = require('./services/opentimestamps-service');
 const PolygonService = require('./services/polygon-timestamp');
 const sightengineDetector = require('./services/sightengine-ai-detection');
+const PlatformDetection = require('./services/platform-signature-detection');
 // Import canonicalization only (workers not needed for minimal endpoint)
 let canonicalizeImage;
 try { 
@@ -326,6 +327,7 @@ app.post('/verify', upload.single('file'), async (req, res) => {
   let landmarkVerification = null;
   let exifData = null; 
   let cameraVerification = null;
+  let platformDetection = null;
   let shadowPhysicsResult = null;
   let audioAIDetection = null;
   let videoAnalysis = null;
@@ -735,6 +737,37 @@ if (kind === 'image') {
                   }
                 }
               }
+              try {
+                platformDetection = await PlatformDetection.detectPlatform(req.file.path, {
+                  width: imgMeta.width,
+                  height: imgMeta.height,
+                  jpegQuality: null,
+                  hasExif: !!(exifData?.Make || exifData?.Model || exifData?.DateTimeOriginal)
+                });
+                
+                if (platformDetection.detected) {
+                  console.log(`📱 Platform detected: ${platformDetection.platform} (${platformDetection.confidence}%)`);
+                  
+                  // Apply rescue if confidence >= 70
+                  if (platformDetection.confidence >= 70 && aiDetection) {
+                    const originalAI = aiDetection.ai_confidence;
+                    const reduction = platformDetection.confidence >= 85 ? 25 : 20;
+                    
+                    aiDetection.ai_confidence = Math.max(0, aiDetection.ai_confidence - reduction);
+                    aiDetection.adjustments = aiDetection.adjustments || [];
+                    aiDetection.adjustments.push(`Platform rescue: ${PlatformDetection.getPlatformDisplayName(platformDetection.platform)} signature (-${reduction}%)`);
+                    
+                    console.log(`📱 Platform rescue: AI ${originalAI}% → ${aiDetection.ai_confidence}%`);
+                    
+                    if (aiDetection.ai_confidence < 50 && aiDetection.verdict === 'AI-GENERATED') {
+                      aiDetection.verdict = 'UNCERTAIN';
+                      aiDetection.adjustments.push('Verdict changed: AI-GENERATED → UNCERTAIN');
+                    }
+                  }
+                }
+              } catch (err) {
+                console.error('⚠️ Platform detection error:', err.message);
+              }
               const gpsAndDate = LandmarkVerification.extractGPSAndDate(exifData);
               
               if (gpsAndDate.gps || gpsAndDate.date) {
@@ -1006,6 +1039,7 @@ if (kind === 'image') {
       ...(kind === 'image' && landmarkVerification && { landmark_verification: landmarkVerification }),
       ...(cameraVerification && { camera_verification: cameraVerification }),
       ...(shadowPhysicsResult && { shadow_physics: shadowPhysicsResult }),
+      ...(platformDetection && { platform_detection: platformDetection }),
       ...(deepfakeAnalysis && { deepfake_detection: deepfakeAnalysis }),
       ...(reverseSearchResults && { reverse_image_search: reverseSearchResults }),
       //...(stockPhotoResult && { stock_photo_detection: stockPhotoResult }),
