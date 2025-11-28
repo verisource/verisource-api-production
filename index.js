@@ -248,7 +248,7 @@ async function initializeDatabase() {
         file_size INTEGER,
         media_kind VARCHAR(20),
         ip_address VARCHAR(45),
-        phash VARCHAR(16),
+        phash VARCHAR(64),
         audio_fingerprint TEXT,
         upload_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
@@ -1188,6 +1188,7 @@ app.get('/admin/migrate-audio', async (req, res) => {
       ADD COLUMN IF NOT EXISTS bitcoin_submitted_at TIMESTAMP
     `);
     await db.query(`ALTER TABLE verifications ALTER COLUMN bitcoin_proof_status TYPE VARCHAR(50)`);
+    await db.query(`ALTER TABLE verifications ALTER COLUMN phash TYPE VARCHAR(64)`);
     console.log('✅ Blockchain columns added');
     
     res.json({ success: true, message: 'Migration complete!' });
