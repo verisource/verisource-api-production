@@ -50,7 +50,7 @@ async function calculateBlurScore(imagePath) {
  */
 async function filterBlurryFrames(framePaths, options = {}) {
   const minFrames = options.minFrames || 5;
-  const maxFrames = options.maxFrames || 30;
+  const maxFrames = options.maxFrames || 5;
   const percentile = options.percentile || 0.7; // Keep top 70%
   
   console.log(`🔍 Analyzing sharpness of ${framePaths.length} frames...`);
@@ -226,12 +226,12 @@ async function analyzeVideo(videoPath) {
     console.log('');
     const sharpFrames = await filterBlurryFrames(allFrames, {
       minFrames: 5,
-      maxFrames: 30,
+      maxFrames: 5,
       percentile: 0.7  // Keep top 70% sharpest
     });
     
     // Limit frames to analyze
-    const maxFramesToAnalyze = Math.min(30, sharpFrames.length);
+    const maxFramesToAnalyze = Math.min(5, sharpFrames.length);
     const framesToAnalyze = sharpFrames.slice(0, maxFramesToAnalyze);
     
     
