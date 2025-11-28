@@ -1,13 +1,13 @@
-/**
-// Speed up TensorFlow with Node.js backend (10-100x faster)
-require('@tensorflow/tfjs-node');
+// Speed up TensorFlow with Node.js backend
+require("@tensorflow/tfjs-node");
 
+/**
  * Deepfake Detection Module
  * Phase 1: Face-focused AI detection
  * Phase 2: Deepfake-specific artifact detection
  */
 
-const faceapi = require('face-api.js');
+const faceapi = require('@vladmandic/face-api');
 const canvas = require('canvas');
 const sharp = require('sharp');
 const path = require('path');

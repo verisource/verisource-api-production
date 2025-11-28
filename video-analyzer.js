@@ -214,7 +214,7 @@ async function analyzeVideo(videoPath) {
     // Get video metadata first
     
     // Extract frames at 1 fps
-    const allFrames = await extractFrames(videoPath, tempDir, 1);
+    const allFrames = await extractFrames(videoPath, tempDir, 0.2);
     
     if (allFrames.length === 0) {
       throw new Error('No frames extracted from video');
@@ -241,21 +241,24 @@ async function analyzeVideo(videoPath) {
     });
 
     
-    // Deepfake detection (face-focused analysis)
-    const deepfakeAnalysis = await analyzeForDeepfakes(framesToAnalyze, tempDir);
 
+    // Run deepfake detection and frame analysis IN PARALLEL
     console.log(`Analyzing ${framesToAnalyze.length} frames...`);
     
-    // Analyze each frame
-    const frameResults = [];
-    for (const framePath of framesToAnalyze) {
-      try {
-        const result = await detectAIGeneration(framePath);
-        frameResults.push(result);
-      } catch (err) {
-        console.error(`Failed to analyze frame ${path.basename(framePath)}:`, err.message);
-      }
-    }
+    const [deepfakeAnalysis, frameResults] = await Promise.all([
+      // Deepfake detection (face-focused analysis)
+      analyzeForDeepfakes(framesToAnalyze, tempDir),
+      
+      // Frame AI analysis (run all frames in parallel too)
+      Promise.all(framesToAnalyze.map(async (framePath) => {
+        try {
+          return await detectAIGeneration(framePath);
+        } catch (err) {
+          console.error(`Failed to analyze frame ${path.basename(framePath)}:`, err.message);
+          return null;
+        }
+      })).then(results => results.filter(r => r !== null))
+    ]);
     
     if (frameResults.length === 0) {
       throw new Error('Failed to analyze any frames');

@@ -33,6 +33,7 @@ try {
 
 // Import analysis and detection services
 const { analyzeVideo } = require('./video-analyzer');
+const { loadFaceModels } = require("./deepfake-detector");
 const { analyzeImage } = require('./google-vision-search');
 const { AudioAIDetection } = require('./services/audio-ai-detection');
 const { detectAIGeneration } = require('./services/ensemble-ai-detection');
@@ -307,10 +308,19 @@ app.get('/blockchain/verify/:hash', async (req, res) => {
   // Initialize database before starting server
   await initializeDatabase();
   
+  // Preload face detection models for faster video analysis
+  console.log("🎭 Preloading face detection models...");
+  try {
+    await loadFaceModels();
+    console.log("✅ Face detection models preloaded");
+  } catch (err) {
+    console.warn("⚠️ Face model preload failed:", err.message);
+  }
+
   // Start server
   app.listen(PORT, () => {
     console.log(`✅ VeriSource API running on port ${PORT}`);
-    console.log(`📊 Database status: ${dbReady ? 'READY' : 'NOT AVAILABLE'}`);
+    console.log(`📊 Database status: ${dbReady ? "READY" : "NOT AVAILABLE"}`);
   });
 })();
 
@@ -353,26 +363,32 @@ app.post('/verify', upload.single('file'), async (req, res) => {
     let blockchainVerification = null;
     let polygonVerification = null;
     
+    // Start blockchain submissions in parallel (dont await yet - will resolve before response)
+    let blockchainPromise = null;
+    let polygonPromise = null;
+    
     if (!searchResults.found) {
-      try {
-        console.log("📦 Timestamping to Bitcoin blockchain...");
-        blockchainVerification = await BlockchainService.timestamp(fingerprint, req.file.originalname);
-        console.log(`✅ Blockchain: ${blockchainVerification.status}`);
-      } catch (error) {
-        console.error("⚠️ Blockchain timestamping failed:", error.message);
-        blockchainVerification = { success: false, error: error.message };
-      }
+      console.log("📦 Timestamping to Bitcoin blockchain (async)...");
+      blockchainPromise = BlockchainService.timestamp(fingerprint, req.file.originalname)
+        .then(result => {
+          console.log(`✅ Blockchain: ${result.status}`);
+          return result;
+        })
+        .catch(error => {
+          console.error("⚠️ Blockchain timestamping failed:", error.message);
+          return { success: false, error: error.message };
+        });
       
-      try {
-        console.log("🔷 Timestamping to Polygon blockchain...");
-        polygonVerification = await PolygonService.timestamp(fingerprint, req.file.originalname);
-        if (polygonVerification.success) {
-          console.log(`✅ Polygon: Block: ${polygonVerification.block_number}`);
-        }
-      } catch (error) {
-        console.error("⚠️ Polygon timestamping failed:", error.message);
-        polygonVerification = { success: false, error: error.message };
-      }
+      console.log("🔷 Timestamping to Polygon blockchain (async)...");
+      polygonPromise = PolygonService.timestamp(fingerprint, req.file.originalname)
+        .then(result => {
+          if (result.success) console.log(`✅ Polygon: Block: ${result.block_number}`);
+          return result;
+        })
+        .catch(error => {
+          console.error("⚠️ Polygon timestamping failed:", error.message);
+          return { success: false, error: error.message };
+        });
     } else {
       console.log("⏭️ Skipping blockchain - already timestamped");
       // Return existing proof info from database
@@ -1037,6 +1053,14 @@ if (kind === 'image') {
 // DISABLED:       } catch (e) { console.error('⚠️ Camera validation error:', e.message); }
 // DISABLED:     }
 // DISABLED: 
+    // Await blockchain results before sending response
+    if (blockchainPromise) {
+      blockchainVerification = await blockchainPromise;
+    }
+    if (polygonPromise) {
+      polygonVerification = await polygonPromise;
+    }
+
     res.json({
       kind: kind,
       filename: req.file.originalname,
