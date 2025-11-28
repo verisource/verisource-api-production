@@ -6,7 +6,7 @@ function calculateConfidenceScore(verificationData) {
     reverse_search,
     blockchain,
     metadata,
-    mediaType = 'image'
+    kind, mediaType = kind || 'image'
   } = verificationData;
 
   // Base scoring
@@ -126,30 +126,71 @@ function calculateConfidenceScore(verificationData) {
     score += 5;
     messages.push('Blockchain verification pending');
   }
-
   // ========================================
   // VIDEO-SPECIFIC
   // ========================================
-  if (mediaType === 'video' && verificationData.mediaAnalysis?.analysis) {
-    const aiPct = verificationData.mediaAnalysis.analysis.aiPercentage || 0;
-    const hasFaces = verificationData.mediaAnalysis.frames?.some(f => 
-      f.aiDetection?.indicators?.some(i => i.toLowerCase().includes('face'))
-    );
+  if (mediaType === "video" && verificationData.video_analysis?.analysis) {
+    const analysis = verificationData.video_analysis.analysis;
+    const aiPct = analysis.aiPercentage || 0;
+    const verdict = analysis.verdict;
+    const deepfake = analysis.deepfakeDetection;
     
-    if (hasFaces && aiPct > 40) {
+    // Deepfake detected
+    if (deepfake?.detected) {
       return {
-        name: 'LOW',
-        label: 'DEEPFAKE INDICATORS DETECTED',
-        percentage: Math.max(score - 30, 20),
-        level: 'LOW',
-        color: '#DC2626',
-        icon: 'alert-triangle',
+        name: "LOW",
+        label: "DEEPFAKE DETECTED",
+        percentage: Math.max(20, 100 - deepfake.confidence),
+        level: "LOW",
+        color: "#DC2626",
+        icon: "alert-triangle",
+        iconSvg: "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"#DC2626\" stroke-width=\"2\"><path d=\"M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z\"/><line x1=\"12\" y1=\"9\" x2=\"12\" y2=\"13\"/><line x1=\"12\" y1=\"17\" x2=\"12.01\" y2=\"17\"/></svg>",
+        message: `Deepfake detected with ${deepfake.confidence}% confidence`
+      };
+    }
+
+    // High AI percentage
+    if (verdict === "LIKELY_AI_GENERATED" || aiPct >= 80) {
+      return {
+        name: "LOW",
+        label: "LIKELY AI-GENERATED VIDEO",
+        percentage: Math.max(20, 100 - aiPct),
+        level: "LOW",
+        color: "#DC2626",
+        icon: "alert-triangle",
         iconSvg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#DC2626" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>',
-        message: `Video contains ${aiPct}% AI-manipulated frames with face alterations`
+        message: `${aiPct}% of frames show AI-generation patterns`
+      };
+    }
+    
+    // Suspicious
+    if (verdict === "SUSPICIOUS" || aiPct >= 40) {
+      return {
+        name: "MEDIUM",
+        label: "SUSPICIOUS VIDEO",
+        percentage: Math.max(35, 100 - aiPct),
+        level: "MEDIUM",
+        color: "#F59E0B",
+        icon: "alert-circle",
+        iconSvg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#F59E0B" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>',
+        message: `${aiPct}% of frames show suspicious patterns`
+      };
+    }
+    
+    // Authentic video
+    if (verdict === "AUTHENTIC" || aiPct < 20) {
+      return {
+        name: "HIGH",
+        label: "LIKELY AUTHENTIC VIDEO",
+        percentage: Math.min(85, 100 - aiPct),
+        level: "HIGH",
+        color: "#10B981",
+        icon: "check-circle",
+        iconSvg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#10B981" stroke-width="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>',
+        message: "Video appears authentic"
       };
     }
   }
-
   // ========================================
   // FINAL CLASSIFICATION
   // ========================================
