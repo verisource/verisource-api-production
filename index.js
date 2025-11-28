@@ -1177,7 +1177,6 @@ app.get('/admin/migrate-audio', async (req, res) => {
       WHERE audio_fingerprint IS NOT NULL
     `);
     console.log('✅ Index created');
-
     // Add blockchain columns
     console.log('🔨 Adding blockchain columns...');
     await db.query(`
@@ -1185,9 +1184,10 @@ app.get('/admin/migrate-audio', async (req, res) => {
       ADD COLUMN IF NOT EXISTS polygon_block_number INTEGER,
       ADD COLUMN IF NOT EXISTS polygon_tx_hash VARCHAR(66),
       ADD COLUMN IF NOT EXISTS polygon_timestamp TIMESTAMP,
-      ADD COLUMN IF NOT EXISTS bitcoin_proof_status VARCHAR(20),
+      ADD COLUMN IF NOT EXISTS bitcoin_proof_status VARCHAR(50),
       ADD COLUMN IF NOT EXISTS bitcoin_submitted_at TIMESTAMP
     `);
+    await db.query(`ALTER TABLE verifications ALTER COLUMN bitcoin_proof_status TYPE VARCHAR(50)`);
     console.log('✅ Blockchain columns added');
     
     res.json({ success: true, message: 'Migration complete!' });
