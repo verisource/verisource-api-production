@@ -52,6 +52,7 @@ const SensorNoiseAnalysis = require('./services/sensor-noise-analysis');
 const LivePhotoValidator = require('./services/live-photo-validator');
 const CompressionSignature = require('./services/compression-signature-detector');
 const app = express();
+const { detectScreenshot, getScreenshotVerdictAdjustment } = require('./screenshot-detection');
 
 // View engine for batch dashboard
 app.set('view engine', 'ejs');
@@ -752,6 +753,29 @@ if (kind === 'image') {
               console.log(`\n📊 FINAL AI CONFIDENCE: ${aiDetection.ai_confidence}% (started at ${aiDetection.ai_confidence_raw || aiDetection.original_ai_confidence || 'unknown'}%)\n`);
               // Get image dimensions for resolution validation
               const imgMeta = await sharp(req.file.path).metadata();
+              // Screenshot Detection
+              let screenshotDetection = null;
+              if (kind === 'image') {
+                try {
+                  console.log('📱 Checking for screenshot...');
+                  screenshotDetection = detectScreenshot({
+                    width: imgMeta.width,
+                    height: imgMeta.height,
+                    format: imgMeta.format,
+                    exif: exifData,
+                    colorProfile: imgMeta.icc ? 'sRGB' : null,  // Simplified - sharp gives ICC profile
+                    noiseLevel: null,  // Will be populated by SensorNoiseAnalysis later
+                    filename: req.file.originalname
+                  });
+    
+                  if (screenshotDetection.is_screenshot) {
+                   console.log(`📱 Screenshot detected: ${screenshotDetection.detected_device || 'Unknown device'} (${screenshotDetection.confidence}%)`);
+                   console.log(`   Indicators: ${screenshotDetection.indicators.slice(0, 2).join(', ')}`);
+                  }
+                } catch (err) {
+                  console.error('⚠️ Screenshot detection error:', err.message);
+                }
+              }
               cameraVerification = verifyCameraModel(exifData, { width: imgMeta.width, height: imgMeta.height });
               if (cameraVerification.camera_found) {
                 console.log(`📷 Camera: ${cameraVerification.details.manufacturer} ${cameraVerification.details.recognized_model}`);
@@ -816,6 +840,27 @@ if (kind === 'image') {
               } catch (err) {
                 console.error('⚠️ Platform detection error:', err.message);
               }
+
+              if (screenshotDetection?.is_screenshot && aiDetection && !aiDetection.error) {
+                const adjustment = getScreenshotVerdictAdjustment(screenshotDetection);
+                
+                // Mark AI detection as having screenshot caveat
+                aiDetection.screenshot_caveat = true;
+                aiDetection.screenshot_severity = adjustment.severity;
+                aiDetection.adjustments = aiDetection.adjustments || [];
+                aiDetection.adjustments.push(
+                  `Screenshot detected (${screenshotDetection.confidence}% confidence, ${adjustment.severity} severity): ` +
+                  `AI detection analyzes the screenshot, not original content`
+                );
+                
+                // Add warning to AI detection
+                aiDetection.warnings = aiDetection.warnings || [];
+                if (adjustment.add_warning) {
+                  aiDetection.warnings.push(adjustment.add_warning);
+                }
+                
+                console.log(`📱 Screenshot caveat added (severity: ${adjustment.severity})`);
+              }
               const gpsAndDate = LandmarkVerification.extractGPSAndDate(exifData);
               
               if (gpsAndDate.gps || gpsAndDate.date) {
@@ -838,7 +883,7 @@ if (kind === 'image') {
                     googleVisionResult.results.landmarks,
                     gpsAndDate.gps
                   );
-                  console.log(`✅ Landmark verification: ${landmarkVerification.landmarks_detected} landmarks detected`);
+                  console.log(`const imgMeta✅ Landmark verification: ${landmarkVerification.landmarks_detected} landmarks detected`);
                 }
                 
                 // Shadow physics verification
@@ -1072,7 +1117,8 @@ if (kind === 'image') {
       },
       blockchain_verification: blockchainVerification,  
       polygon_verification: polygonVerification,
-  ai_detection: aiDetection,
+      ai_detection: aiDetection,
+      ...(screenshotDetection && { screenshot_detection: screenshotDetection }),
       verification: {
         status: searchResults.found ? 'PREVIOUSLY_VERIFIED' : 'NEW_UPLOAD',
         is_first: searchResults.is_first_verification,
