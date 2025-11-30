@@ -1118,7 +1118,7 @@ if (kind === 'image') {
       blockchain_verification: blockchainVerification,  
       polygon_verification: polygonVerification,
       ai_detection: aiDetection,
-      ...(screenshotDetection && { screenshot_detection: screenshotDetection }),
+      // ...(screenshotDetection && { screenshot_detection: screenshotDetection }),
       verification: {
         status: searchResults.found ? 'PREVIOUSLY_VERIFIED' : 'NEW_UPLOAD',
         is_first: searchResults.is_first_verification,
