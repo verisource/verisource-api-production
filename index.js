@@ -883,7 +883,7 @@ if (kind === 'image') {
                     googleVisionResult.results.landmarks,
                     gpsAndDate.gps
                   );
-                  console.log(`const imgMeta✅ Landmark verification: ${landmarkVerification.landmarks_detected} landmarks detected`);
+                  console.log(`✅ Landmark verification: ${landmarkVerification.landmarks_detected} landmarks detected`);
                 }
                 
                 // Shadow physics verification
