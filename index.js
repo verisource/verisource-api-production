@@ -343,6 +343,7 @@ app.post('/verify', upload.single('file'), async (req, res) => {
   let audioAIDetection = null;
   let videoAnalysis = null;
   let deepfakeAnalysis = null;
+  let screenshotDetection = null;
 
   try {
     const buf = fs.readFileSync(req.file.path);
@@ -754,7 +755,7 @@ if (kind === 'image') {
               // Get image dimensions for resolution validation
               const imgMeta = await sharp(req.file.path).metadata();
               // Screenshot Detection
-              let screenshotDetection = null;
+              
               if (kind === 'image') {
                 try {
                   console.log('📱 Checking for screenshot...');
@@ -1118,7 +1119,7 @@ if (kind === 'image') {
       blockchain_verification: blockchainVerification,  
       polygon_verification: polygonVerification,
       ai_detection: aiDetection,
-      // ...(screenshotDetection && { screenshot_detection: screenshotDetection }),
+      ...(screenshotDetection && { screenshot_detection: screenshotDetection }),
       verification: {
         status: searchResults.found ? 'PREVIOUSLY_VERIFIED' : 'NEW_UPLOAD',
         is_first: searchResults.is_first_verification,
