@@ -51,8 +51,9 @@ const HEICDetection = require('./services/heic-detection');
 const SensorNoiseAnalysis = require('./services/sensor-noise-analysis');
 const LivePhotoValidator = require('./services/live-photo-validator');
 const CompressionSignature = require('./services/compression-signature-detector');
-const app = express();
 const { detectScreenshot, getScreenshotVerdictAdjustment } = require('./screenshot-detection');
+
+const app = express();
 
 // View engine for batch dashboard
 app.set('view engine', 'ejs');
@@ -226,6 +227,8 @@ const PORT = process.env.PORT || 3000;
 
 
 // --- Database initialization ---
+let dbReady = false;
+
 async function initializeDatabase() {
   if (!db) {
     console.log('⚠️ Database not configured - skipping initialization');
@@ -754,29 +757,6 @@ if (kind === 'image') {
               console.log(`\n📊 FINAL AI CONFIDENCE: ${aiDetection.ai_confidence}% (started at ${aiDetection.ai_confidence_raw || aiDetection.original_ai_confidence || 'unknown'}%)\n`);
               // Get image dimensions for resolution validation
               const imgMeta = await sharp(req.file.path).metadata();
-              // Screenshot Detection
-              
-              if (kind === 'image') {
-                try {
-                  console.log('📱 Checking for screenshot...');
-                  screenshotDetection = detectScreenshot({
-                    width: imgMeta.width,
-                    height: imgMeta.height,
-                    format: imgMeta.format,
-                    exif: exifData,
-                    colorProfile: imgMeta.icc ? 'sRGB' : null,  // Simplified - sharp gives ICC profile
-                    noiseLevel: null,  // Will be populated by SensorNoiseAnalysis later
-                    filename: req.file.originalname
-                  });
-    
-                  if (screenshotDetection.is_screenshot) {
-                   console.log(`📱 Screenshot detected: ${screenshotDetection.detected_device || 'Unknown device'} (${screenshotDetection.confidence}%)`);
-                   console.log(`   Indicators: ${screenshotDetection.indicators.slice(0, 2).join(', ')}`);
-                  }
-                } catch (err) {
-                  console.error('⚠️ Screenshot detection error:', err.message);
-                }
-              }
               cameraVerification = verifyCameraModel(exifData, { width: imgMeta.width, height: imgMeta.height });
               if (cameraVerification.camera_found) {
                 console.log(`📷 Camera: ${cameraVerification.details.manufacturer} ${cameraVerification.details.recognized_model}`);
@@ -842,26 +822,6 @@ if (kind === 'image') {
                 console.error('⚠️ Platform detection error:', err.message);
               }
 
-              if (screenshotDetection?.is_screenshot && aiDetection && !aiDetection.error) {
-                const adjustment = getScreenshotVerdictAdjustment(screenshotDetection);
-                
-                // Mark AI detection as having screenshot caveat
-                aiDetection.screenshot_caveat = true;
-                aiDetection.screenshot_severity = adjustment.severity;
-                aiDetection.adjustments = aiDetection.adjustments || [];
-                aiDetection.adjustments.push(
-                  `Screenshot detected (${screenshotDetection.confidence}% confidence, ${adjustment.severity} severity): ` +
-                  `AI detection analyzes the screenshot, not original content`
-                );
-                
-                // Add warning to AI detection
-                aiDetection.warnings = aiDetection.warnings || [];
-                if (adjustment.add_warning) {
-                  aiDetection.warnings.push(adjustment.add_warning);
-                }
-                
-                console.log(`📱 Screenshot caveat added (severity: ${adjustment.severity})`);
-              }
               const gpsAndDate = LandmarkVerification.extractGPSAndDate(exifData);
               
               if (gpsAndDate.gps || gpsAndDate.date) {
@@ -991,7 +951,7 @@ if (kind === 'image') {
         }
       }
       // Analyze audio for AI detection
-      let videoAnalysis = null;
+      videoAnalysis = null;
       if (kind === 'video') {
         try {
           console.log('🎥 Analyzing video frames...');
@@ -1050,55 +1010,56 @@ if (kind === 'image') {
     } catch (err) {
       console.error('⚠️ Database save error:', err.message);
     }
-    
-// DISABLED:     // Camera Validation - Temporal, Resolution, Features
-// DISABLED:     if (cameraVerification?.camera_found && cameraVerification.details?.model && cameraVerification.details.model !== 'Unknown') {
-// DISABLED:       try {
-// DISABLED:         console.log('🔍 Running camera validation...');
-// DISABLED:         const imgMeta = await sharp(req.file.path).metadata();
-// DISABLED:         const validation = CameraValidation.validateCamera(
-// DISABLED:           cameraVerification.details,
-// DISABLED:           { date: cameraVerification.details.capture_date, width: imgMeta.width, height: imgMeta.height, claimed_features: [] }
-// DISABLED:         );
-// DISABLED:         cameraVerification.validation = validation;
-// DISABLED:         console.log(`✅ Validation: ${validation.valid ? 'PASSED' : 'FAILED'} (${validation.confidence}%)`);
-// DISABLED:         if (!validation.valid) console.log('   Warnings:', validation.all_warnings);
-// DISABLED:       } catch (e) { console.error('⚠️ Camera validation error:', e.message); }
-// DISABLED:     }
-// DISABLED: 
-// DISABLED:     // Camera Validation - Temporal, Resolution, Features
-// DISABLED:     if (cameraVerification?.camera_found && cameraVerification.details?.model && cameraVerification.details.model !== 'Unknown') {
-// DISABLED:       try {
-// DISABLED:         console.log('🔍 Running camera validation...');
-// DISABLED:         const imgMeta = await sharp(req.file.path).metadata();
-// DISABLED:         const validation = CameraValidation.validateCamera(
-// DISABLED:           cameraVerification.details,
-// DISABLED:           { date: cameraVerification.details.capture_date, width: imgMeta.width, height: imgMeta.height, claimed_features: [] }
-// DISABLED:         );
-// DISABLED:         cameraVerification.validation = validation;
-// DISABLED:           
-// DISABLED:           // Adjust AI confidence based on validation results
-// DISABLED:           if (validation.valid && validation.confidence >= 80 && aiDetection) {
-// DISABLED:             const adjustment = Math.round(validation.confidence / 3); // 80-100 confidence = 27-33 point reduction
-// DISABLED:             const originalAI = aiDetection.ai_confidence;
-// DISABLED:             aiDetection.ai_confidence = Math.max(0, aiDetection.ai_confidence - adjustment);
-// DISABLED:             console.log(`   📊 AI confidence adjusted for validation: ${originalAI}% → ${aiDetection.ai_confidence}% (-${adjustment})`);
-// DISABLED:             aiDetection.adjustments.push(`Camera validation passed: -${adjustment}% confidence`);
-// DISABLED:           }
-// DISABLED:           
-// DISABLED:           // Adjust AI confidence based on validation results
-// DISABLED:           if (validation.valid && validation.confidence >= 80 && aiDetection) {
-// DISABLED:             const adjustment = Math.round(validation.confidence / 3); // 80-100 confidence = 27-33 point reduction
-// DISABLED:             const originalAI = aiDetection.ai_confidence;
-// DISABLED:             aiDetection.ai_confidence = Math.max(0, aiDetection.ai_confidence - adjustment);
-// DISABLED:             console.log(`   📊 AI confidence adjusted for validation: ${originalAI}% → ${aiDetection.ai_confidence}% (-${adjustment})`);
-// DISABLED:             aiDetection.adjustments.push(`Camera validation passed: -${adjustment}% confidence`);
-// DISABLED:           }
-// DISABLED:         console.log(`✅ Validation: ${validation.valid ? 'PASSED' : 'FAILED'} (${validation.confidence}%)`);
-// DISABLED:         if (!validation.valid) console.log('   Warnings:', validation.all_warnings);
-// DISABLED:       } catch (e) { console.error('⚠️ Camera validation error:', e.message); }
-// DISABLED:     }
-// DISABLED: 
+
+    // ============================================================================
+    // SCREENSHOT DETECTION - Runs for ALL images (moved outside EXIF block)
+    // ============================================================================
+    if (kind === 'image' && !screenshotDetection) {
+      try {
+        console.log('📱 Checking for screenshot...');
+        const imgMeta = await sharp(req.file.path).metadata();
+        screenshotDetection = detectScreenshot({
+          width: imgMeta.width,
+          height: imgMeta.height,
+          format: imgMeta.format,
+          exif: exifData,
+          colorProfile: imgMeta.icc ? 'sRGB' : null,
+          noiseLevel: null,
+          filename: req.file.originalname
+        });
+
+        if (screenshotDetection.is_screenshot) {
+          console.log(`📱 Screenshot detected: ${screenshotDetection.detected_device || 'Unknown device'} (${screenshotDetection.confidence}%)`);
+          console.log(`   Indicators: ${screenshotDetection.indicators.slice(0, 2).join(', ')}`);
+          
+          // Add screenshot caveat to AI detection
+          if (aiDetection && !aiDetection.error) {
+            const adjustment = getScreenshotVerdictAdjustment(screenshotDetection);
+            
+            aiDetection.screenshot_caveat = true;
+            aiDetection.screenshot_severity = adjustment.severity;
+            aiDetection.adjustments = aiDetection.adjustments || [];
+            aiDetection.adjustments.push(
+              `Screenshot detected (${screenshotDetection.confidence}% confidence, ${adjustment.severity} severity): ` +
+              `AI detection analyzes the screenshot, not original content`
+            );
+            
+            aiDetection.warnings = aiDetection.warnings || [];
+            if (adjustment.add_warning) {
+              aiDetection.warnings.push(adjustment.add_warning);
+            }
+            
+            console.log(`📱 Screenshot caveat added (severity: ${adjustment.severity})`);
+          }
+        } else {
+          console.log('📱 Not a screenshot');
+        }
+      } catch (err) {
+        console.error('⚠️ Screenshot detection error:', err.message);
+      }
+    }
+    // ============================================================================
+
     // Await blockchain results before sending response
     if (blockchainPromise) {
       blockchainVerification = await blockchainPromise;
@@ -1269,4 +1230,3 @@ app.get('/admin/migrate-audio', async (req, res) => {
   }
 });
 // Force redeploy to pick up new API key
-
