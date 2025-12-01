@@ -614,6 +614,204 @@ if (kind === 'image') {
   }
 }
 
+  // Calculate camera authenticity score based on multiple signals
+function calculateCameraAuthenticityScore(data) {
+  let score = 0;
+  const indicators = [];
+  
+  // 1. Valid camera EXIF with recognized manufacturer
+  if (data.cameraVerification?.camera_found || data.cameraVerification?.details?.make) {
+    const make = (data.cameraVerification?.details?.make || '').toUpperCase();
+    const knownManufacturers = ['SONY', 'CANON', 'NIKON', 'FUJIFILM', 'PANASONIC', 'OLYMPUS', 'LEICA', 'APPLE', 'SAMSUNG', 'GOOGLE'];
+    
+    if (knownManufacturers.some(m => make.includes(m))) {
+      score += 25;
+      indicators.push(`Known camera manufacturer: ${make}`);
+    }
+    
+    // Professional camera models get extra trust
+    const model = (data.cameraVerification?.details?.model || '').toUpperCase();
+    const proCameras = ['ILCE-1', 'ILCE-7', 'EOS R', 'EOS 5D', 'EOS 1D', 'D850', 'D6', 'Z9', 'GFX', 'X-T', 'X-H'];
+    if (proCameras.some(p => model.includes(p))) {
+      score += 15;
+      indicators.push(`Professional camera model: ${model}`);
+    }
+  }
+  
+  // 2. Sensor noise analysis shows camera-like patterns
+  if (data.sensorNoiseAnalyzed && data.sensorNoiseConfidence > 0) {
+    // High spatial correlation = real camera sensor
+    if (data.noiseIndicators?.some(i => i.toLowerCase().includes('sensor pattern') || i.toLowerCase().includes('camera'))) {
+      score += 20;
+      indicators.push(`Sensor noise matches camera pattern (${data.sensorNoiseConfidence}%)`);
+    }
+    
+    // Low AI anomalies in noise
+    if (data.aiNoiseAnomalies !== undefined && data.aiNoiseAnomalies < 20) {
+      score += 10;
+      indicators.push(`Low AI noise anomalies: ${data.aiNoiseAnomalies}%`);
+    }
+  }
+  
+  // 3. Compression signature matches known manufacturer
+  if (data.compressionAnalyzed && data.manufacturerSignature) {
+    const sig = data.manufacturerSignature.toLowerCase();
+    const make = (data.cameraVerification?.details?.make || '').toLowerCase();
+    
+    // Signature matches camera make
+    if (make && sig.includes(make.split(' ')[0])) {
+      score += 20;
+      indicators.push(`Compression signature matches camera: ${sig}`);
+    } else if (sig !== 'generic' && sig !== 'unknown') {
+      score += 10;
+      indicators.push(`Known manufacturer compression: ${sig}`);
+    }
+  }
+  
+  // 4. Found on credible news/stock sources (Google Vision)
+  if (data.googleVision?.results?.web_detection?.pages_with_matching_images?.length > 0) {
+    const pages = data.googleVision.results.web_detection.pages_with_matching_images;
+    const credibleDomains = ['reuters.com', 'apnews.com', 'gettyimages.com', 'alamy.com', 
+                            'shutterstock.com', 'nytimes.com', 'bbc.com', 'cnn.com',
+                            'theguardian.com', 'washingtonpost.com', 'euronews.com'];
+    
+    const foundOnCredible = pages.some(p => 
+      credibleDomains.some(d => p.url?.toLowerCase().includes(d))
+    );
+    
+    if (foundOnCredible) {
+      score += 15;
+      indicators.push('Found on credible news/stock photo source');
+    }
+  }
+  
+  // 5. Multiple real faces detected (not deepfake)
+  if (data.deepfakeDetection?.face_analysis?.faces_detected > 0 && 
+      !data.deepfakeDetection?.is_deepfake) {
+    score += 5;
+    indicators.push(`${data.deepfakeDetection.face_analysis.faces_detected} real faces detected`);
+  }
+  
+  return { score, indicators, maxScore: 95 };
+}
+
+// Main hybrid rescue function
+async function applyHybridCameraRescue(aiDetection, verificationData, callExternalAPI) {
+  const originalConfidence = aiDetection.ai_confidence;
+  
+  // Only apply if local detector says AI-generated
+  if (originalConfidence < 50) {
+    return aiDetection; // No rescue needed
+  }
+  
+  // Calculate camera authenticity score
+  const cameraScore = calculateCameraAuthenticityScore({
+    cameraVerification: verificationData.camera_verification,
+    sensorNoiseAnalyzed: aiDetection.sensor_noise_analyzed,
+    sensorNoiseConfidence: aiDetection.sensor_noise_confidence,
+    noiseIndicators: aiDetection.noise_indicators,
+    aiNoiseAnomalies: aiDetection.ai_noise_anomalies,
+    compressionAnalyzed: aiDetection.compression_analyzed,
+    manufacturerSignature: aiDetection.manufacturer_signature,
+    googleVision: verificationData.google_vision,
+    deepfakeDetection: verificationData.deepfake_detection
+  });
+  
+  console.log(`📸 Camera authenticity score: ${cameraScore.score}/${cameraScore.maxScore}`);
+  console.log(`   Indicators: ${cameraScore.indicators.join(', ')}`);
+  
+  // If camera score is high, we have conflicting signals
+  if (cameraScore.score >= 40) {
+    // Apply reduction based on camera score
+    // score 40 = -25%, score 60 = -40%, score 80+ = -60%, score 95+ = -70%
+    let reduction;
+    if (cameraScore.score >= 95) {
+      reduction = 70; // Overwhelming evidence of real camera
+    } else if (cameraScore.score >= 80) {
+      reduction = 60;
+    } else if (cameraScore.score >= 60) {
+      reduction = 45;
+    } else {
+      reduction = Math.floor(cameraScore.score * 0.6);
+    }
+    let adjustedConfidence = Math.max(0, originalConfidence - reduction);
+    
+    console.log(`   🔧 Hybrid rescue: ${originalConfidence}% → ${adjustedConfidence}% (camera score: ${cameraScore.score})`);
+    
+    aiDetection.hybrid_rescue_applied = true;
+    aiDetection.camera_authenticity_score = cameraScore.score;
+    aiDetection.camera_indicators = cameraScore.indicators;
+    aiDetection.pre_rescue_confidence = originalConfidence;
+    
+    // If still above 50% after reduction, call external API as tiebreaker
+    if (adjustedConfidence > 50 && typeof callExternalAPI === 'function') {
+      console.log(`   🌐 Confidence still ${adjustedConfidence}% - calling external API for tiebreaker...`);
+      
+      try {
+        const externalResult = await callExternalAPI();
+        
+        if (externalResult && externalResult.confidence !== undefined) {
+          const externalConfidence = externalResult.confidence * 100; // Normalize to 0-100
+          
+          console.log(`   🌐 External API result: ${externalResult.isAI ? 'AI' : 'Authentic'} (${externalConfidence.toFixed(1)}%)`);
+          
+          aiDetection.external_tiebreaker = {
+            provider: externalResult.provider || 'sightengine',
+            confidence: externalConfidence,
+            result: externalResult.isAI ? 'ai_generated' : 'authentic',
+            used_as_tiebreaker: true
+          };
+          
+          // External API gets significant weight as tiebreaker
+          if (!externalResult.isAI && externalConfidence < 50) {
+            // External says authentic - trust it more
+            adjustedConfidence = Math.min(adjustedConfidence, externalConfidence);
+            console.log(`   ✅ External confirms authentic - final: ${adjustedConfidence}%`);
+          } else if (externalResult.isAI && externalConfidence > 70) {
+            // External also says AI with high confidence - trust local more
+            adjustedConfidence = Math.max(adjustedConfidence, originalConfidence - 10);
+            console.log(`   ⚠️ External confirms AI - final: ${adjustedConfidence}%`);
+          } else {
+            // Ambiguous - average the signals
+            adjustedConfidence = Math.round((adjustedConfidence + externalConfidence) / 2);
+            console.log(`   🔄 Ambiguous - averaged: ${adjustedConfidence}%`);
+          }
+        }
+      } catch (err) {
+        console.error(`   ❌ External API error: ${err.message}`);
+        aiDetection.external_tiebreaker = {
+          error: err.message,
+          used_as_tiebreaker: false
+        };
+      }
+    }
+    
+    // Apply final adjusted confidence
+    aiDetection.ai_confidence = adjustedConfidence;
+    aiDetection.likely_ai_generated = adjustedConfidence >= 50;
+    aiDetection.verdict = adjustedConfidence >= 70 ? 'AI-GENERATED' : 
+                          adjustedConfidence >= 50 ? 'LIKELY_AI' :
+                          adjustedConfidence >= 30 ? 'UNCERTAIN' : 'AUTHENTIC';
+    
+    // Update adjustments array
+    if (!aiDetection.adjustments) aiDetection.adjustments = [];
+    aiDetection.adjustments.push(
+      `Hybrid camera rescue: ${originalConfidence}% → ${aiDetection.ai_confidence}% ` +
+      `(camera score: ${cameraScore.score}, indicators: ${cameraScore.indicators.length})`
+    );
+    
+    if (aiDetection.external_tiebreaker?.used_as_tiebreaker) {
+      aiDetection.adjustments.push(
+        `External tiebreaker (${aiDetection.external_tiebreaker.provider}): ${aiDetection.external_tiebreaker.result}`
+      );
+    }
+  }
+  
+  return aiDetection;
+}
+
+module.exports = { applyHybridCameraRescue, calculateCameraAuthenticityScore };
+
       // Adjust AI detection for portrait mode / computational photography
       if (aiDetection && !aiDetection.error && exifData) {
         const portraitDetection = PortraitModeDetection.detectPortraitMode(exifData);
@@ -821,6 +1019,32 @@ if (kind === 'image') {
               } catch (err) {
                 console.error('⚠️ Platform detection error:', err.message);
               }
+
+      // ========== HYBRID CAMERA RESCUE ==========
+      if (aiDetection && !aiDetection.error && aiDetection.ai_confidence > 40) {
+        try {
+          console.log('📷 Running hybrid camera rescue...');
+          aiDetection = await applyHybridCameraRescue(
+            aiDetection,
+            {
+              camera_verification: cameraVerification,
+              google_vision: googleVisionResult,
+              deepfake_detection: deepfakeAnalysis
+            },
+            async () => {
+              const result = await sightengineDetector.detectAI(req.file.path);
+              return { provider: 'sightengine', isAI: result.isAI, confidence: result.confidence * 100 };
+            }
+          );
+          if (aiDetection.hybrid_rescue_applied) {
+            console.log(`📷 Hybrid rescue applied: Camera score ${aiDetection.camera_authenticity_score}, AI ${aiDetection.pre_rescue_confidence}% → ${aiDetection.ai_confidence}%`);
+          }
+        } catch (err) {
+          console.error('⚠️ Hybrid camera rescue error:', err.message);
+        }
+      }
+      // ========== END HYBRID CAMERA RESCUE ==========
+
 
               const gpsAndDate = LandmarkVerification.extractGPSAndDate(exifData);
               
