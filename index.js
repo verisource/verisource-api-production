@@ -1174,7 +1174,8 @@ module.exports = { applyHybridCameraRescue, calculateCameraAuthenticityScore };
           }
         }
       }
-      // Analyze audio for AI detection
+      
+      // Analyze video for AI detection
       videoAnalysis = null;
       if (kind === 'video') {
         try {
@@ -1184,11 +1185,64 @@ module.exports = { applyHybridCameraRescue, calculateCameraAuthenticityScore };
             maxFrames: 30
           });
           console.log('✅ Video analysis complete:', videoAnalysis.frames_analyzed, 'frames analyzed');
+          
+     // Apply video authenticity rescue for device-recorded videos
+          if (videoAnalysis && videoAnalysis.success) {
+            try {
+              const { getVideoMetadata } = require('./video-analyzer');
+              const { applyVideoAuthenticityRescue } = require('./services/video-authenticity-rescue');
+              const { analyzeEncoderSignature, getEncoderVerdict } = require('./services/encoder-fingerprinting');
+              const { analyzeVideoAudio } = require('./services/video-audio-analysis');
+              const { applyEnhancedVideoScoring } = require('./services/enhanced-video-scoring');
+              
+              const videoMeta = await getVideoMetadata(req.file.path);
+              
+              // 1. Device signature rescue (existing)
+              if (videoMeta && videoMeta.format && videoMeta.format.tags) {
+                videoAnalysis = applyVideoAuthenticityRescue(videoAnalysis, videoMeta.format.tags);
+              }
+              
+              // 2. Encoder fingerprinting
+              let encoderAnalysis = null;
+              if (videoMeta) {
+                console.log('🔍 Analyzing encoder signature...');
+                encoderAnalysis = analyzeEncoderSignature(videoMeta);
+                encoderAnalysis.verdict = getEncoderVerdict(encoderAnalysis);
+                console.log('   Encoder: ' + (encoderAnalysis.encoderDetected || 'unknown') + ' - ' + encoderAnalysis.verdict.verdict);
+                if (encoderAnalysis.isLikelyAI) {
+                  console.log('   ⚠️ AI tool indicators: ' + encoderAnalysis.indicators.join(', '));
+                }
+              }
+              
+              // 3. Audio analysis
+              console.log('🔊 Analyzing audio track...');
+              const audioAnalysis = await analyzeVideoAudio(req.file.path);
+              if (!audioAnalysis.hasAudio) {
+                console.log('   ⚠️ No audio track - suspicious for device recording');
+              } else {
+                console.log('   Audio: ' + audioAnalysis.verdict + ' (AI: ' + audioAnalysis.aiScore + '%, Auth: ' + audioAnalysis.authenticScore + '%)');
+              }
+              
+              // 4. Apply enhanced combined scoring
+              console.log('📊 Applying enhanced video scoring...');
+              videoAnalysis = applyEnhancedVideoScoring(videoAnalysis, encoderAnalysis, audioAnalysis);
+              
+              // Log adjustments
+              if (videoAnalysis.ai_adjustments && videoAnalysis.ai_adjustments.length > 0) {
+                console.log('   Adjustments: ' + videoAnalysis.ai_adjustments.join(', '));
+              }
+              console.log('   Final: ' + videoAnalysis.ai_confidence_original + '% → ' + videoAnalysis.ai_confidence + '% (' + videoAnalysis.verdict + ')');
+              
+            } catch (rescueErr) {
+              console.error('⚠️ Video analysis enhancement error:', rescueErr.message);
+            }
+          }
         } catch (err) {
           console.error('⚠️ Video analysis error:', err.message);
           videoAnalysis = { error: err.message };
         }
-      }
+      } 
+
      // AI Generator Detection (Sora, Runway, Pika, Kling, Midjourney, DALL-E, etc.)
       let generatorDetection = null;
       try {

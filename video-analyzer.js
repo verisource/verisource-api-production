@@ -214,7 +214,7 @@ async function analyzeVideo(videoPath) {
     // Get video metadata first
     
     // Extract frames at 1 fps
-    const allFrames = await extractFrames(videoPath, tempDir, 0.2);
+    const allFrames = await extractFrames(videoPath, tempDir, 1);
     
     if (allFrames.length === 0) {
       throw new Error('No frames extracted from video');
@@ -226,12 +226,12 @@ async function analyzeVideo(videoPath) {
     console.log('');
     const sharpFrames = await filterBlurryFrames(allFrames, {
       minFrames: 5,
-      maxFrames: 5,
+      maxFrames: 10,
       percentile: 0.7  // Keep top 70% sharpest
     });
     
     // Limit frames to analyze
-    const maxFramesToAnalyze = Math.min(5, sharpFrames.length);
+    const maxFramesToAnalyze = Math.min(10, sharpFrames.length);
     const framesToAnalyze = sharpFrames.slice(0, maxFramesToAnalyze);
     
     
@@ -377,3 +377,20 @@ async function analyzeVideo(videoPath) {
 module.exports = {
   analyzeVideo
 };
+
+/**
+ * Get video metadata synchronously using ffprobe
+ */
+function getVideoMetadata(videoPath) {
+  return new Promise((resolve, reject) => {
+    ffmpeg.ffprobe(videoPath, (err, metadata) => {
+      if (err) {
+        reject(err);
+      } else {
+        resolve(metadata);
+      }
+    });
+  });
+}
+
+module.exports.getVideoMetadata = getVideoMetadata;
