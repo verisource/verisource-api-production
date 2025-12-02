@@ -1223,9 +1223,20 @@ module.exports = { applyHybridCameraRescue, calculateCameraAuthenticityScore };
                 console.log('   Audio: ' + audioAnalysis.verdict + ' (AI: ' + audioAnalysis.aiScore + '%, Auth: ' + audioAnalysis.authenticScore + '%)');
               }
               
+              // 4. Bitrate anomaly detection
+              console.log('📊 Analyzing bitrate patterns...');
+              const { analyzeBitrate } = require('./services/bitrate-anomaly-detection');
+              const bitrateAnalysis = await analyzeBitrate(req.file.path);
+              if (bitrateAnalysis.success) {
+                console.log('   Bitrate CV: ' + bitrateAnalysis.stats.cv + '% - ' + bitrateAnalysis.verdict);
+                if (bitrateAnalysis.indicators.length > 0) {
+                  console.log('   ' + bitrateAnalysis.indicators[0]);
+                }
+              }
+
               // 4. Apply enhanced combined scoring
               console.log('📊 Applying enhanced video scoring...');
-              videoAnalysis = applyEnhancedVideoScoring(videoAnalysis, encoderAnalysis, audioAnalysis);
+              videoAnalysis = applyEnhancedVideoScoring(videoAnalysis, encoderAnalysis, audioAnalysis, bitrateAnalysis);
               
               // Log adjustments
               if (videoAnalysis.ai_adjustments && videoAnalysis.ai_adjustments.length > 0) {

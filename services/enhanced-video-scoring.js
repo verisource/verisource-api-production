@@ -1,9 +1,8 @@
 /**
  * Enhanced Video AI Scoring
- * Combines encoder fingerprinting and audio analysis for better AI detection
+ * Combines encoder fingerprinting, audio analysis, and bitrate analysis for better AI detection
  */
-
-function applyEnhancedVideoScoring(videoAnalysis, encoderAnalysis, audioAnalysis) {
+function applyEnhancedVideoScoring(videoAnalysis, encoderAnalysis, audioAnalysis, bitrateAnalysis) {
   if (!videoAnalysis) return videoAnalysis;
   
   var result = Object.assign({}, videoAnalysis);
@@ -62,13 +61,45 @@ function applyEnhancedVideoScoring(videoAnalysis, encoderAnalysis, audioAnalysis
     }
   }
   
+  // Bitrate scoring
+  if (bitrateAnalysis && bitrateAnalysis.success) {
+    result.bitrate_analysis = {
+      cv: bitrateAnalysis.stats.cv,
+      similarityRatio: bitrateAnalysis.stats.similarityRatio,
+      avgFrameChange: bitrateAnalysis.stats.avgFrameChange,
+      verdict: bitrateAnalysis.verdict,
+      aiScore: bitrateAnalysis.aiScore,
+      authenticScore: bitrateAnalysis.authenticScore,
+      indicators: bitrateAnalysis.indicators
+    };
+    
+    if (bitrateAnalysis.aiScore >= 40) {
+      var bitrateBoost = Math.round(bitrateAnalysis.aiScore * 0.25);
+      totalBoost += bitrateBoost;
+      adjustments.push('Suspicious bitrate pattern (+' + bitrateBoost + '%)');
+      result.bitrate_analysis.adjustment = '+' + bitrateBoost + '% AI confidence';
+    } else if (bitrateAnalysis.authenticScore >= 25) {
+      var bitrateReduction = Math.round(bitrateAnalysis.authenticScore * 0.2);
+      totalReduction += bitrateReduction;
+      adjustments.push('Natural bitrate variation (-' + bitrateReduction + '%)');
+      result.bitrate_analysis.adjustment = '-' + bitrateReduction + '% AI confidence';
+    }
+  }
+  
   // Combined signal bonus
   var encoderSuspicious = encoderAnalysis && encoderAnalysis.isLikelyAI;
   var audioSuspicious = audioAnalysis && (!audioAnalysis.hasAudio || audioAnalysis.aiScore >= 30);
+  var bitrateSuspicious = bitrateAnalysis && bitrateAnalysis.success && bitrateAnalysis.aiScore >= 30;
   
   if (encoderSuspicious && audioSuspicious) {
     totalBoost += 15;
     adjustments.push('Combined encoder+audio suspicious (+15%)');
+  }
+  
+  // Triple suspicious signal bonus
+  if (encoderSuspicious && audioSuspicious && bitrateSuspicious) {
+    totalBoost += 10;
+    adjustments.push('Triple signal suspicious (+10%)');
   }
   
   // Minimum floor for clear AI signals
@@ -104,4 +135,4 @@ function applyEnhancedVideoScoring(videoAnalysis, encoderAnalysis, audioAnalysis
   return result;
 }
 
-module.exports = { applyEnhancedVideoScoring: applyEnhancedVideoScoring };
+module.exports = { applyEnhancedVideoScoring };
