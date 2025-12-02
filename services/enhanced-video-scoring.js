@@ -27,7 +27,7 @@ function applyEnhancedVideoScoring(videoAnalysis, encoderAnalysis, audioAnalysis
       adjustments.push('Suspicious encoder (+' + encoderBoost + '%)');
       result.encoder_analysis.adjustment = '+' + encoderBoost + '% AI confidence';
     } else if (encoderAnalysis.authenticScore >= 30) {
-      var reduction = Math.round(encoderAnalysis.authenticScore * 0.3);
+      var reduction = Math.round(encoderAnalysis.authenticScore * 0.5);
       totalReduction += reduction;
       adjustments.push('Authentic encoder (-' + reduction + '%)');
       result.encoder_analysis.adjustment = '-' + reduction + '% AI confidence';
@@ -55,7 +55,7 @@ function applyEnhancedVideoScoring(videoAnalysis, encoderAnalysis, audioAnalysis
       adjustments.push('Suspicious audio (+' + audioBoost + '%)');
       result.audio_analysis.adjustment = '+' + audioBoost + '% AI confidence';
     } else if (audioAnalysis.authenticScore >= 30) {
-      var audioReduction = Math.round(audioAnalysis.authenticScore * 0.2);
+      var audioReduction = Math.round(audioAnalysis.authenticScore * 0.35);
       totalReduction += audioReduction;
       adjustments.push('Authentic audio (-' + audioReduction + '%)');
       result.audio_analysis.adjustment = '-' + audioReduction + '% AI confidence';
