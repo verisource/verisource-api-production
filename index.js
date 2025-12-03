@@ -1188,6 +1188,10 @@ module.exports = { applyHybridCameraRescue, calculateCameraAuthenticityScore };
           
      // Apply video authenticity rescue for device-recorded videos
           if (videoAnalysis && videoAnalysis.success) {
+
+              // 0. Apply frame analysis fix FIRST (video compression artifacts cause false positives)
+              const { adjustFrameAnalysisForVideo } = require('./services/video-frame-analysis-fix');
+              videoAnalysis = adjustFrameAnalysisForVideo(videoAnalysis);
             try {
               const { getVideoMetadata } = require('./video-analyzer');
               const { applyVideoAuthenticityRescue } = require('./services/video-authenticity-rescue');
@@ -1233,10 +1237,58 @@ module.exports = { applyHybridCameraRescue, calculateCameraAuthenticityScore };
                   console.log('   ' + bitrateAnalysis.indicators[0]);
                 }
               }
+              
+              // 5. GOP structure analysis (NEW)
+              console.log('🎞️ Analyzing GOP structure...');
+              const gopAnalysis = await analyzeGOP(req.file.path);
+              if (gopAnalysis.success) {
+                const summary = getGOPSummary(gopAnalysis);
+                console.log('   GOP: ' + summary);
+                if (gopAnalysis.indicators.length > 0) {
+                  console.log('   ' + gopAnalysis.indicators.slice(0, 2).join(', '));
+                }
+                if (gopAnalysis.deviceMatch && gopAnalysis.deviceMatch.matched) {
+                  console.log('   ✅ Device match: ' + gopAnalysis.deviceMatch.device);
+                }
+              } else {
+                console.log('   GOP analysis: ' + (gopAnalysis.error || 'unavailable'));
+              }
 
-              // 4. Apply enhanced combined scoring
+             // 6. Motion analysis (optical flow + edge stability)
+              console.log('🎬 Analyzing motion patterns...');
+              const { analyzeMotion } = require('./services/motion-analysis');
+              let motionAnalysis = null;
+              try {
+                const motionTempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'motion-'));
+                await new Promise((resolve, reject) => {
+                  ffmpeg(req.file.path)
+                    .on('end', resolve)
+                    .on('error', reject)
+                    .outputOptions(['-vf', 'fps=2', '-q:v', '2', '-frames:v', '30'])
+                    .output(path.join(motionTempDir, 'frame-%04d.jpg'))
+                    .run();
+                });
+                const motionFrames = fs.readdirSync(motionTempDir)
+                  .filter(f => f.endsWith('.jpg'))
+                  .map(f => path.join(motionTempDir, f))
+                  .sort();
+                if (motionFrames.length >= 3) {
+                  motionAnalysis = await analyzeMotion(req.file.path, motionFrames);
+                  if (motionAnalysis.success) {
+                    console.log('   Motion: ' + motionAnalysis.verdict + ' (AI:' + motionAnalysis.aiScore + ' Auth:' + motionAnalysis.authenticScore + ')');
+                    console.log('   Flicker: ' + (motionAnalysis.correlation.flickerRatio * 100).toFixed(0) + '% of expected');
+                  }
+                }
+                fs.rmSync(motionTempDir, { recursive: true, force: true });
+              } catch (motionErr) {
+                console.log('   Motion analysis error:', motionErr.message);
+              }
+
+              // 7. Apply enhanced combined scoring (with motion)
               console.log('📊 Applying enhanced video scoring...');
-              videoAnalysis = applyEnhancedVideoScoring(videoAnalysis, encoderAnalysis, audioAnalysis, bitrateAnalysis);
+              videoAnalysis = applyEnhancedVideoScoring(videoAnalysis, encoderAnalysis, audioAnalysis, bitrateAnalysis, gopAnalysis, motionAnalysis);
+              
+              console.log('   Final: ' + videoAnalysis.ai_confidence_original + '% → ' + videoAnalysis.ai_confidence + '% (' + videoAnalysis.verdict + ')');
               
               // Log adjustments
               if (videoAnalysis.ai_adjustments && videoAnalysis.ai_adjustments.length > 0) {
