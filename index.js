@@ -1238,7 +1238,7 @@ module.exports = { applyHybridCameraRescue, calculateCameraAuthenticityScore };
                 }
               }
               
-              // 5. GOP structure analysis (NEW)
+              // 5. GOP structure analysis
               console.log('🎞️ Analyzing GOP structure...');
               const gopAnalysis = await analyzeGOP(req.file.path);
               if (gopAnalysis.success) {
@@ -1254,7 +1254,19 @@ module.exports = { applyHybridCameraRescue, calculateCameraAuthenticityScore };
                 console.log('   GOP analysis: ' + (gopAnalysis.error || 'unavailable'));
               }
 
-             // 6. Motion analysis + Watermark detection (shared frame extraction)
+              // 6. Resolution analysis
+              console.log('📐 Analyzing resolution...');
+              const { analyzeResolution } = require('./services/resolution-analysis');
+              const resolutionAnalysis = analyzeResolution(videoMeta);
+              if (resolutionAnalysis.aiToolMatch && resolutionAnalysis.aiToolMatch.matched) {
+                console.log('   ⚠️ AI resolution detected: ' + resolutionAnalysis.aiToolMatch.tool + ' (' + resolutionAnalysis.width + 'x' + resolutionAnalysis.height + ')');
+              } else if (resolutionAnalysis.verdict === 'LIKELY_AI') {
+                console.log('   ⚠️ Unusual resolution: ' + resolutionAnalysis.width + 'x' + resolutionAnalysis.height);
+              } else {
+                console.log('   Resolution: ' + resolutionAnalysis.width + 'x' + resolutionAnalysis.height + ' (' + resolutionAnalysis.verdict + ')');
+              }
+
+              // 7. Motion analysis + Watermark detection
               console.log('🎬 Analyzing motion patterns...');
               const { analyzeMotion } = require('./services/motion-analysis');
               const { analyzeVideoWatermarks } = require('./services/watermark-detection');
@@ -1281,7 +1293,7 @@ module.exports = { applyHybridCameraRescue, calculateCameraAuthenticityScore };
                     console.log('   Flicker: ' + (motionAnalysis.correlation.flickerRatio * 100).toFixed(0) + '% of expected');
                   }
                   
-                  // 7. Watermark detection (reuse extracted frames)
+                  // 8. Watermark detection
                   watermarkAnalysis = await analyzeVideoWatermarks(req.file.path, motionFrames);
                   if (watermarkAnalysis.watermarkDetected) {
                     console.log('   🏷️ AI Watermark: ' + watermarkAnalysis.tool + ' (' + watermarkAnalysis.confidence + '%)');
@@ -1292,7 +1304,7 @@ module.exports = { applyHybridCameraRescue, calculateCameraAuthenticityScore };
                 console.log('   Motion analysis error:', motionErr.message);
               }
               
-              // 8. Audio content analysis (TTS/synthetic audio detection)
+              // 9. Audio content analysis
               console.log('🔊 Analyzing audio content...');
               const { analyzeAudioContent } = require('./services/audio-content-analysis');
               let audioContentAnalysis = null;
@@ -1305,17 +1317,15 @@ module.exports = { applyHybridCameraRescue, calculateCameraAuthenticityScore };
                 console.log('   Audio content analysis error:', audioContentErr.message);
               }
 
-              // 9. Apply enhanced combined scoring (all 8 signals)
+              // 10. Apply enhanced combined scoring (all 9 signals)
               console.log('📊 Applying enhanced video scoring...');
-              videoAnalysis = applyEnhancedVideoScoring(videoAnalysis, encoderAnalysis, audioAnalysis, bitrateAnalysis, gopAnalysis, motionAnalysis, watermarkAnalysis, audioContentAnalysis);
+              videoAnalysis = applyEnhancedVideoScoring(videoAnalysis, encoderAnalysis, audioAnalysis, bitrateAnalysis, gopAnalysis, motionAnalysis, watermarkAnalysis, audioContentAnalysis, resolutionAnalysis);
               
               console.log('   Final: ' + videoAnalysis.ai_confidence_original + '% → ' + videoAnalysis.ai_confidence + '% (' + videoAnalysis.verdict + ')');
               
-              // Log adjustments
               if (videoAnalysis.ai_adjustments && videoAnalysis.ai_adjustments.length > 0) {
                 console.log('   Adjustments: ' + videoAnalysis.ai_adjustments.join(', '));
               }
-              console.log('   Final: ' + videoAnalysis.ai_confidence_original + '% → ' + videoAnalysis.ai_confidence + '% (' + videoAnalysis.verdict + ')');
               
             } catch (rescueErr) {
               console.error('⚠️ Video analysis enhancement error:', rescueErr.message);
@@ -1325,9 +1335,11 @@ module.exports = { applyHybridCameraRescue, calculateCameraAuthenticityScore };
           console.error('⚠️ Video analysis error:', err.message);
           videoAnalysis = { error: err.message };
         }
-      } 
+      }
 
-     // AI Generator Detection (Sora, Runway, Pika, Kling, Midjourney, DALL-E, etc.)
+      // AI Generator Detection (Sora, Runway, Pika, Kling, Midjourney, DALL-E, etc.)
+
+     
       let generatorDetection = null;
       try {
         console.log('🔍 Running AI generator detection...');
