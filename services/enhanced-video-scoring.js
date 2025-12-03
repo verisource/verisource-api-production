@@ -1,8 +1,8 @@
 /**
  * Enhanced Video AI Scoring
- * Combines encoder, audio, bitrate, GOP, and motion analysis
+ * Combines all signals: encoder, audio presence, audio content, bitrate, GOP, motion, watermarks
  */
-function applyEnhancedVideoScoring(videoAnalysis, encoderAnalysis, audioAnalysis, bitrateAnalysis, gopAnalysis, motionAnalysis) {
+function applyEnhancedVideoScoring(videoAnalysis, encoderAnalysis, audioAnalysis, bitrateAnalysis, gopAnalysis, motionAnalysis, watermarkAnalysis, audioContentAnalysis) {
   if (!videoAnalysis) return videoAnalysis;
   
   var result = Object.assign({}, videoAnalysis);
@@ -15,6 +15,23 @@ function applyEnhancedVideoScoring(videoAnalysis, encoderAnalysis, audioAnalysis
     aiConfidence = result.analysis.aiPercentage || 0;
   }
   var originalConfidence = aiConfidence;
+  
+  // === WATERMARK DETECTION (HIGHEST PRIORITY) ===
+  if (watermarkAnalysis && watermarkAnalysis.watermarkDetected) {
+    result.watermark_analysis = watermarkAnalysis;
+    totalBoost += watermarkAnalysis.confidence;
+    adjustments.push('Watermark: ' + watermarkAnalysis.tool + ' (+' + watermarkAnalysis.confidence + '%)');
+    
+    // Watermark is definitive - set high floor
+    if (watermarkAnalysis.confidence >= 90) {
+      result.ai_confidence = Math.max(90, aiConfidence);
+      result.verdict = 'LIKELY_AI_GENERATED';
+      result.ai_adjustments = adjustments;
+      result.ai_confidence_original = originalConfidence;
+      console.log('   🏷️ AI watermark detected: ' + watermarkAnalysis.tool + ' - returning 90%+');
+      return result;
+    }
+  }
   
   // === CHECK FOR FACE-BASED AI SIGNALS ===
   var deepfakeDetected = result.analysis?.deepfakeDetection?.detected || false;
@@ -34,7 +51,7 @@ function applyEnhancedVideoScoring(videoAnalysis, encoderAnalysis, audioAnalysis
     adjustments.push('AI faces floor: 45% (' + aiFacePercent + '% AI faces)');
   }
   
-  // === MOTION ANALYSIS (NEW) ===
+  // === MOTION ANALYSIS ===
   var hasMotionAISignal = false;
   if (motionAnalysis && motionAnalysis.success) {
     result.motion_analysis = {
@@ -61,12 +78,35 @@ function applyEnhancedVideoScoring(videoAnalysis, encoderAnalysis, audioAnalysis
       adjustments.push('Motion: POSSIBLY_AUTHENTIC (-6%)');
     }
     
-    // Strong motion AI signal creates floor
     if (motionAnalysis.aiScore >= 35 && motionAnalysis.authenticScore <= 5) {
       if (faceFloor < 40) {
         faceFloor = 40;
         adjustments.push('Motion floor: 40%');
       }
+    }
+  }
+  
+  // === AUDIO CONTENT ANALYSIS (NEW) ===
+  var hasAudioAISignal = false;
+  if (audioContentAnalysis && audioContentAnalysis.success) {
+    result.audio_content_analysis = {
+      verdict: audioContentAnalysis.verdict,
+      aiScore: audioContentAnalysis.aiScore,
+      authenticScore: audioContentAnalysis.authenticScore,
+      indicators: audioContentAnalysis.indicators
+    };
+    
+    if (audioContentAnalysis.verdict === 'LIKELY_AI_AUDIO') {
+      totalBoost += 15;
+      adjustments.push('Audio content: LIKELY_AI (+15%)');
+      hasAudioAISignal = true;
+    } else if (audioContentAnalysis.verdict === 'POSSIBLY_AI_AUDIO') {
+      totalBoost += 8;
+      adjustments.push('Audio content: suspicious (+8%)');
+      hasAudioAISignal = true;
+    } else if (audioContentAnalysis.verdict === 'LIKELY_AUTHENTIC_AUDIO' && !hasAIFaceSignal && !hasMotionAISignal) {
+      totalReduction += 8;
+      adjustments.push('Audio content: authentic (-8%)');
     }
   }
   
@@ -78,14 +118,14 @@ function applyEnhancedVideoScoring(videoAnalysis, encoderAnalysis, audioAnalysis
       var encoderBoost = encoderAnalysis.aiScore >= 70 ? 35 : (encoderAnalysis.aiScore >= 50 ? 25 : 18);
       totalBoost += encoderBoost;
       adjustments.push('Suspicious encoder (+' + encoderBoost + '%)');
-    } else if (encoderAnalysis.authenticScore >= 30 && !hasAIFaceSignal && !hasMotionAISignal) {
+    } else if (encoderAnalysis.authenticScore >= 30 && !hasAIFaceSignal && !hasMotionAISignal && !hasAudioAISignal) {
       var reduction = Math.round(encoderAnalysis.authenticScore * 0.5);
       totalReduction += reduction;
       adjustments.push('Authentic encoder (-' + reduction + '%)');
     }
   }
   
-  // === AUDIO SCORING ===
+  // === AUDIO PRESENCE SCORING ===
   if (audioAnalysis) {
     result.audio_analysis = {
       hasAudio: audioAnalysis.hasAudio,
@@ -101,7 +141,7 @@ function applyEnhancedVideoScoring(videoAnalysis, encoderAnalysis, audioAnalysis
       var audioBoost = Math.round(audioAnalysis.aiScore * 0.35);
       totalBoost += audioBoost;
       adjustments.push('Suspicious audio (+' + audioBoost + '%)');
-    } else if (audioAnalysis.authenticScore >= 30 && !hasAIFaceSignal && !hasMotionAISignal) {
+    } else if (audioAnalysis.authenticScore >= 30 && !hasAIFaceSignal && !hasMotionAISignal && !hasAudioAISignal) {
       var audioReduction = Math.round(audioAnalysis.authenticScore * 0.35);
       totalReduction += audioReduction;
       adjustments.push('Authentic audio (-' + audioReduction + '%)');
@@ -121,7 +161,7 @@ function applyEnhancedVideoScoring(videoAnalysis, encoderAnalysis, audioAnalysis
       var bitrateBoost = Math.round(bitrateAnalysis.aiScore * 0.25);
       totalBoost += bitrateBoost;
       adjustments.push('Suspicious bitrate (+' + bitrateBoost + '%)');
-    } else if (bitrateAnalysis.authenticScore >= 20 && !hasAIFaceSignal && !hasMotionAISignal) {
+    } else if (bitrateAnalysis.authenticScore >= 20 && !hasAIFaceSignal && !hasMotionAISignal && !hasAudioAISignal) {
       var bitrateReduction = Math.round(bitrateAnalysis.authenticScore * 0.25);
       totalReduction += bitrateReduction;
       adjustments.push('Natural bitrate (-' + bitrateReduction + '%)');
@@ -144,7 +184,7 @@ function applyEnhancedVideoScoring(videoAnalysis, encoderAnalysis, audioAnalysis
       var gopBoost = Math.round(gopAnalysis.aiScore * 0.30);
       totalBoost += gopBoost;
       adjustments.push('Suspicious GOP (+' + gopBoost + '%)');
-    } else if (gopAnalysis.authenticScore >= 25 && !hasAIFaceSignal && !hasMotionAISignal) {
+    } else if (gopAnalysis.authenticScore >= 25 && !hasAIFaceSignal && !hasMotionAISignal && !hasAudioAISignal) {
       var gopReduction = Math.round(gopAnalysis.authenticScore * 0.25);
       totalReduction += gopReduction;
       adjustments.push('Authentic GOP (-' + gopReduction + '%)');
@@ -158,31 +198,39 @@ function applyEnhancedVideoScoring(videoAnalysis, encoderAnalysis, audioAnalysis
   
   // === COMBINED SIGNALS ===
   var encoderSuspicious = encoderAnalysis && encoderAnalysis.isLikelyAI;
-  var audioSuspicious = audioAnalysis && (!audioAnalysis.hasAudio || audioAnalysis.aiScore >= 30);
+  var audioMissing = audioAnalysis && !audioAnalysis.hasAudio;
   
-  if (encoderSuspicious && audioSuspicious) {
+  if (encoderSuspicious && audioMissing) {
     totalBoost += 15;
-    adjustments.push('Encoder+audio suspicious (+15%)');
+    adjustments.push('Encoder+no audio (+15%)');
   }
   
-  // Motion + other AI signals
-  if (hasMotionAISignal && (encoderSuspicious || audioSuspicious)) {
+  if (hasMotionAISignal && (encoderSuspicious || audioMissing)) {
     totalBoost += 10;
     adjustments.push('Motion+encoding suspicious (+10%)');
   }
   
-  // === AUTHENTICITY BONUSES (only if no AI signals) ===
-  if (!hasAIFaceSignal && !hasMotionAISignal) {
+  if (hasAudioAISignal && hasMotionAISignal) {
+    totalBoost += 8;
+    adjustments.push('Audio+motion suspicious (+8%)');
+  }
+  
+  // === AUTHENTICITY BONUSES ===
+  if (!hasAIFaceSignal && !hasMotionAISignal && !hasAudioAISignal) {
     var encoderAuthentic = encoderAnalysis && encoderAnalysis.authenticScore >= 30;
     var audioAuthentic = audioAnalysis && audioAnalysis.hasAudio && audioAnalysis.authenticScore >= 25;
     var bitrateAuthentic = bitrateAnalysis && bitrateAnalysis.success && bitrateAnalysis.authenticScore >= 20;
     var gopAuthentic = gopAnalysis && gopAnalysis.success && gopAnalysis.authenticScore >= 25;
     var motionAuthentic = motionAnalysis && motionAnalysis.success && motionAnalysis.verdict === 'LIKELY_AUTHENTIC';
+    var audioContentAuthentic = audioContentAnalysis && audioContentAnalysis.verdict === 'LIKELY_AUTHENTIC_AUDIO';
     
-    var authenticCount = [encoderAuthentic, audioAuthentic, bitrateAuthentic, gopAuthentic, motionAuthentic].filter(Boolean).length;
-    if (authenticCount >= 3) {
-      totalReduction += 15;
-      adjustments.push('Multiple authentic (' + authenticCount + '/5) (-15%)');
+    var authenticCount = [encoderAuthentic, audioAuthentic, bitrateAuthentic, gopAuthentic, motionAuthentic, audioContentAuthentic].filter(Boolean).length;
+    if (authenticCount >= 4) {
+      totalReduction += 18;
+      adjustments.push('Multiple authentic (' + authenticCount + '/6) (-18%)');
+    } else if (authenticCount >= 3) {
+      totalReduction += 12;
+      adjustments.push('Multiple authentic (' + authenticCount + '/6) (-12%)');
     }
     
     if (gopAnalysis && gopAnalysis.deviceMatch && gopAnalysis.deviceMatch.matched) {
@@ -207,7 +255,7 @@ function applyEnhancedVideoScoring(videoAnalysis, encoderAnalysis, audioAnalysis
   }
   
   // === NO-AUDIO FLOOR ===
-  if (encoderSuspicious && audioAnalysis && !audioAnalysis.hasAudio) {
+  if (encoderSuspicious && audioMissing) {
     var currentScore = aiConfidence + totalBoost - totalReduction;
     if (currentScore < 50) {
       var floorBoost = 50 - currentScore;
@@ -219,7 +267,6 @@ function applyEnhancedVideoScoring(videoAnalysis, encoderAnalysis, audioAnalysis
   // === APPLY FINAL SCORE ===
   aiConfidence = aiConfidence + totalBoost - totalReduction;
   
-  // Apply face/motion floor
   if (faceFloor > 0 && aiConfidence < faceFloor) {
     adjustments.push('Floor applied: ' + Math.round(aiConfidence) + '% → ' + faceFloor + '%');
     aiConfidence = faceFloor;

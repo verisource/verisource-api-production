@@ -1254,10 +1254,12 @@ module.exports = { applyHybridCameraRescue, calculateCameraAuthenticityScore };
                 console.log('   GOP analysis: ' + (gopAnalysis.error || 'unavailable'));
               }
 
-             // 6. Motion analysis (optical flow + edge stability)
+             // 6. Motion analysis + Watermark detection (shared frame extraction)
               console.log('🎬 Analyzing motion patterns...');
               const { analyzeMotion } = require('./services/motion-analysis');
+              const { analyzeVideoWatermarks } = require('./services/watermark-detection');
               let motionAnalysis = null;
+              let watermarkAnalysis = null;
               try {
                 const motionTempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'motion-'));
                 await new Promise((resolve, reject) => {
@@ -1278,15 +1280,34 @@ module.exports = { applyHybridCameraRescue, calculateCameraAuthenticityScore };
                     console.log('   Motion: ' + motionAnalysis.verdict + ' (AI:' + motionAnalysis.aiScore + ' Auth:' + motionAnalysis.authenticScore + ')');
                     console.log('   Flicker: ' + (motionAnalysis.correlation.flickerRatio * 100).toFixed(0) + '% of expected');
                   }
+                  
+                  // 7. Watermark detection (reuse extracted frames)
+                  watermarkAnalysis = await analyzeVideoWatermarks(req.file.path, motionFrames);
+                  if (watermarkAnalysis.watermarkDetected) {
+                    console.log('   🏷️ AI Watermark: ' + watermarkAnalysis.tool + ' (' + watermarkAnalysis.confidence + '%)');
+                  }
                 }
                 fs.rmSync(motionTempDir, { recursive: true, force: true });
               } catch (motionErr) {
                 console.log('   Motion analysis error:', motionErr.message);
               }
+              
+              // 8. Audio content analysis (TTS/synthetic audio detection)
+              console.log('🔊 Analyzing audio content...');
+              const { analyzeAudioContent } = require('./services/audio-content-analysis');
+              let audioContentAnalysis = null;
+              try {
+                audioContentAnalysis = await analyzeAudioContent(req.file.path);
+                if (audioContentAnalysis.success && audioContentAnalysis.hasAudio) {
+                  console.log('   Audio content: ' + audioContentAnalysis.verdict + ' (AI:' + audioContentAnalysis.aiScore + ' Auth:' + audioContentAnalysis.authenticScore + ')');
+                }
+              } catch (audioContentErr) {
+                console.log('   Audio content analysis error:', audioContentErr.message);
+              }
 
-              // 7. Apply enhanced combined scoring (with motion)
+              // 9. Apply enhanced combined scoring (all 8 signals)
               console.log('📊 Applying enhanced video scoring...');
-              videoAnalysis = applyEnhancedVideoScoring(videoAnalysis, encoderAnalysis, audioAnalysis, bitrateAnalysis, gopAnalysis, motionAnalysis);
+              videoAnalysis = applyEnhancedVideoScoring(videoAnalysis, encoderAnalysis, audioAnalysis, bitrateAnalysis, gopAnalysis, motionAnalysis, watermarkAnalysis, audioContentAnalysis);
               
               console.log('   Final: ' + videoAnalysis.ai_confidence_original + '% → ' + videoAnalysis.ai_confidence + '% (' + videoAnalysis.verdict + ')');
               
