@@ -526,7 +526,7 @@ if (kind === 'image') {
     let confidenceLevel = 'high';
     
     // Trigger Sightengine for uncertain cases
-    if (localResult.ai_confidence > 20 && localResult.ai_confidence < 80) {
+    if (localResult.ai_confidence >= 20 && localResult.ai_confidence < 80) {
       needsExternalCheck = true;
       confidenceLevel = 'uncertain';
       console.log(`⚠️ Local confidence: ${localResult.ai_confidence}% - calling Sightengine for verification`);
