@@ -1230,6 +1230,8 @@ module.exports = { applyHybridCameraRescue, calculateCameraAuthenticityScore };
               // 4. Bitrate anomaly detection
               console.log('📊 Analyzing bitrate patterns...');
               const { analyzeBitrate } = require('./services/bitrate-anomaly-detection');
+              const { analyzeGOP, getGOPSummary } = require("./services/gop-structure-analysis");
+              const { analyzeGOP, getGOPSummary } = require('./services/gop-structure-analysis');
               const bitrateAnalysis = await analyzeBitrate(req.file.path);
               if (bitrateAnalysis.success) {
                 console.log('   Bitrate CV: ' + bitrateAnalysis.stats.cv + '% - ' + bitrateAnalysis.verdict);
