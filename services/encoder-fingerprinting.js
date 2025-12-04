@@ -161,6 +161,7 @@ function analyzeEncoderSignature(metadata) {
   result.isLikelyAI = result.aiScore >= 40;
   result.confidence = Math.min(95, Math.max(result.aiScore, result.authenticScore));
 
+  result.metadata = metadata;
   return result;
 }
 
@@ -188,3 +189,40 @@ module.exports = {
   AUTHENTIC_ENCODER_PATTERNS
 };
 
+
+/**
+ * Detect Android device from metadata
+ */
+function detectAndroidDevice(metadata) {
+  const format = metadata?.format || {};
+  const tags = format.tags || {};
+  
+  // Check for Android-specific tags
+  const androidVersion = tags['com.android.version'];
+  const androidFps = tags['com.android.capture.fps'];
+  const hasCreationTime = !!tags['creation_time'];
+  
+  if (androidVersion || androidFps) {
+    return {
+      detected: true,
+      device: 'Android',
+      version: androidVersion || 'unknown',
+      fps: androidFps || null,
+      hasCreationTime,
+      confidence: 95
+    };
+  }
+  
+  // Check for Samsung-specific
+  if (tags['com.samsung.android.capture'] || (tags.encoder && tags.encoder.includes('samsung'))) {
+    return {
+      detected: true,
+      device: 'Samsung Android',
+      confidence: 90
+    };
+  }
+  
+  return { detected: false };
+}
+
+module.exports.detectAndroidDevice = detectAndroidDevice;
