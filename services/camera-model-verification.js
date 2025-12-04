@@ -461,4 +461,72 @@ function extractYear(dateTime) {
   return yearMatch ? parseInt(yearMatch[1]) : null;
 }
 
-module.exports = { verifyCameraModel, KNOWN_CAMERAS };
+/**
+ * Detect if photo is likely historical (old camera, old date)
+ * Returns adjustment to reduce AI false positives on old photos
+ */
+function detectHistoricalPhoto(exifData, imageDimensions = null) {
+  const result = {
+    isHistorical: false,
+    era: null,
+    confidence: 0,
+    aiScoreReduction: 0,
+    reasons: []
+  };
+  
+  if (!exifData) return result;
+  
+  const make = exifData.Make || exifData.make || "";
+  const model = exifData.Model || exifData.model || "";
+  const dateTime = exifData.DateTimeOriginal || exifData.DateTime || exifData.CreateDate;
+  
+  // Check capture date age
+  let photoAge = 0;
+  if (dateTime) {
+    const captureYear = extractYear(dateTime);
+    const currentYear = new Date().getFullYear();
+    photoAge = currentYear - captureYear;
+    
+    if (photoAge >= 8) {
+      result.isHistorical = true;
+      result.era = captureYear + "-era";
+      result.reasons.push("Photo is " + photoAge + " years old");
+      result.aiScoreReduction += Math.min(25, photoAge * 2);
+      result.confidence += 40;
+    } else if (photoAge >= 5) {
+      result.reasons.push("Photo is " + photoAge + " years old");
+      result.aiScoreReduction += 10;
+      result.confidence += 20;
+    }
+  }
+  
+  // Check for old camera models
+  const oldDevices = {
+    "iPhone 4": 2010, "iPhone 4S": 2011, "iPhone 5": 2012, "iPhone 5s": 2013, "iPhone 5c": 2013,
+    "iPhone 6": 2014, "iPhone 6 Plus": 2014, "iPhone 6s": 2015, "iPhone 6s Plus": 2015,
+    "Galaxy S": 2010, "Galaxy S2": 2011, "Galaxy S3": 2012, "Galaxy S4": 2013, "Galaxy S5": 2014,
+    "EOS 550D": 2010, "EOS 600D": 2011, "EOS 650D": 2012, "EOS 700D": 2013,
+    "D3100": 2010, "D5100": 2011, "D3200": 2012, "D5200": 2012,
+    "COOLPIX": 2005, "PowerShot": 2008, "FinePix": 2006
+  };
+  
+  for (const [device, year] of Object.entries(oldDevices)) {
+    if (model.includes(device)) {
+      const deviceAge = new Date().getFullYear() - year;
+      result.isHistorical = true;
+      result.era = year + "-era";
+      result.reasons.push("Old device: " + device + " (" + year + ")");
+      result.aiScoreReduction += Math.min(20, deviceAge);
+      result.confidence += 50;
+      break;
+    }
+  }
+  
+  // Cap reduction
+  result.aiScoreReduction = Math.min(35, result.aiScoreReduction);
+  result.confidence = Math.min(100, result.confidence);
+  
+  return result;
+}
+
+module.exports = { verifyCameraModel, detectHistoricalPhoto, KNOWN_CAMERAS };

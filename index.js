@@ -44,7 +44,7 @@ const acoustid = require('./acoustid-integration');
 const WeatherVerification = require('./services/weather-verification');
 const LandmarkVerification = require('./services/landmark-verification');
 const PortraitModeDetection = require('./services/enhanced-portrait-detection');
-const { verifyCameraModel } = require('./services/camera-model-verification');
+const { verifyCameraModel, detectHistoricalPhoto } = require('./services/camera-model-verification');
 const AIGeneratorDetector = require('./services/ai-generator-detector');
 // View engine for batch dashboard
 const HEICDetection = require('./services/heic-detection');
@@ -1022,6 +1022,21 @@ module.exports = { applyHybridCameraRescue, calculateCameraAuthenticityScore };
                   if (aiDetection.ai_confidence < 50 && aiDetection.verdict === 'AI-GENERATED') {
                     aiDetection.verdict = 'UNCERTAIN';
                     aiDetection.adjustments.push('Verdict changed: AI-GENERATED → UNCERTAIN');
+                  }
+              
+              // Historical photo detection - reduce AI false positives for old photos
+              if (exifData && aiDetection) {
+                const historicalCheck = detectHistoricalPhoto(exifData);
+                if (historicalCheck.isHistorical && historicalCheck.aiScoreReduction > 0) {
+                  const originalAI = aiDetection.ai_confidence;
+                  aiDetection.ai_confidence = Math.max(0, aiDetection.ai_confidence - historicalCheck.aiScoreReduction);
+                  aiDetection.adjustments = aiDetection.adjustments || [];
+                  aiDetection.adjustments.push("Historical photo: " + historicalCheck.reasons.join(", ") + " (-" + historicalCheck.aiScoreReduction + "%)");
+                  console.log("📅 Historical photo detected: " + historicalCheck.reasons.join(", ") + ", AI " + originalAI + "% → " + aiDetection.ai_confidence + "%");
+                  
+                  if (aiDetection.ai_confidence < 50 && aiDetection.verdict === "AI-GENERATED") {
+                    aiDetection.verdict = "UNCERTAIN";
+                    aiDetection.adjustments.push("Verdict changed: AI-GENERATED → UNCERTAIN (historical photo)");
                   }
                 }
               }
