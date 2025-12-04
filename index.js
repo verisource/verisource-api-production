@@ -854,6 +854,45 @@ module.exports = { applyHybridCameraRescue, calculateCameraAuthenticityScore };
           console.error('⚠️ Deepfake detection error:', err.message);
         }
       }
+
+      // Authority figure detection (deepfake risk for public figures)
+      let authorityResult = null;
+      if (kind === "image" && googleVisionResult) {
+        try {
+          console.log("👤 Checking for authority figures...");
+          const { checkAuthorityInVisionResults, getAuthorityAdjustment } = require("./services/authority-integration");
+          authorityResult = await checkAuthorityInVisionResults(googleVisionResult);
+          if (authorityResult.authorityDetected) {
+            console.log("   ⚠️ Authority detected: " + authorityResult.authorities[0].name + " (" + authorityResult.highestRisk + " risk)");
+          } else {
+            console.log("   No authority figures detected");
+          }
+        } catch (err) {
+          console.error("⚠️ Authority detection error:", err.message);
+        }
+      }
+
+      // Apply authority figure adjustment to AI score
+      if (authorityResult && authorityResult.authorityDetected && aiDetection) {
+        const { getAuthorityAdjustment } = require("./services/authority-integration");
+        const aiSignals = {
+          highFrameAI: aiDetection.ai_confidence > 50,
+          noDeviceMetadata: !exifData || Object.keys(exifData).length < 3,
+          aiEncoder: false,
+          noAudio: false,
+          authenticDevice: exifData && (exifData.Make || exifData.Model),
+          authenticGOP: false,
+          authenticAudio: false
+        };
+        const authAdj = getAuthorityAdjustment(authorityResult, aiSignals);
+        if (authAdj.adjustment > 0) {
+          aiDetection.ai_confidence = Math.min(100, aiDetection.ai_confidence + authAdj.adjustment);
+          aiDetection.adjustments = aiDetection.adjustments || [];
+          aiDetection.adjustments.push(...authAdj.adjustments);
+          aiDetection.authority_alerts = authAdj.alerts;
+          console.log("   ⚠️ " + authAdj.alerts[0]);
+        }
+      }
       
       // Extract EXIF data for weather and landmark verification
 
@@ -1486,6 +1525,7 @@ module.exports = { applyHybridCameraRescue, calculateCameraAuthenticityScore };
       ...(shadowPhysicsResult && { shadow_physics: shadowPhysicsResult }),
       ...(platformDetection && { platform_detection: platformDetection }),
       ...(deepfakeAnalysis && { deepfake_detection: deepfakeAnalysis }),
+      ...(authorityResult && authorityResult.authorityDetected && { authority_detection: authorityResult }),
       ...(reverseSearchResults && { reverse_image_search: reverseSearchResults }),
       //...(stockPhotoResult && { stock_photo_detection: stockPhotoResult }),
       // C2PA/Blockchain verification (Phase 1 Step 3)
