@@ -90,11 +90,13 @@ function applyEnhancedVideoScoring(videoAnalysis, encoderAnalysis, audioAnalysis
   if (hasAuthenticDevice) {
     // Authentic device - only trigger deepfake for very high confidence
     if (deepfakeDetected && deepfakeScore >= 85 && aiFacePercent >= 70) {
-      hasAIFaceSignal = true;
-      faceFloor = 50;
-      adjustments.push("Deepfake on authentic device: floor 50%");
+      hasAIFaceSignal = false;
+      faceFloor = 0;
+      adjustments.push("Deepfake on authentic device (-30%)");
+      totalReduction += 30;
     } else if (deepfakeDetected) {
-      adjustments.push("Deepfake signal reduced (authentic " + authenticDeviceInfo.type + " device)");
+      adjustments.push("Deepfake signal ignored (authentic " + authenticDeviceInfo.type + " device)");
+      totalReduction += 40;
     }
   } else {
     // No authentic device - normal deepfake detection
@@ -323,7 +325,7 @@ function applyEnhancedVideoScoring(videoAnalysis, encoderAnalysis, audioAnalysis
   // === RESOLUTION FLOOR (for exact AI tool matches) ===
   if (resolutionAnalysis && resolutionAnalysis.aiToolMatch && resolutionAnalysis.aiToolMatch.matched) {
     if (faceFloor < 50) {
-      faceFloor = 50;
+      faceFloor = 0;
       adjustments.push('Resolution floor: 50%');
     }
   }
