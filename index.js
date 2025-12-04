@@ -1023,6 +1023,8 @@ module.exports = { applyHybridCameraRescue, calculateCameraAuthenticityScore };
                     aiDetection.verdict = 'UNCERTAIN';
                     aiDetection.adjustments.push('Verdict changed: AI-GENERATED → UNCERTAIN');
                   }
+                }
+              }
               
               // Historical photo detection - reduce AI false positives for old photos
               if (exifData && aiDetection) {
