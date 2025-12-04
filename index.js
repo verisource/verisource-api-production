@@ -1275,6 +1275,7 @@ module.exports = { applyHybridCameraRescue, calculateCameraAuthenticityScore };
               let watermarkAnalysis = null;
               try {
                 const motionTempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'motion-'));
+                const ffmpeg = require('fluent-ffmpeg');
                 await new Promise((resolve, reject) => {
                   ffmpeg(req.file.path)
                     .on('end', resolve)
