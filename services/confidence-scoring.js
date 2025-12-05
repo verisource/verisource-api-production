@@ -206,7 +206,7 @@ function calculateConfidenceScore(verificationData) {
     }
 
     // High AI percentage in video frames
-    if (verdict === "LIKELY_AI_GENERATED" || aiPct >= 80) {
+    if (verdict === "LIKELY_AI_GENERATED" || verdict?.includes("HIGHLY LIKELY") || verdict?.includes("PROBABLE_AI") || aiPct >= 80) {
       return buildResponse({
         score: Math.max(20, 100 - aiPct),
         level: 'untrusted',
@@ -222,7 +222,7 @@ function calculateConfidenceScore(verificationData) {
     }
     
     // Suspicious video
-    if (verdict === "SUSPICIOUS" || aiPct >= 40) {
+    if (verdict === "SUSPICIOUS" || verdict?.includes("POSSIBLY") || verdict?.includes("POSSIBLE_AI") || aiPct >= 40) {
       return buildResponse({
         score: Math.max(35, 100 - aiPct),
         level: 'suspicious',
