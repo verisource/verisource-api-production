@@ -462,6 +462,33 @@ function extractYear(dateTime) {
 }
 
 /**
+ * Precise device model matching that avoids false positives
+ * e.g., "Galaxy S24" should NOT match "Galaxy S"
+ */
+function matchesDeviceModel(fullModel, targetDevice) {
+  if (!fullModel || !targetDevice) return false;
+  
+  const modelLower = fullModel.toLowerCase();
+  const targetLower = targetDevice.toLowerCase();
+  
+  const index = modelLower.indexOf(targetLower);
+  if (index === -1) return false;
+  
+  const afterMatch = modelLower.substring(index + targetLower.length);
+  
+  // Exact match or word boundary
+  if (afterMatch.length === 0) return true;
+  if (afterMatch[0] === ' ' || afterMatch[0] === '-' || afterMatch[0] === '_') return true;
+  
+  // If followed by a number, it's a DIFFERENT model (e.g., S24 != S)
+  if (/^\d/.test(afterMatch)) return false;
+  
+  // If followed by 's' (Apple suffix), it's different (e.g., 6s != 6)
+  if (/^s\b/i.test(afterMatch)) return false;
+  
+  return true;
+}
+/**
  * Detect if photo is likely historical (old camera, old date)
  * Returns adjustment to reduce AI false positives on old photos
  */
@@ -504,14 +531,18 @@ function detectHistoricalPhoto(exifData, imageDimensions = null) {
   const oldDevices = {
     "iPhone 4": 2010, "iPhone 4S": 2011, "iPhone 5": 2012, "iPhone 5s": 2013, "iPhone 5c": 2013,
     "iPhone 6": 2014, "iPhone 6 Plus": 2014, "iPhone 6s": 2015, "iPhone 6s Plus": 2015,
-    "Galaxy S": 2010, "Galaxy S2": 2011, "Galaxy S3": 2012, "Galaxy S4": 2013, "Galaxy S5": 2014,
+    "GT-I9000": 2010, "Galaxy S2": 2011, "Galaxy S3": 2012, "Galaxy S4": 2013, "Galaxy S5": 2014,
     "EOS 550D": 2010, "EOS 600D": 2011, "EOS 650D": 2012, "EOS 700D": 2013,
     "D3100": 2010, "D5100": 2011, "D3200": 2012, "D5200": 2012,
     "COOLPIX": 2005, "PowerShot": 2008, "FinePix": 2006
   };
   
-  for (const [device, year] of Object.entries(oldDevices)) {
-    if (model.includes(device)) {
+  // Sort by length (longest first) to match specific names first
+  const sortedDevices = Object.entries(oldDevices)
+    .sort((a, b) => b[0].length - a[0].length);
+  
+  for (const [device, year] of sortedDevices) {
+    if (matchesDeviceModel(model, device)) {
       const deviceAge = new Date().getFullYear() - year;
       result.isHistorical = true;
       result.era = year + "-era";
