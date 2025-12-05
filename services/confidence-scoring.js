@@ -104,7 +104,7 @@ function calculateConfidenceScore(verificationData) {
     return buildResponse({
       score: Math.max(score - 30, 20),
       level: 'suspicious',
-      label: 'LIKELY AI-GENERATED',
+      label: 'LIKELY AI-GENERATED IMAGE',
       color: '#9333EA',
       icon: 'cpu',
       message: `Likely AI-generated (${aiConfidence}% confidence)`,
@@ -119,7 +119,7 @@ function calculateConfidenceScore(verificationData) {
     return buildResponse({
       score: Math.min(Math.max(score, 35), 70),
       level: 'uncertain',
-      label: 'EDITED PHOTOGRAPH',
+      label: 'EDITED IMAGE',
       color: '#F59E0B',
       icon: 'edit',
       message: `Photograph with AI enhancements or heavy editing (${aiConfidence}% AI indicators)`,
@@ -194,7 +194,7 @@ function calculateConfidenceScore(verificationData) {
       return buildResponse({
         score: Math.max(20, 100 - deepfake.confidence),
         level: 'untrusted',
-        label: 'DEEPFAKE DETECTED',
+        label: 'DEEPFAKE VIDEO DETECTED',
         color: '#DC2626',
         icon: 'alert-triangle',
         message: `Deepfake detected with ${deepfake.confidence}% confidence`,
@@ -210,7 +210,7 @@ function calculateConfidenceScore(verificationData) {
       return buildResponse({
         score: Math.max(20, 100 - aiPct),
         level: 'untrusted',
-        label: 'LIKELY AI-GENERATED VIDEO',
+        label: 'AI-GENERATED VIDEO',
         color: '#DC2626',
         icon: 'alert-triangle',
         message: `${aiPct}% of frames show AI-generation patterns`,
@@ -226,7 +226,7 @@ function calculateConfidenceScore(verificationData) {
       return buildResponse({
         score: Math.max(35, 100 - aiPct),
         level: 'suspicious',
-        label: 'SUSPICIOUS VIDEO',
+        label: 'AI-ENHANCED VIDEO',
         color: '#F59E0B',
         icon: 'alert-circle',
         message: `${aiPct}% of frames show suspicious patterns`,
@@ -240,7 +240,7 @@ function calculateConfidenceScore(verificationData) {
       return buildResponse({
         score: Math.min(85, 100 - aiPct),
         level: 'trusted',
-        label: 'LIKELY AUTHENTIC VIDEO',
+        label: 'VERIFIED VIDEO',
         color: '#10B981',
         icon: 'check-circle',
         message: 'Video appears authentic',
@@ -282,7 +282,7 @@ function calculateConfidenceScore(verificationData) {
     return buildResponse({
       score,
       level: 'trusted',
-      label: 'VERIFIED AUTHENTIC',
+      label: 'VERIFIED IMAGE',
       color: '#10B981',
       icon: 'check-circle',
       message: messages.join(', '),
@@ -295,7 +295,7 @@ function calculateConfidenceScore(verificationData) {
     return buildResponse({
       score,
       level: 'acceptable',
-      label: 'LIKELY CAMERA-CAPTURED',
+      label: 'LIKELY REAL IMAGE',
       color: '#3B82F6',
       icon: 'camera',
       message: messages.join(', '),
@@ -308,7 +308,7 @@ function calculateConfidenceScore(verificationData) {
     return buildResponse({
       score,
       level: 'uncertain',
-      label: 'EDITED PHOTOGRAPH',
+      label: 'EDITED IMAGE',
       color: '#F59E0B',
       icon: 'edit',
       message: messages.join(', '),
@@ -321,7 +321,7 @@ function calculateConfidenceScore(verificationData) {
     return buildResponse({
       score,
       level: 'suspicious',
-      label: 'AUTHENTICITY UNCLEAR',
+      label: 'UNCERTAIN IMAGE',
       color: '#6B7280',
       icon: 'help-circle',
       message: messages.join(', '),
@@ -391,3 +391,141 @@ function buildResponse({ score, level, label, color, icon, message, messages, wa
 
 // CRITICAL: Proper export
 module.exports = { calculateConfidenceScore };
+/**
+ * Check for editing/enhancement software in EXIF
+ * Returns software name if found, null otherwise
+ */
+function checkForEditingSoftwareInExif(metadata) {
+  if (!metadata?.exif) return null;
+  
+  const exifString = JSON.stringify(metadata.exif).toLowerCase();
+  
+  // Professional editing software
+  const editingSoftware = [
+    // Adobe products
+    { pattern: 'photoshop', name: 'Adobe Photoshop' },
+    { pattern: 'lightroom', name: 'Adobe Lightroom' },
+    { pattern: 'camera raw', name: 'Adobe Camera Raw' },
+    { pattern: 'premiere', name: 'Adobe Premiere' },
+    
+    // AI Enhancement tools
+    { pattern: 'topaz', name: 'Topaz Labs' },
+    { pattern: 'gigapixel', name: 'Topaz Gigapixel AI' },
+    { pattern: 'denoise', name: 'Topaz DeNoise AI' },
+    { pattern: 'sharpen ai', name: 'Topaz Sharpen AI' },
+    { pattern: 'luminar', name: 'Luminar AI/Neo' },
+    { pattern: 'remini', name: 'Remini' },
+    
+    // Professional RAW processors
+    { pattern: 'capture one', name: 'Capture One' },
+    { pattern: 'dxo', name: 'DxO PhotoLab' },
+    { pattern: 'darktable', name: 'Darktable' },
+    { pattern: 'rawtherapee', name: 'RawTherapee' },
+    { pattern: 'affinity photo', name: 'Affinity Photo' },
+    { pattern: 'on1', name: 'ON1 Photo RAW' },
+    
+    // Mobile/consumer apps
+    { pattern: 'snapseed', name: 'Snapseed' },
+    { pattern: 'vsco', name: 'VSCO' },
+    { pattern: 'facetune', name: 'FaceTune' },
+    { pattern: 'faceapp', name: 'FaceApp' },
+    { pattern: 'picsart', name: 'PicsArt' },
+    { pattern: 'pixlr', name: 'Pixlr' },
+    { pattern: 'canva', name: 'Canva' },
+    { pattern: 'polish', name: 'Photo Polish' },
+    
+    // Manufacturer software
+    { pattern: 'canon dpp', name: 'Canon Digital Photo Professional' },
+    { pattern: 'digital photo professional', name: 'Canon DPP' },
+    { pattern: 'nikon nx', name: 'Nikon NX Studio' },
+    { pattern: 'sony imaging', name: 'Sony Imaging Edge' },
+    { pattern: 'fujifilm', name: 'Fujifilm X RAW Studio' },
+    
+    // Open source
+    { pattern: 'gimp', name: 'GIMP' },
+    { pattern: 'krita', name: 'Krita' },
+    { pattern: 'photopea', name: 'Photopea' },
+    
+    // AI upscaling indicators
+    { pattern: 'upscale', name: 'AI Upscaler' },
+    { pattern: 'enhanced', name: 'AI Enhanced' },
+    { pattern: 'super resolution', name: 'Super Resolution' }
+  ];
+  
+  for (const software of editingSoftware) {
+    if (exifString.includes(software.pattern)) {
+      return software.name;
+    }
+  }
+  return null;
+}
+
+/**
+ * Determine if image is AI-generated vs AI-enhanced
+ * Returns: { verdict: 'AI-GENERATED IMAGE' | 'AI-ENHANCED IMAGE' | 'VERIFIED IMAGE', software: string | null, confidence: number }
+ */
+function categorizeAIContent(metadata, aiConfidence, cameraVerification) {
+  const result = {
+    verdict: 'VERIFIED IMAGE',
+    category: null,
+    software: null,
+    explanation: null
+  };
+  
+  // Check for AI generator software first (highest priority)
+  const aiGenerator = checkForAISoftwareInExif(metadata);
+  if (aiGenerator) {
+    result.verdict = 'AI-GENERATED IMAGE';
+    result.category = 'synthetic';
+    result.software = aiGenerator;
+    result.explanation = `Generated by ${aiGenerator}`;
+    return result;
+  }
+  
+  // Check for editing software
+  const editingSoftware = checkForEditingSoftwareInExif(metadata);
+  
+  // If high AI confidence but has real camera + editing software = AI-enhanced
+  if (aiConfidence >= 40) {
+    const hasRealCamera = cameraVerification?.camera_found && cameraVerification?.is_valid;
+    
+    if (hasRealCamera && editingSoftware) {
+      result.verdict = 'AI-ENHANCED IMAGE';
+      result.category = 'enhanced';
+      result.software = editingSoftware;
+      result.explanation = `Real photo edited with ${editingSoftware}`;
+      return result;
+    }
+    
+    // Has editing software but no camera info - likely enhanced but uncertain
+    if (editingSoftware && aiConfidence < 70) {
+      result.verdict = 'AI-ENHANCED IMAGE';
+      result.category = 'enhanced';
+      result.software = editingSoftware;
+      result.explanation = `Appears edited with ${editingSoftware}`;
+      return result;
+    }
+    
+    // High AI confidence, no camera, no editing software = likely generated
+    if (aiConfidence >= 70 && !hasRealCamera) {
+      result.verdict = 'AI-GENERATED IMAGE';
+      result.category = 'synthetic';
+      result.explanation = 'High AI indicators, no camera origin detected';
+      return result;
+    }
+  }
+  
+  // Low AI confidence with editing software - just edited
+  if (editingSoftware) {
+    result.verdict = 'AI-ENHANCED IMAGE';
+    result.category = 'edited';
+    result.software = editingSoftware;
+    result.explanation = `Edited with ${editingSoftware}`;
+    return result;
+  }
+  
+  return result;
+}
+
+module.exports.checkForEditingSoftwareInExif = checkForEditingSoftwareInExif;
+module.exports.categorizeAIContent = categorizeAIContent;
