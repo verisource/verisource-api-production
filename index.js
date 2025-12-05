@@ -593,7 +593,7 @@ if (kind === 'image') {
         noise_level: finalResult.individual_results?.jpeg?.details?.noise || 'unknown'
       },
       
- verdict: finalResult.likely_ai_generated ? 'AI-GENERATED' : 'LIKELY AUTHENTIC',
+ verdict: finalResult.likely_ai_generated ? 'AI-GENERATED IMAGE' : 'LIKELY REAL IMAGE',
       analysis_time_ms: 0,
       
       // Smart routing metadata
@@ -606,7 +606,7 @@ if (kind === 'image') {
     
     console.log(`✅ Ensemble detection: ${aiDetection.verdict} (${aiDetection.ai_confidence}%)`);
     
-    console.log(`✅ Ensemble detection: ${finalResult.likely_ai_generated ? 'AI-GENERATED' : 'AUTHENTIC'} (${finalResult.ai_confidence}%)`);
+    console.log(`✅ Ensemble detection: ${finalResult.likely_ai_generated ? 'AI-GENERATED IMAGE' : 'VERIFIED IMAGE'} (${finalResult.ai_confidence}%)`);
     
   } catch (err) {
     console.error('⚠️ AI detection error:', err.message);
@@ -789,9 +789,9 @@ async function applyHybridCameraRescue(aiDetection, verificationData, callExtern
     // Apply final adjusted confidence
     aiDetection.ai_confidence = adjustedConfidence;
     aiDetection.likely_ai_generated = adjustedConfidence >= 50;
-    aiDetection.verdict = adjustedConfidence >= 70 ? 'AI-GENERATED' : 
-                          adjustedConfidence >= 50 ? 'LIKELY_AI' :
-                          adjustedConfidence >= 30 ? 'UNCERTAIN' : 'AUTHENTIC';
+    aiDetection.verdict = adjustedConfidence >= 70 ? 'AI-GENERATED IMAGE' : 
+                          adjustedConfidence >= 50 ? 'LIKELY AI-GENERATED IMAGE' :
+                          adjustedConfidence >= 30 ? 'UNCERTAIN IMAGE' : 'VERIFIED IMAGE';
     
     // Update adjustments array
     if (!aiDetection.adjustments) aiDetection.adjustments = [];
@@ -1019,8 +1019,8 @@ module.exports = { applyHybridCameraRescue, calculateCameraAuthenticityScore };
                   console.log(`📷 Camera EXIF rescue: ${cameraVerification.details.recognized_model} @ ${camConf}% confidence, AI ${originalAI}% → ${aiDetection.ai_confidence}%`);
                   
                   // Update verdict if confidence dropped below threshold
-                  if (aiDetection.ai_confidence < 50 && aiDetection.verdict === 'AI-GENERATED') {
-                    aiDetection.verdict = 'UNCERTAIN';
+                  if (aiDetection.ai_confidence < 50 && aiDetection.verdict === 'AI-GENERATED IMAGE') {
+                    aiDetection.verdict = 'UNCERTAIN IMAGE';
                     aiDetection.adjustments.push('Verdict changed: AI-GENERATED → UNCERTAIN');
                   }
                 }
@@ -1036,10 +1036,27 @@ module.exports = { applyHybridCameraRescue, calculateCameraAuthenticityScore };
                   aiDetection.adjustments.push("Historical photo: " + historicalCheck.reasons.join(", ") + " (-" + historicalCheck.aiScoreReduction + "%)");
                   console.log("📅 Historical photo detected: " + historicalCheck.reasons.join(", ") + ", AI " + originalAI + "% → " + aiDetection.ai_confidence + "%");
                   
-                  if (aiDetection.ai_confidence < 50 && aiDetection.verdict === "AI-GENERATED") {
+                  if (aiDetection.ai_confidence < 50 && aiDetection.verdict === "AI-GENERATED IMAGE") {
                     aiDetection.verdict = "UNCERTAIN";
                     aiDetection.adjustments.push("Verdict changed: AI-GENERATED → UNCERTAIN (historical photo)");
                   }
+                }
+              }
+              
+              // Categorize AI content: AI-GENERATED vs AI-ENHANCED
+              if (aiDetection && aiDetection.ai_confidence > 0) {
+                const aiCategory = ConfidenceScoring.categorizeAIContent(
+                  { exif: exifData },
+                  aiDetection.ai_confidence,
+                  cameraVerification
+                );
+                aiDetection.ai_category = aiCategory;
+                
+                if ((aiCategory.verdict === "AI-ENHANCED IMAGE" || aiCategory.verdict === "EDITED IMAGE") && aiDetection.verdict === "AI-GENERATED IMAGE") {
+                  aiDetection.verdict = aiCategory.verdict;
+                  aiDetection.adjustments = aiDetection.adjustments || [];
+                  aiDetection.adjustments.push("Recategorized: " + aiCategory.explanation);
+                  console.log("🎨 AI-ENHANCED detected: " + aiCategory.explanation);
                 }
               }
               try {
@@ -1066,8 +1083,8 @@ module.exports = { applyHybridCameraRescue, calculateCameraAuthenticityScore };
                     
                     console.log(`📱 Platform rescue: AI ${originalAI}% → ${aiDetection.ai_confidence}%`);
                     
-                    if (aiDetection.ai_confidence < 50 && aiDetection.verdict === 'AI-GENERATED') {
-                      aiDetection.verdict = 'UNCERTAIN';
+                    if (aiDetection.ai_confidence < 50 && aiDetection.verdict === 'AI-GENERATED IMAGE') {
+                      aiDetection.verdict = 'UNCERTAIN IMAGE';
                       aiDetection.adjustments.push('Verdict changed: AI-GENERATED → UNCERTAIN');
                     }
                   }
@@ -1224,8 +1241,8 @@ module.exports = { applyHybridCameraRescue, calculateCameraAuthenticityScore };
           console.log(`📸 Stock photo rescue: ${stockSites} stock sites, AI confidence ${originalAI}% → ${aiDetection.ai_confidence}%`);
           
           // Update verdict if confidence dropped below threshold
-          if (aiDetection.ai_confidence < 50 && aiDetection.verdict === 'AI-GENERATED') {
-            aiDetection.verdict = 'UNCERTAIN';
+          if (aiDetection.ai_confidence < 50 && aiDetection.verdict === 'AI-GENERATED IMAGE') {
+            aiDetection.verdict = 'UNCERTAIN IMAGE';
             aiDetection.adjustments.push('Verdict changed: AI-GENERATED → UNCERTAIN');
           }
         }
@@ -1317,7 +1334,7 @@ module.exports = { applyHybridCameraRescue, calculateCameraAuthenticityScore };
               const resolutionAnalysis = analyzeResolution(videoMeta);
               if (resolutionAnalysis.aiToolMatch && resolutionAnalysis.aiToolMatch.matched) {
                 console.log('   ⚠️ AI resolution detected: ' + resolutionAnalysis.aiToolMatch.tool + ' (' + resolutionAnalysis.width + 'x' + resolutionAnalysis.height + ')');
-              } else if (resolutionAnalysis.verdict === 'LIKELY_AI') {
+              } else if (resolutionAnalysis.verdict === 'LIKELY AI-GENERATED IMAGE') {
                 console.log('   ⚠️ Unusual resolution: ' + resolutionAnalysis.width + 'x' + resolutionAnalysis.height);
               } else {
                 console.log('   Resolution: ' + resolutionAnalysis.width + 'x' + resolutionAnalysis.height + ' (' + resolutionAnalysis.verdict + ')');
