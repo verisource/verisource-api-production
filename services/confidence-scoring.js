@@ -400,75 +400,79 @@ function checkForEditingSoftwareInExif(metadata) {
   
   const exifString = JSON.stringify(metadata.exif).toLowerCase();
   
-  // Professional editing software
-  const editingSoftware = [
-    // Adobe products
+  // AI-powered editing tools
+  const aiEditingSoftware = [
+    { pattern: 'topaz', name: 'Topaz Labs' },
+    { pattern: 'gigapixel', name: 'Topaz Gigapixel AI' },
+    { pattern: 'denoise ai', name: 'Topaz DeNoise AI' },
+    { pattern: 'sharpen ai', name: 'Topaz Sharpen AI' },
+    { pattern: 'luminar', name: 'Luminar AI/Neo' },
+    { pattern: 'remini', name: 'Remini' },
+    { pattern: 'facetune', name: 'FaceTune' },
+    { pattern: 'faceapp', name: 'FaceApp' },
+    { pattern: 'upscale', name: 'AI Upscaler' },
+    { pattern: 'enhanced', name: 'AI Enhanced' },
+    { pattern: 'super resolution', name: 'Super Resolution' },
+    { pattern: 'neural', name: 'Neural Filters' },
+    { pattern: 'generative fill', name: 'Generative Fill' },
+    { pattern: 'content-aware', name: 'Content-Aware AI' },
+  ];
+  
+  // Traditional editing software
+  const traditionalEditingSoftware = [
     { pattern: 'photoshop', name: 'Adobe Photoshop' },
     { pattern: 'lightroom', name: 'Adobe Lightroom' },
     { pattern: 'camera raw', name: 'Adobe Camera Raw' },
     { pattern: 'premiere', name: 'Adobe Premiere' },
-    
-    // AI Enhancement tools
-    { pattern: 'topaz', name: 'Topaz Labs' },
-    { pattern: 'gigapixel', name: 'Topaz Gigapixel AI' },
-    { pattern: 'denoise', name: 'Topaz DeNoise AI' },
-    { pattern: 'sharpen ai', name: 'Topaz Sharpen AI' },
-    { pattern: 'luminar', name: 'Luminar AI/Neo' },
-    { pattern: 'remini', name: 'Remini' },
-    
-    // Professional RAW processors
     { pattern: 'capture one', name: 'Capture One' },
     { pattern: 'dxo', name: 'DxO PhotoLab' },
     { pattern: 'darktable', name: 'Darktable' },
     { pattern: 'rawtherapee', name: 'RawTherapee' },
     { pattern: 'affinity photo', name: 'Affinity Photo' },
     { pattern: 'on1', name: 'ON1 Photo RAW' },
-    
-    // Mobile/consumer apps
     { pattern: 'snapseed', name: 'Snapseed' },
     { pattern: 'vsco', name: 'VSCO' },
-    { pattern: 'facetune', name: 'FaceTune' },
-    { pattern: 'faceapp', name: 'FaceApp' },
     { pattern: 'picsart', name: 'PicsArt' },
     { pattern: 'pixlr', name: 'Pixlr' },
     { pattern: 'canva', name: 'Canva' },
     { pattern: 'polish', name: 'Photo Polish' },
-    
-    // Manufacturer software
     { pattern: 'canon dpp', name: 'Canon Digital Photo Professional' },
     { pattern: 'digital photo professional', name: 'Canon DPP' },
     { pattern: 'nikon nx', name: 'Nikon NX Studio' },
     { pattern: 'sony imaging', name: 'Sony Imaging Edge' },
     { pattern: 'fujifilm', name: 'Fujifilm X RAW Studio' },
-    
-    // Open source
     { pattern: 'gimp', name: 'GIMP' },
     { pattern: 'krita', name: 'Krita' },
     { pattern: 'photopea', name: 'Photopea' },
-    
-    // AI upscaling indicators
-    { pattern: 'upscale', name: 'AI Upscaler' },
-    { pattern: 'enhanced', name: 'AI Enhanced' },
-    { pattern: 'super resolution', name: 'Super Resolution' }
   ];
   
-  for (const software of editingSoftware) {
+  // Check AI tools first (higher priority)
+  for (const software of aiEditingSoftware) {
     if (exifString.includes(software.pattern)) {
-      return software.name;
+      return { name: software.name, type: 'ai' };
     }
   }
+  
+  // Then check traditional tools
+  for (const software of traditionalEditingSoftware) {
+    if (exifString.includes(software.pattern)) {
+      return { name: software.name, type: 'traditional' };
+    }
+  }
+  
   return null;
 }
 
 /**
  * Determine if image is AI-generated vs AI-enhanced
- * Returns: { verdict: 'AI-GENERATED IMAGE' | 'AI-ENHANCED IMAGE' | 'VERIFIED IMAGE', software: string | null, confidence: number }
+ * Returns: { verdict: 'AI-GENERATED IMAGE' | 'AI-ENHANCED IMAGE' | 'EDITED IMAGE' | 'VERIFIED IMAGE', software: string | null, confidence: number }
  */
 function categorizeAIContent(metadata, aiConfidence, cameraVerification) {
   const result = {
     verdict: 'VERIFIED IMAGE',
     category: null,
     software: null,
+    softwareType: null,
     explanation: null
   };
   
@@ -482,27 +486,42 @@ function categorizeAIContent(metadata, aiConfidence, cameraVerification) {
     return result;
   }
   
-  // Check for editing software
+  // Check for editing software (returns { name, type } or null)
   const editingSoftware = checkForEditingSoftwareInExif(metadata);
+  const softwareName = editingSoftware?.name;
+  const softwareType = editingSoftware?.type; // 'ai' or 'traditional'
   
-  // If high AI confidence but has real camera + editing software = AI-enhanced
+  // If high AI confidence but has real camera + editing software
   if (aiConfidence >= 40) {
     const hasRealCamera = cameraVerification?.camera_found && cameraVerification?.is_valid;
     
     if (hasRealCamera && editingSoftware) {
-      result.verdict = 'AI-ENHANCED IMAGE';
-      result.category = 'enhanced';
-      result.software = editingSoftware;
-      result.explanation = `Real photo edited with ${editingSoftware}`;
+      // Use type to determine verdict
+      if (softwareType === 'ai') {
+        result.verdict = 'AI-ENHANCED IMAGE';
+        result.category = 'ai-enhanced';
+      } else {
+        result.verdict = 'EDITED IMAGE';
+        result.category = 'edited';
+      }
+      result.software = softwareName;
+      result.softwareType = softwareType;
+      result.explanation = `Real photo edited with ${softwareName}`;
       return result;
     }
     
-    // Has editing software but no camera info - likely enhanced but uncertain
+    // Has editing software but no camera info
     if (editingSoftware && aiConfidence < 70) {
-      result.verdict = 'AI-ENHANCED IMAGE';
-      result.category = 'enhanced';
-      result.software = editingSoftware;
-      result.explanation = `Appears edited with ${editingSoftware}`;
+      if (softwareType === 'ai') {
+        result.verdict = 'AI-ENHANCED IMAGE';
+        result.category = 'ai-enhanced';
+      } else {
+        result.verdict = 'EDITED IMAGE';
+        result.category = 'edited';
+      }
+      result.software = softwareName;
+      result.softwareType = softwareType;
+      result.explanation = `Appears edited with ${softwareName}`;
       return result;
     }
     
@@ -515,12 +534,18 @@ function categorizeAIContent(metadata, aiConfidence, cameraVerification) {
     }
   }
   
-  // Low AI confidence with editing software - just edited
+  // Low AI confidence with editing software
   if (editingSoftware) {
-    result.verdict = 'AI-ENHANCED IMAGE';
-    result.category = 'edited';
-    result.software = editingSoftware;
-    result.explanation = `Edited with ${editingSoftware}`;
+    if (softwareType === 'ai') {
+      result.verdict = 'AI-ENHANCED IMAGE';
+      result.category = 'ai-enhanced';
+    } else {
+      result.verdict = 'EDITED IMAGE';
+      result.category = 'edited';
+    }
+    result.software = softwareName;
+    result.softwareType = softwareType;
+    result.explanation = `Edited with ${softwareName}`;
     return result;
   }
   
