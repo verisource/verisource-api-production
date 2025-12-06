@@ -406,17 +406,13 @@ app.post('/verify-url', async (req, res) => {
     if (!searchResults.found) {
       console.log('⛓️ Submitting to blockchain...');
       try {
-       blockchainVerification = await BlockchainService.submitHash(fingerprint); 
+      blockchainVerification = await BlockchainService.timestamp(fingerprint, download.filename);  
       } catch (err) {
         console.error('Blockchain error:', err.message);
       }
       
       try {
-        polygonVerification = await PolygonService.timestampContent(fingerprint, {
-          filename: download.filename,
-          source_url: url,
-          platform: download.platform
-        });
+       polygonVerification = await PolygonService.timestamp(fingerprint, download.filename); 
       } catch (err) {
         console.error('Polygon error:', err.message);
       }
