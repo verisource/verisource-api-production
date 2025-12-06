@@ -1556,6 +1556,18 @@ module.exports = { applyHybridCameraRescue, calculateCameraAuthenticityScore };
       ...(kind === 'image' && weatherVerification && { weather_verification: weatherVerification }),
       ...(kind === 'image' && landmarkVerification && { landmark_verification: landmarkVerification }),
       ...(cameraVerification && { camera_verification: cameraVerification }),
+      ...(exifData && {
+        exif: {
+          date_taken: exifData.DateTimeOriginal || exifData.CreateDate || exifData.DateTime || null,
+          camera_make: exifData.Make || null,
+          camera_model: exifData.Model || null,
+          software: exifData.Software || null,
+          gps: (exifData.GPSLatitude && exifData.GPSLongitude) ? {
+            latitude: exifData.GPSLatitude,
+            longitude: exifData.GPSLongitude
+          } : null
+        }
+      }),
       ...(shadowPhysicsResult && { shadow_physics: shadowPhysicsResult }),
       ...(platformDetection && { platform_detection: platformDetection }),
       ...(deepfakeAnalysis && { deepfake_detection: deepfakeAnalysis }),
