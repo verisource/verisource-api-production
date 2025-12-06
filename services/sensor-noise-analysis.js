@@ -280,26 +280,21 @@ function detectAINoiseAnomalies(noiseStats) {
 
 /**
  * Adjust AI confidence based on sensor noise analysis
+ * ENHANCED: Much stronger adjustment when sensor noise clearly indicates real camera
  */
-function adjustForSensorNoise(aiDetection, noiseAnalysis) {
-  if (!aiDetection) {
-  // Check if image has been recompressed (from JPEG forensics indicators)
+function adjustForSensorNoise(aiDetection, noiseAnalysis, exifData = null) {
+  if (!aiDetection || !noiseAnalysis) {
     return aiDetection;
   }
 
-  let adjustment = 0;
-  
-  // Check if image has been recompressed (from JPEG forensics indicators)
   const hasMultipleCompressions = aiDetection.indicators?.some(ind => 
     ind.includes('Multiple compressions detected') || 
     ind.includes('double compress')
   );
-  
-  if (hasMultipleCompressions) {
-    console.log('⚠️ Multiple compressions detected - skipping sensor noise adjustment');
-    return aiDetection;
-  }
+
   const originalConfidence = aiDetection.ai_confidence || 0;
+  let adjustedConfidence = originalConfidence;
+  let adjustmentReason = null;
 
   console.log('🔬 DEBUG Sensor Noise Adjustment:');
   console.log('  - has_sensor_noise:', noiseAnalysis.has_sensor_noise);
@@ -307,35 +302,93 @@ function adjustForSensorNoise(aiDetection, noiseAnalysis) {
   console.log('  - ai_likelihood:', noiseAnalysis.ai_likelihood);
   console.log('  - originalConfidence:', originalConfidence);
 
-  // Strong sensor noise = reduce AI confidence
-  if (noiseAnalysis.has_sensor_noise && noiseAnalysis.confidence >= 40) {
-    adjustment = -Math.round(35 * (noiseAnalysis.confidence / 100));
+  // Check if EXIF confirms a real camera
+  const hasRealCameraExif = exifData && 
+    (exifData.Make || exifData.Model) && 
+    !isAISoftwareInExif(exifData);
+  
+  console.log('  - hasRealCameraExif:', hasRealCameraExif);
+
+  // RULE 1: STRONGEST - Sensor noise + EXIF both confirm real camera
+  if (noiseAnalysis.has_sensor_noise && 
+      noiseAnalysis.confidence >= 80 && 
+      noiseAnalysis.ai_likelihood < 10 &&
+      hasRealCameraExif &&
+      !hasMultipleCompressions) {
+    const maxAI = 25;
+    if (originalConfidence > maxAI) {
+      adjustedConfidence = maxAI;
+      adjustmentReason = `STRONG OVERRIDE: Sensor noise (${noiseAnalysis.confidence}%) + camera EXIF confirm real photo → capped at ${maxAI}%`;
+      console.log('  ✅ RULE 1 (strongest):', adjustmentReason);
+    }
+  }
+  // RULE 2: High sensor noise, low AI anomalies
+  else if (noiseAnalysis.has_sensor_noise && 
+           noiseAnalysis.confidence >= 70 && 
+           noiseAnalysis.ai_likelihood < 20 &&
+           !hasMultipleCompressions) {
+    const reduction = Math.round(50 * (noiseAnalysis.confidence / 100));
+    adjustedConfidence = Math.max(35, originalConfidence - reduction);
+    if (adjustedConfidence > 40 && noiseAnalysis.confidence >= 85) {
+      adjustedConfidence = 40;
+    }
+    adjustmentReason = `Sensor noise (${noiseAnalysis.confidence}%) indicates camera → reduced to ${adjustedConfidence}%`;
+    console.log('  ✅ RULE 2 (strong):', adjustmentReason);
+  }
+  // RULE 3: Moderate sensor noise
+  else if (noiseAnalysis.has_sensor_noise && 
+           noiseAnalysis.confidence >= 50 &&
+           noiseAnalysis.ai_likelihood < 40) {
+    const reduction = Math.round(35 * (noiseAnalysis.confidence / 100));
+    adjustedConfidence = Math.max(20, originalConfidence - reduction);
+    adjustmentReason = `Sensor noise suggests camera → reduced by ${reduction}%`;
+    console.log('  ✅ RULE 3 (moderate):', adjustmentReason);
+  }
+  // RULE 4: AI anomalies - BOOST
+  else if (noiseAnalysis.ai_likelihood >= 50 && !noiseAnalysis.has_sensor_noise) {
+    const boost = Math.round(25 * (noiseAnalysis.ai_likelihood / 100));
+    adjustedConfidence = Math.min(95, originalConfidence + boost);
+    adjustmentReason = `AI noise anomalies → boosted by ${boost}%`;
+    console.log('  ⚠️ RULE 4 (AI boost):', adjustmentReason);
   }
 
-  // AI noise anomalies = increase AI confidence
-  if (noiseAnalysis.ai_likelihood >= 40) {
-    adjustment = Math.round(25 * (noiseAnalysis.ai_likelihood / 100));
+  if (adjustedConfidence !== originalConfidence) {
+    console.log(`   📊 AI confidence: ${originalConfidence}% → ${adjustedConfidence}%`);
+    
+    return {
+      ...aiDetection,
+      ai_confidence: adjustedConfidence,
+      original_ai_confidence: aiDetection.original_ai_confidence || originalConfidence,
+      sensor_noise_analyzed: true,
+      sensor_noise_confidence: noiseAnalysis.confidence,
+      ai_noise_anomalies: noiseAnalysis.ai_likelihood,
+      noise_indicators: noiseAnalysis.indicators,
+      adjusted_for_sensor_noise: true,
+      warnings: [...(aiDetection.warnings || []), adjustmentReason]
+    };
   }
 
-  const adjustedConfidence = Math.max(0, Math.min(100, originalConfidence + adjustment));
-
-  return {
-    ...aiDetection,
-    ai_confidence: adjustedConfidence,
-    original_ai_confidence: aiDetection.original_ai_confidence || originalConfidence,
-    sensor_noise_analyzed: true,
+  return { 
+    ...aiDetection, 
+    sensor_noise_analyzed: true, 
     sensor_noise_confidence: noiseAnalysis.confidence,
     ai_noise_anomalies: noiseAnalysis.ai_likelihood,
-    noise_indicators: noiseAnalysis.indicators,
-    adjusted_for_sensor_noise: true,
-    warnings: [
-      ...(aiDetection.warnings || []),
-      `Sensor noise analysis: ${noiseAnalysis.has_sensor_noise ? 'Camera-like' : 'No camera signature'}. AI confidence adjusted from ${originalConfidence}% to ${adjustedConfidence}%.`
-    ]
+    adjusted_for_sensor_noise: false 
   };
+}
+
+/**
+ * Check if EXIF contains AI software indicators
+ */
+function isAISoftwareInExif(exifData) {
+  if (!exifData) return false;
+  const fields = [exifData.Make, exifData.Model, exifData.Software].filter(Boolean).join(' ').toLowerCase();
+  const aiIndicators = ['dall-e', 'dalle', 'midjourney', 'stable diffusion', 'flux', 'sora', 'runway'];
+  return aiIndicators.some(ai => fields.includes(ai));
 }
 
 module.exports = {
   analyzeSensorNoise,
   adjustForSensorNoise
 };
+

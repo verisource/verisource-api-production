@@ -951,7 +951,7 @@ module.exports = { applyHybridCameraRescue, calculateCameraAuthenticityScore };
                 if (noiseAnalysis.has_sensor_noise || noiseAnalysis.ai_likelihood > 40) {
                   console.log(`✅ Noise analysis complete:`);
                   console.log(`   Camera sensor: ${noiseAnalysis.confidence}% | AI anomalies: ${noiseAnalysis.ai_likelihood}%`);
-                  aiDetection = SensorNoiseAnalysis.adjustForSensorNoise(aiDetection, noiseAnalysis);
+                  aiDetection = SensorNoiseAnalysis.adjustForSensorNoise(aiDetection, noiseAnalysis, exifData);  
                   console.log(`   AI confidence adjusted: ${aiDetection.original_ai_confidence}% → ${aiDetection.ai_confidence}%`);
                 }
               } catch (err) {
