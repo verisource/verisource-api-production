@@ -1628,13 +1628,15 @@ module.exports = { applyHybridCameraRescue, calculateCameraAuthenticityScore };
             ...(chromaprint && { chromaprint }),
             ...(phash && { phash }),
             ...(similarImages && { similar_images: similarImages }),
-              ...(aiDetection && { ai_detection: aiDetection }),
-              ...(googleVisionResult && { google_vision: googleVisionResult }),
-              ...(videoAnalysis && { video_analysis: videoAnalysis }),
-              ...(audioAIDetection && { audio_ai_detection: audioAIDetection }),
-              ...(shadowPhysicsResult && { shadow_physics: shadowPhysicsResult }),
-              ...(reverseSearchResults && { reverse_image_search: reverseSearchResults }),
-            };
+            ...(aiDetection && { ai_detection: aiDetection }),
+            ...(googleVisionResult && { google_vision: googleVisionResult }),
+            ...(videoAnalysis && { video_analysis: videoAnalysis }),
+            ...(audioAIDetection && { audio_ai_detection: audioAIDetection }),
+            ...(shadowPhysicsResult && { shadow_physics: shadowPhysicsResult }),
+            ...(reverseSearchResults && { reverse_image_search: reverseSearchResults }),
+            ...(cameraVerification && { camera_verification: cameraVerification }),
+            ...(exifData && { metadata: { has_exif: true, exif: exifData } }),
+          };
           console.log('📊 Calculating confidence score...');
           const score = ConfidenceScoring.calculateConfidenceScore(confidenceData);
           console.log(`✅ Confidence: ${score.level} (${score.percentage}%)`);
