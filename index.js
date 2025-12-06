@@ -380,7 +380,7 @@ app.post('/verify-url', async (req, res) => {
     if (kind === 'video') {
       console.log('🎬 Running video AI detection...');
       try {
-        const videoAnalysis = await VideoAnalysis.analyzeVideo(filePath);
+       const videoAnalysis = await analyzeVideo(filePath);
         aiDetection = {
           ai_confidence: videoAnalysis.analysis?.aiConfidence || 0,
           likely_ai_generated: (videoAnalysis.analysis?.aiConfidence || 0) >= 50,
@@ -406,13 +406,13 @@ app.post('/verify-url', async (req, res) => {
     if (!searchResults.found) {
       console.log('⛓️ Submitting to blockchain...');
       try {
-        blockchainVerification = await submitToOpenTimestamps(fingerprint);
+       blockchainVerification = await BlockchainService.submitHash(fingerprint); 
       } catch (err) {
         console.error('Blockchain error:', err.message);
       }
       
       try {
-        polygonVerification = await PolygonTimestamp.timestampContent(fingerprint, {
+        polygonVerification = await PolygonService.timestampContent(fingerprint, {
           filename: download.filename,
           source_url: url,
           platform: download.platform
