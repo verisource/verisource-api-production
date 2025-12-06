@@ -382,11 +382,11 @@ app.post('/verify-url', async (req, res) => {
       try {
        const videoAnalysis = await analyzeVideo(filePath);
         aiDetection = {
-          ai_confidence: videoAnalysis.analysis?.aiConfidence || 0,
-          likely_ai_generated: (videoAnalysis.analysis?.aiConfidence || 0) >= 50,
-          method: 'video_frame_analysis',
-          details: videoAnalysis.analysis
-        };
+    ai_confidence: videoAnalysis.analysis?.aiPercentage || videoAnalysis.analysis?.videoConfidence || 0,
+      likely_ai_generated: (videoAnalysis.analysis?.aiPercentage || 0) >= 50 || videoAnalysis.analysis?.verdict === 'LIKELY_AI_GENERATED',
+     method: 'video_frame_analysis',
+     details: videoAnalysis.analysis
+  };
       } catch (err) {
         console.error('Video analysis error:', err.message);
       }
