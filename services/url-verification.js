@@ -84,7 +84,7 @@ async function downloadMedia(url, outputDir = '/tmp') {
     // First, get metadata without downloading
     console.log('📋 Fetching media metadata...');
     const metadataJson = execSync(
-      `yt-dlp --dump-json --no-download "${url}" 2>/dev/null`,
+      `yt-dlp --dump-json --no-download "${url}"`,
       { encoding: 'utf-8', timeout: 30000 }
     );
     
