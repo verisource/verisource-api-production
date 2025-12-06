@@ -1,12 +1,15 @@
 FROM node:18-slim
 
-# Install FFmpeg and dependencies
+# Install FFmpeg, Python, yt-dlp and dependencies
 RUN apt-get update && apt-get install -y \
     ffmpeg \
     libchromaprint-tools \
     imagemagick \
     libjpeg-dev \
     libjpeg-turbo-progs \
+    python3 \
+    python3-pip \
+    && pip3 install --break-system-packages yt-dlp \
     && rm -rf /var/lib/apt/lists/*
 
 # Set working directory
