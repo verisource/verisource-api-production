@@ -7,6 +7,7 @@ const rateLimit = require('express-rate-limit');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
+const crypto = require('crypto');
 const db = require('./db-minimal');
 const { searchByFingerprint, saveVerification } = require('./search');
 const c2paVerification = require('./services/c2pa-verification');
