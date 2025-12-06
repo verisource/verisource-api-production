@@ -355,44 +355,119 @@ app.post('/verify-url', async (req, res) => {
     });
   }
   
+  let filePath = download.file_path;
+  
   try {
-    // Create a fake req.file object to reuse existing verification logic
-    const fs = require('fs');
-    const stats = fs.statSync(download.file_path);
-    
-    req.file = {
-      path: download.file_path,
-      originalname: download.filename,
-      size: stats.size,
-      mimetype: download.media_type === 'video' ? 'video/mp4' : 'image/jpeg'
-    };
-    
-    // Add URL metadata to be included in response
-    req.urlMetadata = {
-      source_url: url,
-      platform: download.platform,
-      ...download.metadata
-    };
-    
     console.log(`✅ Downloaded: ${download.filename} (${download.media_type})`);
     console.log(`📋 Platform: ${download.platform}`);
     
-    // Continue to main verification logic by calling next middleware
-    // For now, we'll redirect internally to the verify logic
-    // This requires refactoring - for now return success with download info
+    const fs = require('fs');
+    const stats = fs.statSync(filePath);
+    const kind = download.media_type; // 'video' or 'image'
     
-    // TODO: Integrate with main verification pipeline
-    // For now, return download success + metadata
-    res.json({
-      status: 'downloaded',
-      message: 'Media downloaded successfully. Full verification coming soon.',
-      url_metadata: req.urlMetadata,
-      file: {
-        path: download.file_path,
-        name: download.filename,
-        size: stats.size,
-        type: download.media_type
+    // 1. Generate fingerprint
+    console.log('🔐 Generating fingerprint...');
+    const fileBuffer = fs.readFileSync(filePath);
+    const fingerprint = crypto.createHash('sha256').update(fileBuffer).digest('hex');
+    
+    // 2. Check database for existing verification
+    console.log('🔍 Checking verification history...');
+    const searchResults = await searchByFingerprint(fingerprint);
+    
+    // 3. Run AI detection
+    let aiDetection = null;
+    if (kind === 'video') {
+      console.log('🎬 Running video AI detection...');
+      try {
+        const videoAnalysis = await VideoAnalysis.analyzeVideo(filePath);
+        aiDetection = {
+          ai_confidence: videoAnalysis.analysis?.aiConfidence || 0,
+          likely_ai_generated: (videoAnalysis.analysis?.aiConfidence || 0) >= 50,
+          method: 'video_frame_analysis',
+          details: videoAnalysis.analysis
+        };
+      } catch (err) {
+        console.error('Video analysis error:', err.message);
       }
+    } else {
+      console.log('🤖 Running image AI detection...');
+      try {
+        aiDetection = await ensembleAIDetection.detectAIGeneration(filePath);
+      } catch (err) {
+        console.error('AI detection error:', err.message);
+      }
+    }
+    
+    // 4. Blockchain timestamping
+    let blockchainVerification = null;
+    let polygonVerification = null;
+    
+    if (!searchResults.found) {
+      console.log('⛓️ Submitting to blockchain...');
+      try {
+        blockchainVerification = await submitToOpenTimestamps(fingerprint);
+      } catch (err) {
+        console.error('Blockchain error:', err.message);
+      }
+      
+      try {
+        polygonVerification = await PolygonTimestamp.timestampContent(fingerprint, {
+          filename: download.filename,
+          source_url: url,
+          platform: download.platform
+        });
+      } catch (err) {
+        console.error('Polygon error:', err.message);
+      }
+    }
+    
+    // 5. Save to database
+    console.log('💾 Saving verification...');
+    await saveVerification({
+      fingerprint,
+      filename: download.filename,
+      size_bytes: stats.size,
+      kind,
+      source_url: url,
+      platform: download.platform
+    });
+    
+    // 6. Calculate confidence score
+    const confidenceData = {
+      kind,
+      ai_detection: aiDetection,
+      verification: searchResults
+    };
+    const confidence = ConfidenceScoring.calculateConfidenceScore(confidenceData);
+    console.log(`✅ Confidence: ${confidence.level} (${confidence.percentage}%)`);
+    
+    // 7. Return response
+    res.json({
+      kind,
+      source: {
+        url: url,
+        platform: download.platform,
+        title: download.metadata.title,
+        uploader: download.metadata.uploader,
+        upload_date: download.metadata.upload_date,
+        duration: download.metadata.duration,
+        view_count: download.metadata.view_count,
+        thumbnail: download.metadata.thumbnail
+      },
+      fingerprint: {
+        algorithm: 'sha256',
+        hash: fingerprint
+      },
+      verification: {
+        status: searchResults.found ? 'PREVIOUSLY_VERIFIED' : 'NEW_UPLOAD',
+        is_first: searchResults.is_first_verification,
+        first_seen: searchResults.found ? searchResults.first_seen : new Date().toISOString(),
+        times_verified: searchResults.found ? searchResults.total_verifications : 1
+      },
+      ai_detection: aiDetection,
+      blockchain_verification: blockchainVerification,
+      polygon_verification: polygonVerification,
+      confidence
     });
     
   } catch (err) {
@@ -400,8 +475,9 @@ app.post('/verify-url', async (req, res) => {
     res.status(500).json({ error: err.message });
   } finally {
     // Clean up downloaded file
-    UrlVerification.cleanupFile(download.file_path);
+    UrlVerification.cleanupFile(filePath);
   }
+
 });
 
 app.get('/verify-url/platforms', (req, res) => {
