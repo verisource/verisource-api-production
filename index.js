@@ -327,7 +327,88 @@ app.get('/blockchain/verify/:hash', async (req, res) => {
     console.log(`📊 Database status: ${dbReady ? "READY" : "NOT AVAILABLE"}`);
   });
 })();
+// ============================================
+// URL VERIFY ENDPOINT
+// ============================================
+const UrlVerification = require('./services/url-verification');
 
+app.post('/verify-url', async (req, res) => {
+  const requestId = Date.now();
+  console.log(`\n🌐 [${requestId}] URL Verification Request`);
+  
+  const { url } = req.body;
+  
+  if (!url) {
+    return res.status(400).json({ error: 'No URL provided' });
+  }
+  
+  console.log(`🔗 URL: ${url}`);
+  
+  // Download media from URL
+  const download = await UrlVerification.downloadMedia(url, '/tmp');
+  
+  if (!download.success) {
+    return res.status(400).json({ 
+      error: download.error,
+      platform: download.platform,
+      url: url
+    });
+  }
+  
+  try {
+    // Create a fake req.file object to reuse existing verification logic
+    const fs = require('fs');
+    const stats = fs.statSync(download.file_path);
+    
+    req.file = {
+      path: download.file_path,
+      originalname: download.filename,
+      size: stats.size,
+      mimetype: download.media_type === 'video' ? 'video/mp4' : 'image/jpeg'
+    };
+    
+    // Add URL metadata to be included in response
+    req.urlMetadata = {
+      source_url: url,
+      platform: download.platform,
+      ...download.metadata
+    };
+    
+    console.log(`✅ Downloaded: ${download.filename} (${download.media_type})`);
+    console.log(`📋 Platform: ${download.platform}`);
+    
+    // Continue to main verification logic by calling next middleware
+    // For now, we'll redirect internally to the verify logic
+    // This requires refactoring - for now return success with download info
+    
+    // TODO: Integrate with main verification pipeline
+    // For now, return download success + metadata
+    res.json({
+      status: 'downloaded',
+      message: 'Media downloaded successfully. Full verification coming soon.',
+      url_metadata: req.urlMetadata,
+      file: {
+        path: download.file_path,
+        name: download.filename,
+        size: stats.size,
+        type: download.media_type
+      }
+    });
+    
+  } catch (err) {
+    console.error('❌ URL verification error:', err.message);
+    res.status(500).json({ error: err.message });
+  } finally {
+    // Clean up downloaded file
+    UrlVerification.cleanupFile(download.file_path);
+  }
+});
+
+app.get('/verify-url/platforms', (req, res) => {
+  res.json({
+    supported_platforms: UrlVerification.getSupportedPlatforms()
+  });
+});
 // ============================================
 // SINGLE FILE VERIFY ENDPOINT
 // ============================================
