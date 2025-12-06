@@ -1573,6 +1573,10 @@ module.exports = { applyHybridCameraRescue, calculateCameraAuthenticityScore };
           } : null
         }
       }),
+      ...((() => {
+        const editingSoftware = ConfidenceScoring.checkForEditingSoftwareInExif({ exif: exifData });
+        return editingSoftware ? { editing_software: editingSoftware } : {};
+      })()),
       ...(shadowPhysicsResult && { shadow_physics: shadowPhysicsResult }),
       ...(platformDetection && { platform_detection: platformDetection }),
       ...(deepfakeAnalysis && { deepfake_detection: deepfakeAnalysis }),
