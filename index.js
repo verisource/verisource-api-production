@@ -1558,7 +1558,12 @@ module.exports = { applyHybridCameraRescue, calculateCameraAuthenticityScore };
       ...(cameraVerification && { camera_verification: cameraVerification }),
       ...(exifData && {
         exif: {
-          date_taken: exifData.DateTimeOriginal || exifData.CreateDate || exifData.DateTime || null,
+          date_taken: (() => {
+            const ts = exifData.DateTimeOriginal || exifData.CreateDate || exifData.DateTime;
+            if (!ts) return null;
+            if (typeof ts === 'number') return new Date(ts * 1000).toISOString();
+            return ts;
+          })(),
           camera_make: exifData.Make || null,
           camera_model: exifData.Model || null,
           software: exifData.Software || null,
