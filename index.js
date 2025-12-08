@@ -39,6 +39,7 @@ const { analyzeImage } = require('./google-vision-search');
 const { AudioAIDetection } = require('./services/audio-ai-detection');
 const { detectAIGeneration } = require('./services/ensemble-ai-detection');
 const { generatePHash, searchSimilarImages } = require('./phash-module');
+const { analyzeCrossReference, analyzeTemporalConsistency } = require('./services/fingerprint-index');
 const ConfidenceScoring = require('./services/confidence-scoring');
 const ChromaprintService = require('./services/chromaprint');
 const acoustid = require('./acoustid-integration');
@@ -1615,6 +1616,59 @@ module.exports = { applyHybridCameraRescue, calculateCameraAuthenticityScore };
     } catch (err) {
       console.error('⚠️ Database save error:', err.message);
     }
+    // ============================================================================
+    // CROSS-REFERENCE ANALYSIS - Check index for related content
+    // ============================================================================
+    let crossReference = null;
+    try {
+      console.log('🔍 Running cross-reference analysis...');
+      crossReference = analyzeCrossReference(
+        fingerprint,
+        phash,
+        googleVisionResult?.results?.labels || [],
+        req.headers['x-customer-id'] || null
+      );
+      if (crossReference.similar_content_found) {
+        console.log(`   ⚠️ Related content found: ${crossReference.fraud_indicators.risk_level} risk`);
+        if (crossReference.fraud_indicators.flags.length > 0) {
+          crossReference.fraud_indicators.flags.forEach(f => console.log(`   - ${f}`));
+        }
+      } else {
+        console.log('   ✅ No related content in index');
+      }
+    } catch (err) {
+      console.error('⚠️ Cross-reference error:', err.message);
+    }
+    // Add temporal validation to cross-reference
+    if (crossReference) {
+      try {
+        const exifDateRaw = exifData?.DateTimeOriginal || exifData?.CreateDate || exifData?.DateTime;
+        const claimedDate = req.headers['x-claimed-date'] || null;
+        
+        crossReference.temporal_analysis = analyzeTemporalConsistency(
+          exifDateRaw,
+          crossReference.exact_match?.first_seen,
+          claimedDate
+        );
+        
+        if (crossReference.temporal_analysis.flags.length > 0) {
+          console.log('📅 Temporal analysis:');
+          crossReference.temporal_analysis.flags.forEach(f => console.log(`   - ${f}`));
+          
+          // Elevate risk level if temporal issues found
+          if (crossReference.temporal_analysis.risk_level === 'high' && 
+              crossReference.fraud_indicators.risk_level !== 'critical') {
+            crossReference.fraud_indicators.risk_level = 'high';
+            crossReference.fraud_indicators.recommendation = 'Review required - temporal inconsistencies detected';
+          }
+          // Add temporal flags to main fraud indicators
+          crossReference.fraud_indicators.flags.push(...crossReference.temporal_analysis.flags);
+        }
+      } catch (err) {
+        console.error('⚠️ Temporal validation error:', err.message);
+      }
+    }
+
 
     // ============================================================================
     // SCREENSHOT DETECTION - Runs for ALL images (moved outside EXIF block)
@@ -1686,6 +1740,7 @@ module.exports = { applyHybridCameraRescue, calculateCameraAuthenticityScore };
       polygon_verification: polygonVerification,
       ai_detection: aiDetection,
       ...(screenshotDetection && { screenshot_detection: screenshotDetection }),
+      ...(crossReference && { cross_reference: crossReference }),
       verification: {
         status: searchResults.found ? 'PREVIOUSLY_VERIFIED' : 'NEW_UPLOAD',
         is_first: searchResults.is_first_verification,
