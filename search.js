@@ -1,14 +1,22 @@
 const db = require('./db-minimal');
+const fingerprintIndex = require('./services/fingerprint-index');
 
 async function searchByFingerprint(fingerprint) {
   try {
+    // Check SQLite fingerprint index first (fast local lookup)
+    const localResult = fingerprintIndex.checkLocalIndex(fingerprint);
+    if (localResult.exactMatch) {
+      console.log('⚡ Cache hit: Found in local fingerprint index');
+    }
+
     // Ensure database is initialized
     if (!db.isAvailable()) {
       console.log('⚠️ Database not available for search');
       return {
-        found: false,
-        is_first_verification: true,
-        message: 'Database temporarily unavailable'
+        found: localResult.exactMatch !== null,
+        is_first_verification: localResult.exactMatch === null,
+        message: 'Database temporarily unavailable',
+        local_index: localResult
       };
     }
     
@@ -24,7 +32,8 @@ async function searchByFingerprint(fingerprint) {
       return {
         found: false,
         is_first_verification: true,
-        message: "First time this file has been verified"
+        message: "First time this file has been verified",
+        local_index: localResult
       };
     }
     
@@ -40,6 +49,7 @@ async function searchByFingerprint(fingerprint) {
       polygon_timestamp: matches[0].polygon_timestamp,
       bitcoin_proof_status: matches[0].bitcoin_proof_status,
       bitcoin_submitted_at: matches[0].bitcoin_submitted_at,
+      local_index: localResult,
       matches: matches.map(m => ({
         verification_id: m.id,
         date: m.upload_date,
@@ -60,9 +70,47 @@ async function searchByFingerprint(fingerprint) {
 
 async function saveVerification(data) {
   try {
+    // 1. Save to fingerprint index (SQLite - fast local)
+    let fingerprintResult = null;
+    try {
+      fingerprintResult = fingerprintIndex.storeFingerprint({
+        sha256: data.fingerprint,
+        phash: data.phash || null,
+        verificationId: null, // Will update after PG insert
+        sourceType: 'submission',
+        customerId: data.customer_id || null,
+        claimContext: data.claim_context || null
+      });
+      
+      if (fingerprintResult.isNew) {
+        console.log('📇 New fingerprint indexed');
+      } else {
+        console.log(`📇 Fingerprint seen ${fingerprintResult.occurrences} times`);
+      }
+    } catch (err) {
+      console.error('⚠️ Fingerprint index error:', err.message);
+    }
+
+    // 2. Store Google Vision labels if provided
+    if (data.google_vision_labels && data.google_vision_labels.length > 0 && fingerprintResult) {
+      try {
+        const labelCount = fingerprintIndex.storeLabels(
+          fingerprintResult.id,
+          data.google_vision_labels.map(l => ({
+            label: l.description || l.label || l,
+            confidence: l.score || l.confidence || 0.5
+          }))
+        );
+        console.log(`🏷️ Cached ${labelCount} labels`);
+      } catch (err) {
+        console.error('⚠️ Label caching error:', err.message);
+      }
+    }
+
+    // 3. Save to PostgreSQL (main database)
     if (!db.isAvailable()) {
       console.log('⚠️ Database not available for save');
-      return null;
+      return fingerprintResult ? { fingerprint_id: fingerprintResult.id } : null;
     }
     
     const query = `
@@ -95,7 +143,9 @@ async function saveVerification(data) {
     
     return {
       verification_id: result.rows[0].id,
-      upload_date: result.rows[0].upload_date
+      upload_date: result.rows[0].upload_date,
+      fingerprint_id: fingerprintResult?.id || null,
+      fingerprint_occurrences: fingerprintResult?.occurrences || 1
     };
     
   } catch (error) {
@@ -103,13 +153,23 @@ async function saveVerification(data) {
     return null;
   }
 }
+
 async function getStats() {
   try {
+    // Get fingerprint index stats
+    let indexStats = {};
+    try {
+      indexStats = fingerprintIndex.getIndexStats();
+    } catch (err) {
+      console.error('⚠️ Index stats error:', err.message);
+    }
+
     if (!db.isAvailable()) {
-      console.log('⚠️ Database not available for stats, isAvailable():', db.isAvailable());
+      console.log('⚠️ Database not available for stats');
       return {
         message: 'Database being configured',
-        total_verifications: 0
+        total_verifications: 0,
+        fingerprint_index: indexStats
       };
     }
     
@@ -124,7 +184,10 @@ async function getStats() {
     `;
     
     const result = await db.query(query);
-    return result.rows[0];
+    return {
+      ...result.rows[0],
+      fingerprint_index: indexStats
+    };
     
   } catch (error) {
     console.error('❌ Stats error:', error.message);
@@ -135,8 +198,19 @@ async function getStats() {
   }
 }
 
+// New function: Find related content by label
+async function findRelatedByLabel(label, minConfidence = 0.7) {
+  try {
+    return fingerprintIndex.findByLabel(label, minConfidence);
+  } catch (error) {
+    console.error('❌ Label search error:', error.message);
+    return [];
+  }
+}
+
 module.exports = {
   searchByFingerprint,
   saveVerification,
-  getStats
+  getStats,
+  findRelatedByLabel
 };

@@ -1608,7 +1608,9 @@ module.exports = { applyHybridCameraRescue, calculateCameraAuthenticityScore };
         polygon_tx_hash: polygonVerification?.transaction_hash || null,
         polygon_timestamp: polygonVerification?.timestamp || null,
         bitcoin_proof_status: blockchainVerification?.status || null,
-        bitcoin_submitted_at: blockchainVerification?.submitted_at || null
+        bitcoin_submitted_at: blockchainVerification?.submitted_at || null,
+        phash: phash || null,
+        google_vision_labels: googleVisionResult?.results?.labels || []
       });
     } catch (err) {
       console.error('⚠️ Database save error:', err.message);
@@ -1857,3 +1859,129 @@ app.get('/admin/migrate-audio', async (req, res) => {
   }
 });
 // Force redeploy to pick up new API key
+// ============================================================================
+// FINGERPRINT INDEX API ENDPOINTS
+// ============================================================================
+
+const fingerprintIndex = require('./services/fingerprint-index');
+
+// Get index stats
+app.get('/index/stats', (req, res) => {
+  try {
+    const stats = fingerprintIndex.getIndexStats();
+    res.json({
+      success: true,
+      ...stats
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Search by label
+app.get('/index/search/label/:label', (req, res) => {
+  try {
+    const { label } = req.params;
+    const minConfidence = parseFloat(req.query.confidence) || 0.7;
+    const limit = parseInt(req.query.limit) || 50;
+    
+    const results = fingerprintIndex.findByLabel(label, minConfidence, limit);
+    
+    res.json({
+      success: true,
+      query: { label, minConfidence, limit },
+      total: results.length,
+      results: results.map(r => ({
+        fingerprint_id: r.id,
+        sha256: r.sha256,
+        phash: r.phash,
+        source_type: r.source_type,
+        label: r.label,
+        confidence: r.confidence,
+        first_seen: r.first_seen,
+        occurrence_count: r.occurrence_count
+      }))
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Check if content exists in index (by SHA256)
+app.get('/index/check/:sha256', (req, res) => {
+  try {
+    const { sha256 } = req.params;
+    const result = fingerprintIndex.checkLocalIndex(sha256);
+    
+    res.json({
+      success: true,
+      sha256,
+      found: result.exactMatch !== null,
+      exact_match: result.exactMatch ? {
+        fingerprint_id: result.exactMatch.id,
+        first_seen: result.exactMatch.first_seen,
+        occurrence_count: result.exactMatch.occurrence_count,
+        labels: result.exactMatch.labels
+      } : null,
+      similar_count: result.similarMatches.length
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Get labels for a fingerprint
+app.get('/index/fingerprint/:id/labels', (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const labels = fingerprintIndex.getLabels(id);
+    
+    res.json({
+      success: true,
+      fingerprint_id: id,
+      total: labels.length,
+      labels
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Find related content (same labels as given fingerprint)
+app.get('/index/fingerprint/:id/related', (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const limit = parseInt(req.query.limit) || 20;
+    const related = fingerprintIndex.findRelatedContent(id, limit);
+    
+    res.json({
+      success: true,
+      fingerprint_id: id,
+      total: related.length,
+      related: related.map(r => ({
+        fingerprint_id: r.id,
+        sha256: r.sha256,
+        matching_label: r.matching_label,
+        confidence: r.confidence,
+        first_seen: r.first_seen
+      }))
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// List all unique labels in index
+app.get('/index/labels', (req, res) => {
+  try {
+    const stats = fingerprintIndex.getIndexStats();
+    res.json({
+      success: true,
+      unique_labels: stats.uniqueLabels,
+      top_labels: stats.topLabels
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+

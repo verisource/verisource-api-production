@@ -27,6 +27,7 @@
     "@types/fluent-ffmpeg": "^2.1.28",
     "@vladmandic/face-api": "^1.7.15",
     "axios": "^1.13.2",
+    "better-sqlite3": "^12.5.0",
     "c2pa-node": "^0.5.26",
     "canvas": "^3.2.0",
     "cors": "^2.8.5",
