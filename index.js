@@ -39,7 +39,7 @@ const { analyzeImage } = require('./google-vision-search');
 const { AudioAIDetection } = require('./services/audio-ai-detection');
 const { detectAIGeneration } = require('./services/ensemble-ai-detection');
 const { generatePHash, searchSimilarImages } = require('./phash-module');
-const { analyzeCrossReference, analyzeTemporalConsistency } = require('./services/fingerprint-index');
+const { analyzeCrossReference, analyzeTemporalConsistency, cacheExternalSearchResults, analyzeExternalSources } = require('./services/fingerprint-index');
 const ConfidenceScoring = require('./services/confidence-scoring');
 const ChromaprintService = require('./services/chromaprint');
 const acoustid = require('./acoustid-integration');
@@ -1375,7 +1375,7 @@ module.exports = { applyHybridCameraRescue, calculateCameraAuthenticityScore };
           };
         }
       }
-
+    
       // Stock Photo Rescue Logic - reduce AI false positives
       if (reverseSearchResults?.tineye?.is_stock_photo && aiDetection) {
         const stockSites = reverseSearchResults.tineye.domain_breakdown?.stock_photo_sites || 0;
@@ -1668,6 +1668,34 @@ module.exports = { applyHybridCameraRescue, calculateCameraAuthenticityScore };
         console.error('⚠️ Temporal validation error:', err.message);
       }
     }
+    // ============================================================================
+    // CACHE EXTERNAL SEARCH RESULTS
+    // ============================================================================
+    if (reverseSearchResults && crossReference?.index_status?.fingerprint_id) {
+      const fpId = crossReference.index_status.fingerprint_id;
+      try {
+        if (reverseSearchResults.tineye && reverseSearchResults.tineye.status !== 'error') {
+          cacheExternalSearchResults(fpId, 'tineye', reverseSearchResults.tineye);
+          console.log('📦 Cached TinEye results');
+        }
+        if (reverseSearchResults.google && reverseSearchResults.google.status !== 'error') {
+          cacheExternalSearchResults(fpId, 'google', reverseSearchResults.google);
+          console.log('📦 Cached Google results');
+        }
+        if (reverseSearchResults.bing && reverseSearchResults.bing.status !== 'error') {
+          cacheExternalSearchResults(fpId, 'bing', reverseSearchResults.bing);
+          console.log('📦 Cached Bing results');
+        }
+        // Add source analysis to cross-reference
+        crossReference.external_sources = analyzeExternalSources(fpId);
+        if (crossReference.external_sources.total_external_matches > 0) {
+          console.log(`📊 External sources: ${crossReference.external_sources.total_external_matches} matches indexed`);
+        }
+      } catch (err) {
+        console.error('⚠️ External cache error:', err.message);
+      }
+    }
+
 
 
     // ============================================================================
@@ -2034,6 +2062,46 @@ app.get('/index/labels', (req, res) => {
       success: true,
       unique_labels: stats.uniqueLabels,
       top_labels: stats.topLabels
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+
+// Get external matches for a fingerprint
+app.get('/index/fingerprint/:id/external', (req, res) => {
+  try {
+    const { getExternalMatches, analyzeExternalSources } = require('./services/fingerprint-index');
+    const id = parseInt(req.params.id);
+    
+    const matches = getExternalMatches(id);
+    const analysis = analyzeExternalSources(id);
+    
+    res.json({
+      success: true,
+      fingerprint_id: id,
+      ...matches,
+      analysis
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Search external matches by domain
+app.get('/index/search/domain/:domain', (req, res) => {
+  try {
+    const { searchExternalMatchesByDomain } = require('./services/fingerprint-index');
+    const { domain } = req.params;
+    
+    const matches = searchExternalMatchesByDomain(domain);
+    
+    res.json({
+      success: true,
+      query: { domain },
+      total: matches.length,
+      matches
     });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
