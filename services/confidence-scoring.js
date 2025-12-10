@@ -2,19 +2,20 @@
 // Updated: Raised base score, AI veto power, platform-aware scoring
 
 function calculateConfidenceScore(verificationData) {
-  const {
-    camera_verification,
-    ai_detection,
-    reverse_search,
-    blockchain,
-    blockchain_verification,
-    polygon_verification,
-    metadata,
-    platform_detection,
-    screenshot_detection,
-    kind,
-    mediaType = kind || 'image'
-  } = verificationData;
+ const {
+  camera_verification,
+  ai_detection,
+  reverse_search,
+  blockchain,
+  blockchain_verification,
+  polygon_verification,
+  metadata,
+  platform_detection,
+  screenshot_detection,
+  kind
+} = verificationData;
+
+const mediaType = verificationData.mediaType || kind || 'image';
 
   // Base scoring - START HIGHER (was 50, now 65)
   // Philosophy: Assume authentic until proven otherwise
