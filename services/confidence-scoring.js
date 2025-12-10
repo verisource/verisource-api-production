@@ -86,46 +86,46 @@ function calculateConfidenceScore(verificationData) {
 
   // RAISED THRESHOLDS to reduce false positives
   if (aiConfidence >= 70) {
-    // Very high AI confidence (70%+)
-    return buildResponse({
-      score: Math.max(score - 40, 10),
-      level: 'untrusted',
-      label: 'AI-GENERATED IMAGE',
-      color: '#9333EA',
-      icon: 'cpu',
-      message: `AI generation detected (${aiConfidence}% confidence)`,
-      messages,
-      warnings,
-      aiVetoApplied: true,
-      preVetoScore: score
-    });
+  return buildResponse({
+    score: Math.max(score - 40, 10),
+    level: 'untrusted',
+    label: mediaType === 'video' ? 'AI-GENERATED VIDEO' : 'AI-GENERATED IMAGE',
+    color: '#9333EA',
+    icon: 'cpu',
+    message: `AI generation detected (${aiConfidence}% confidence)`,
+    messages,
+    warnings,
+    aiVetoApplied: true,
+    preVetoScore: score
+  });
+
   } else if (aiConfidence >= 55) {
-    // High AI confidence (55-69%)
-    return buildResponse({
-      score: Math.max(score - 30, 20),
-      level: 'suspicious',
-      label: 'LIKELY AI-GENERATED IMAGE',
-      color: '#9333EA',
-      icon: 'cpu',
-      message: `Likely AI-generated (${aiConfidence}% confidence)`,
-      messages,
-      warnings,
-      aiVetoApplied: true,
-      preVetoScore: score
-    });
+  return buildResponse({
+    score: Math.max(score - 30, 20),
+    level: 'suspicious',
+    label: mediaType === 'video' ? 'LIKELY AI-GENERATED VIDEO' : 'LIKELY AI-GENERATED IMAGE',
+    color: '#9333EA',
+    icon: 'cpu',
+    message: `Likely AI-generated (${aiConfidence}% confidence)`,
+    messages,
+    warnings,
+    aiVetoApplied: true,
+    preVetoScore: score
+  });
+
   } else if (aiConfidence >= 40) {
-    // Medium AI confidence (40-54%) - EDITED, not pure AI
-    score -= 15;
-    return buildResponse({
-      score: Math.min(Math.max(score, 35), 70),
-      level: 'uncertain',
-      label: 'EDITED IMAGE',
-      color: '#F59E0B',
-      icon: 'edit',
-      message: `Photograph with AI enhancements or heavy editing (${aiConfidence}% AI indicators)`,
-      messages,
-      warnings
-    });
+  score -= 15;
+  return buildResponse({
+    score: Math.min(Math.max(score, 35), 70),
+    level: 'uncertain',
+    label: mediaType === 'video' ? 'EDITED VIDEO' : 'EDITED IMAGE',
+    color: '#F59E0B',
+    icon: 'edit',
+    message: `${mediaType === 'video' ? 'Video' : 'Photograph'} with AI enhancements or heavy editing (${aiConfidence}% AI indicators)`,
+    messages,
+    warnings
+  });
+
   } else if (aiConfidence >= 25) {
     // Low-medium AI confidence (25-39%)
     score -= 10;
