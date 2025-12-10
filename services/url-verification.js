@@ -28,6 +28,11 @@ const SUPPORTED_PLATFORMS = [
 function detectPlatform(url) {
   const urlLower = url.toLowerCase();
   
+  // Explicit YouTube Shorts check
+  if (urlLower.includes('youtube.com/shorts/')) {
+    return 'YouTube Shorts';
+  }
+
   for (const platform of SUPPORTED_PLATFORMS) {
     if (platform.patterns.some(p => urlLower.includes(p))) {
       return platform.name;
@@ -116,8 +121,8 @@ async function downloadMedia(url, outputDir = '/tmp') {
     ];
 
     // For videos, get best quality up to 1080p
-    if (result.media_type === 'video') {
-      downloadArgs.push('-f', 'best[height<=1080]/best');
+    if (result.media_type === 'video' || result.platform === 'YouTube Shorts') {
+    downloadArgs.push('-f', 'bestvideo[height<=1080]+bestaudio/best[height<=1080]/best');
     }
 
     downloadArgs.push(url);
@@ -138,6 +143,18 @@ async function downloadMedia(url, outputDir = '/tmp') {
 
     result.file_path = path.join(outputDir, files[0]);
     result.filename = files[0];
+
+    const actualExt = path.extname(files[0]).toLowerCase().slice(1);
+    const imageExts = ['jpg', 'jpeg', 'png', 'webp', 'gif'];
+
+    // Platforms that should always be treated as video
+    const videoOnlyPlatforms = ['YouTube', 'YouTube Shorts', 'TikTok', 'Vimeo', 'Twitch'];
+
+    if (videoOnlyPlatforms.includes(result.platform)) {
+    result.media_type = 'video';
+    } else {
+      result.media_type = imageExts.includes(actualExt) ? 'image' : 'video';
+    }
     result.success = true;
 
     // Get file size
