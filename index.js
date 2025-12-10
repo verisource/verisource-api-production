@@ -437,6 +437,7 @@ app.post('/verify-url', async (req, res) => {
       verification: searchResults
     };
     const confidence = ConfidenceScoring.calculateConfidenceScore(confidenceData);
+    console.log('DEBUG confidenceData:', JSON.stringify({ kind: confidenceData.kind, mediaType: confidenceData.mediaType }));
     console.log(`✅ Confidence: ${confidence.level} (${confidence.percentage}%)`);
     
     // 7. Return response
