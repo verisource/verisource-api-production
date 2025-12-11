@@ -329,7 +329,8 @@ function applyEnhancedVideoScoring(videoAnalysis, encoderAnalysis, audioAnalysis
       adjustments.push('Resolution floor: 50%');
     }
   }
-  
+ console.log('   Enhanced scoring: boost=' + totalBoost + '% reduction=' + totalReduction + '% floor=' + faceFloor); 
+
   // === APPLY FINAL SCORE ===
   aiConfidence = aiConfidence + totalBoost - totalReduction;
   
