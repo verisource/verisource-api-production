@@ -187,14 +187,16 @@ const mediaType = verificationData.mediaType || kind || 'image';
   if (mediaType === "video" && verificationData.video_analysis?.analysis) {
     const analysis = verificationData.video_analysis.analysis;
     const aiPct = analysis.aiPercentage || 0;
-    const verdict = analysis.verdict;
+    const rawVerdict = analysis.verdict;
+    const finalVerdict = verificationData.video_analysis.verdict || rawVerdict;
     const deepfake = analysis.deepfakeDetection;
     const videoAiConfidence = verificationData.video_analysis?.ai_confidence || 0;
+    const adjustments = verificationData.video_analysis?.ai_adjustments || [];
     
-   // Deepfake detected - HARD VETO (unless already handled by enhanced scoring)
+    // Deepfake detected - HARD VETO (unless already handled by enhanced scoring)
     if (deepfake?.detected) {
       // Check if enhanced scoring already dismissed the deepfake signal (authentic device)
-      const deepfakeIgnored = verificationData.video_analysis?.ai_adjustments?.some(
+      const deepfakeIgnored = adjustments.some(
         adj => adj.includes('Deepfake signal ignored')
       );
       
@@ -213,12 +215,52 @@ const mediaType = verificationData.mediaType || kind || 'image';
         });
       }
     }
-
-   // High AI percentage in video frames
-    if (verdict === "LIKELY_AI_GENERATED" || verdict?.includes("HIGHLY LIKELY") || verdict?.includes("PROBABLE_AI") || aiPct >= 80 || (videoAiConfidence >= 80 && aiPct >= 50)) {
-      // Use the higher of aiPct or suspiciousPercentage for score calculation
+    
+    // Check final verdict from enhanced scoring
+    // If enhanced scoring says LIKELY_AUTHENTIC, verify with multiple signals
+    if (finalVerdict === "LIKELY_AUTHENTIC" && videoAiConfidence <= 20) {
+      // Count authentic signals from adjustments
+      const authenticSignals = adjustments.filter(adj => 
+        adj.includes('(-') && (
+          adj.includes('LIKELY_AUTHENTIC') ||
+          adj.includes('Authentic') ||
+          adj.includes('Natural') ||
+          adj.includes('Standard resolution') ||
+          adj.includes('Device') ||
+          adj.includes('Multiple authentic')
+        )
+      ).length;
+      
+      // Check for "Multiple authentic (X/7)" pattern
+      const multipleAuthMatch = adjustments.find(adj => adj.includes('Multiple authentic'));
+      let authenticRatio = 0;
+      if (multipleAuthMatch) {
+        const match = multipleAuthMatch.match(/\((\d+)\/(\d+)\)/);
+        if (match) {
+          authenticRatio = parseInt(match[1]) / parseInt(match[2]);
+        }
+      }
+      
+      // Require 75% authentic signals OR at least 5 individual authentic adjustments
+      if (authenticRatio >= 0.75 || authenticSignals >= 5) {
+        return buildResponse({
+          score: Math.min(85, 100 - videoAiConfidence),
+          level: 'trusted',
+          label: 'VERIFIED VIDEO',
+          color: '#10B981',
+          icon: 'check-circle',
+          message: 'Video appears authentic',
+          messages,
+          warnings
+        });
+      }
+      // Not enough authentic signals - fall through to uncertain
+    }
+    
+    // High AI confidence after enhanced scoring
+    if (videoAiConfidence >= 70 || (rawVerdict === "LIKELY_AI_GENERATED" && videoAiConfidence >= 50)) {
       const suspiciousPct = analysis.suspiciousPercentage || 0;
-      const effectivePct = Math.max(aiPct, suspiciousPct, 50); // At least 50% for AI verdict
+      const effectivePct = Math.max(aiPct, suspiciousPct, videoAiConfidence, 50);
       return buildResponse({
         score: Math.max(20, 100 - effectivePct),
         level: 'untrusted',
@@ -234,7 +276,7 @@ const mediaType = verificationData.mediaType || kind || 'image';
     }
     
     // Suspicious video
-    if (verdict === "SUSPICIOUS" || verdict?.includes("POSSIBLY") || verdict?.includes("POSSIBLE_AI") || aiPct >= 40) {
+     if (finalVerdict === "SUSPICIOUS" || finalVerdict?.includes("POSSIBLY") || finalVerdict?.includes("POSSIBLE_AI") || (videoAiConfidence >= 40 && videoAiConfidence < 70)) {
       return buildResponse({
         score: Math.max(35, 100 - aiPct),
         level: 'suspicious',
@@ -248,7 +290,7 @@ const mediaType = verificationData.mediaType || kind || 'image';
     }
     
     // Authentic video
-    if (verdict === "AUTHENTIC" || aiPct < 20) {
+    if (finalVerdict === "AUTHENTIC" || aiPct < 20) {
       return buildResponse({
         score: Math.min(85, 100 - aiPct),
         level: 'trusted',
