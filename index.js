@@ -381,22 +381,145 @@ app.post('/verify-url', async (req, res) => {
     if (kind === 'video') {
       console.log('🎬 Running video AI detection...');
       try {
-       const videoAnalysis = await analyzeVideo(filePath);
+        let videoAnalysis = await analyzeVideo(filePath);
+        
+        // Apply frame analysis fix (compression artifacts cause false positives)
+        const { adjustFrameAnalysisForVideo } = require('./services/video-frame-analysis-fix');
+        videoAnalysis = adjustFrameAnalysisForVideo(videoAnalysis, download.platform);
+        
+        try {
+          const { getVideoMetadata } = require('./video-analyzer');
+          const { applyVideoAuthenticityRescue } = require('./services/video-authenticity-rescue');
+          const { analyzeEncoderSignature, getEncoderVerdict } = require('./services/encoder-fingerprinting');
+          const { analyzeVideoAudio } = require('./services/video-audio-analysis');
+          const { applyEnhancedVideoScoring } = require('./services/enhanced-video-scoring');
+          const { analyzeBitrate } = require('./services/bitrate-anomaly-detection');
+          const { analyzeGOP, getGOPSummary } = require('./services/gop-structure-analysis');
+          const { analyzeResolution } = require('./services/resolution-analysis');
+          const { analyzeMotion } = require('./services/motion-analysis');
+          const { analyzeVideoWatermarks } = require('./services/watermark-detection');
+          const { analyzeAudioContent } = require('./services/audio-content-analysis');
+          
+          const videoMeta = await getVideoMetadata(filePath);
+          
+          // 1. Device signature rescue
+          if (videoMeta && videoMeta.format && videoMeta.format.tags) {
+            videoAnalysis = applyVideoAuthenticityRescue(videoAnalysis, videoMeta.format.tags);
+          }
+          
+          // 2. Encoder fingerprinting
+          let encoderAnalysis = null;
+          if (videoMeta) {
+            console.log('🔍 Analyzing encoder signature...');
+            encoderAnalysis = analyzeEncoderSignature(videoMeta);
+            encoderAnalysis.verdict = getEncoderVerdict(encoderAnalysis);
+            console.log('   Encoder: ' + (encoderAnalysis.encoderDetected || 'unknown') + ' - ' + encoderAnalysis.verdict.verdict);
+          }
+          
+          // 3. Audio analysis
+          console.log('🔊 Analyzing audio track...');
+          const audioAnalysis = await analyzeVideoAudio(filePath);
+          if (!audioAnalysis.hasAudio) {
+            console.log('   ⚠️ No audio track');
+          } else {
+            console.log('   Audio: ' + audioAnalysis.verdict);
+          }
+          
+          // 4. Bitrate anomaly detection
+          console.log('📊 Analyzing bitrate patterns...');
+          const bitrateAnalysis = await analyzeBitrate(filePath);
+          if (bitrateAnalysis.success) {
+            console.log('   Bitrate: ' + bitrateAnalysis.verdict);
+          }
+          
+          // 5. GOP structure analysis
+          console.log('🎞️ Analyzing GOP structure...');
+          const gopAnalysis = await analyzeGOP(filePath);
+          if (gopAnalysis.success) {
+            const summary = getGOPSummary(gopAnalysis);
+            console.log('   GOP: ' + summary);
+          }
+          
+          // 6. Resolution analysis
+          console.log('📐 Analyzing resolution...');
+          const resolutionAnalysis = analyzeResolution(videoMeta);
+          
+          // 7. Motion analysis + Watermark detection
+          console.log('🎬 Analyzing motion patterns...');
+          let motionAnalysis = null;
+          let watermarkAnalysis = null;
+          try {
+            const os = require('os');
+            const motionTempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'motion-'));
+            const ffmpeg = require('fluent-ffmpeg');
+            await new Promise((resolve, reject) => {
+              ffmpeg(filePath)
+                .on('end', resolve)
+                .on('error', reject)
+                .outputOptions(['-vf', 'fps=2', '-q:v', '2', '-frames:v', '30'])
+                .output(path.join(motionTempDir, 'frame-%04d.jpg'))
+                .run();
+            });
+            const motionFrames = fs.readdirSync(motionTempDir)
+              .filter(f => f.endsWith('.jpg'))
+              .map(f => path.join(motionTempDir, f))
+              .sort();
+            if (motionFrames.length >= 3) {
+              motionAnalysis = await analyzeMotion(filePath, motionFrames);
+              if (motionAnalysis.success) {
+                console.log('   Motion: ' + motionAnalysis.verdict);
+              }
+              watermarkAnalysis = await analyzeVideoWatermarks(filePath, motionFrames);
+              if (watermarkAnalysis.watermarkDetected) {
+                console.log('   🏷️ AI Watermark: ' + watermarkAnalysis.tool);
+              }
+            }
+            fs.rmSync(motionTempDir, { recursive: true, force: true });
+          } catch (motionErr) {
+            console.log('   Motion analysis error:', motionErr.message);
+          }
+          
+          // 8. Audio content analysis
+          console.log('🔊 Analyzing audio content...');
+          let audioContentAnalysis = null;
+          try {
+            audioContentAnalysis = await analyzeAudioContent(filePath);
+            if (audioContentAnalysis.success && audioContentAnalysis.hasAudio) {
+              console.log('   Audio content: ' + audioContentAnalysis.verdict);
+            }
+          } catch (audioContentErr) {
+            console.log('   Audio content error:', audioContentErr.message);
+          }
+          
+          // 9. Apply enhanced combined scoring (all signals)
+          console.log('📊 Applying enhanced video scoring...');
+          videoAnalysis = applyEnhancedVideoScoring(
+            videoAnalysis, 
+            encoderAnalysis, 
+            audioAnalysis, 
+            bitrateAnalysis, 
+            gopAnalysis, 
+            motionAnalysis, 
+            watermarkAnalysis, 
+            audioContentAnalysis, 
+            resolutionAnalysis
+          );
+          
+          console.log('   Final: ' + (videoAnalysis.ai_confidence_original || 'N/A') + '% → ' + videoAnalysis.ai_confidence + '%');
+          
+        } catch (enhancedErr) {
+          console.log('Enhanced analysis error:', enhancedErr.message);
+        }
+        
         aiDetection = {
-    ai_confidence: videoAnalysis.analysis?.aiPercentage || videoAnalysis.analysis?.videoConfidence || 0,
-      likely_ai_generated: (videoAnalysis.analysis?.aiPercentage || 0) >= 50 || videoAnalysis.analysis?.verdict === 'LIKELY_AI_GENERATED',
-     method: 'video_frame_analysis',
-     details: videoAnalysis.analysis
-  };
+          ai_confidence: videoAnalysis.ai_confidence || videoAnalysis.analysis?.aiPercentage || 0,
+          likely_ai_generated: (videoAnalysis.ai_confidence || 0) >= 50 || videoAnalysis.analysis?.verdict === 'LIKELY_AI_GENERATED',
+          method: 'video_frame_analysis',
+          details: videoAnalysis.analysis,
+          adjustments: videoAnalysis.ai_adjustments || []
+        };
       } catch (err) {
         console.error('Video analysis error:', err.message);
-      }
-    } else {
-      console.log('🤖 Running image AI detection...');
-      try {
-        aiDetection = await ensembleAIDetection.detectAIGeneration(filePath);
-      } catch (err) {
-        console.error('AI detection error:', err.message);
       }
     }
     
