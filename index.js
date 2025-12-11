@@ -1681,7 +1681,60 @@ module.exports = { applyHybridCameraRescue, calculateCameraAuthenticityScore };
               if (videoAnalysis.ai_adjustments && videoAnalysis.ai_adjustments.length > 0) {
                 console.log('   Adjustments: ' + videoAnalysis.ai_adjustments.join(', '));
               }
-              
+             // Sightengine second opinion for edge cases (very high or very low confidence)
+              const videoAiConf = videoAnalysis.ai_confidence || 0;
+              if (process.env.SIGHTENGINE_API_USER && (videoAiConf >= 80 || videoAiConf <= 20)) {
+                try {
+                  console.log(`🔍 Sightengine verification (edge case: ${videoAiConf}%)...`);
+                  
+                  // Extract a frame for Sightengine analysis
+                  const frameDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sightengine-frame-'));
+                  const framePath = path.join(frameDir, 'frame.jpg');
+                  
+                  await new Promise((resolve, reject) => {
+                    const ffmpeg = require('fluent-ffmpeg');
+                    ffmpeg(req.file.path)
+                      .on('end', resolve)
+                      .on('error', reject)
+                      .outputOptions(['-vf', 'select=eq(n\\,30)', '-frames:v', '1', '-q:v', '2'])
+                      .output(framePath)
+                      .run();
+                  });
+                  
+                  if (fs.existsSync(framePath)) {
+                    const sightengineResult = await sightengineDetector.detectAI(framePath);
+                    const seConfidence = sightengineResult.confidence * 100;
+                    const seIsAI = sightengineResult.isAI;
+                    
+                    console.log(`   Sightengine: ${seIsAI ? 'AI' : 'Authentic'} (${seConfidence.toFixed(1)}%)`);
+                    
+                    videoAnalysis.sightengine_verification = {
+                      checked: true,
+                      isAI: seIsAI,
+                      confidence: seConfidence,
+                      local_confidence: videoAiConf,
+                      agreement: (seIsAI && videoAiConf >= 50) || (!seIsAI && videoAiConf < 50)
+                    };
+                    
+                    // If major disagreement, log warning but trust combined signals
+                    if (!videoAnalysis.sightengine_verification.agreement) {
+                      console.log(`   ⚠️ Disagreement: Local=${videoAiConf}% vs Sightengine=${seConfidence}% (${seIsAI ? 'AI' : 'Authentic'})`);
+                      
+                      // Blend scores for disagreement cases
+                      const blendedConfidence = Math.round((videoAiConf + seConfidence) / 2);
+                      console.log(`   Blending: ${videoAiConf}% + ${seConfidence}% → ${blendedConfidence}%`);
+                      videoAnalysis.ai_confidence_pre_blend = videoAiConf;
+                      videoAnalysis.ai_confidence = blendedConfidence;
+                    }
+                    
+                    fs.rmSync(frameDir, { recursive: true, force: true });
+                  }
+                } catch (seErr) {
+                  console.log(`   Sightengine error: ${seErr.message}`);
+                  videoAnalysis.sightengine_verification = { checked: false, error: seErr.message };
+                }
+              }  
+
             } catch (rescueErr) {
               console.error('⚠️ Video analysis enhancement error:', rescueErr.message);
             }
