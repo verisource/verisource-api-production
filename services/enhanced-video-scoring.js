@@ -179,11 +179,14 @@ function applyEnhancedVideoScoring(videoAnalysis, encoderAnalysis, audioAnalysis
   var hasStrongAISignal = hasAIFaceSignal || hasMotionAISignal || hasResolutionAISignal || hasAudioAISignal;
   console.log('   AI signals: face=' + hasAIFaceSignal + ' motion=' + hasMotionAISignal + ' resolution=' + hasResolutionAISignal + ' audio=' + hasAudioAISignal);
   
-  // === ENCODER SCORING ===
+ // === ENCODER SCORING ===
   if (encoderAnalysis) {
     result.encoder_analysis = Object.assign({}, encoderAnalysis);
     
-    if (encoderAnalysis.isLikelyAI && encoderAnalysis.aiScore >= 40) {
+    if (isReencodedPlatform && encoderAnalysis.encoderDetected && encoderAnalysis.encoderDetected.includes('Lavf')) {
+      // YouTube/TikTok use FFmpeg (Lavf) for re-encoding - not suspicious
+      adjustments.push('Encoder: skipped (platform re-encoding)');
+    } else if (encoderAnalysis.isLikelyAI && encoderAnalysis.aiScore >= 40) {
       var encoderBoost = encoderAnalysis.aiScore >= 70 ? 35 : (encoderAnalysis.aiScore >= 50 ? 25 : 18);
       totalBoost += encoderBoost;
       adjustments.push('Suspicious encoder (+' + encoderBoost + '%)');
