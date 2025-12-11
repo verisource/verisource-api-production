@@ -247,7 +247,7 @@ const mediaType = verificationData.mediaType || kind || 'image';
       
       if (sightengineDisagrees) {
         // Sightengine says AI with high confidence - don't trust authentic verdict
-        warnings.push(`Sightengine disagrees: ${sightengine.confidence}% AI confidence`);
+       warnings.push(`Sightengine disagrees: ${sightengine.confidence}% AI confidence`);
         // Fall through to further checks
       } else if (authenticRatio >= 0.75 || authenticSignals >= 5) {
         return buildResponse({
