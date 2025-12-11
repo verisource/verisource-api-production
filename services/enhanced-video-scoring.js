@@ -171,6 +171,7 @@ function applyEnhancedVideoScoring(videoAnalysis, encoderAnalysis, audioAnalysis
   
   // Block reductions if we have strong AI signals
   var hasStrongAISignal = hasAIFaceSignal || hasMotionAISignal || hasResolutionAISignal || hasAudioAISignal;
+  console.log('   AI signals: face=' + hasAIFaceSignal + ' motion=' + hasMotionAISignal + ' resolution=' + hasResolutionAISignal + ' audio=' + hasAudioAISignal);
   
   // === ENCODER SCORING ===
   if (encoderAnalysis) {
