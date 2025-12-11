@@ -207,10 +207,13 @@ const mediaType = verificationData.mediaType || kind || 'image';
       });
     }
 
-    // High AI percentage in video frames
+   // High AI percentage in video frames
     if (verdict === "LIKELY_AI_GENERATED" || verdict?.includes("HIGHLY LIKELY") || verdict?.includes("PROBABLE_AI") || aiPct >= 80 || (videoAiConfidence >= 80 && aiPct >= 50)) {
+      // Use the higher of aiPct or suspiciousPercentage for score calculation
+      const suspiciousPct = analysis.suspiciousPercentage || 0;
+      const effectivePct = Math.max(aiPct, suspiciousPct, 50); // At least 50% for AI verdict
       return buildResponse({
-        score: Math.max(20, 100 - aiPct),
+        score: Math.max(20, 100 - effectivePct),
         level: 'untrusted',
         label: 'AI-GENERATED VIDEO',
         color: '#DC2626',
