@@ -191,20 +191,27 @@ const mediaType = verificationData.mediaType || kind || 'image';
     const deepfake = analysis.deepfakeDetection;
     const videoAiConfidence = verificationData.video_analysis?.ai_confidence || 0;
     
-    // Deepfake detected - HARD VETO
+   // Deepfake detected - HARD VETO (unless already handled by enhanced scoring)
     if (deepfake?.detected) {
-      return buildResponse({
-        score: Math.max(20, 100 - deepfake.confidence),
-        level: 'untrusted',
-        label: 'DEEPFAKE VIDEO DETECTED',
-        color: '#DC2626',
-        icon: 'alert-triangle',
-        message: `Deepfake detected with ${deepfake.confidence}% confidence`,
-        messages,
-        warnings: [...warnings, 'Deepfake manipulation detected'],
-        aiVetoApplied: true,
-        preVetoScore: score
-      });
+      // Check if enhanced scoring already dismissed the deepfake signal (authentic device)
+      const deepfakeIgnored = verificationData.video_analysis?.ai_adjustments?.some(
+        adj => adj.includes('Deepfake signal ignored')
+      );
+      
+      if (!deepfakeIgnored) {
+        return buildResponse({
+          score: Math.max(20, 100 - deepfake.confidence),
+          level: 'untrusted',
+          label: 'DEEPFAKE VIDEO DETECTED',
+          color: '#DC2626',
+          icon: 'alert-triangle',
+          message: `Deepfake detected with ${deepfake.confidence}% confidence`,
+          messages,
+          warnings: [...warnings, 'Deepfake manipulation detected'],
+          aiVetoApplied: true,
+          preVetoScore: score
+        });
+      }
     }
 
    // High AI percentage in video frames
