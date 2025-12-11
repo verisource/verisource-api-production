@@ -280,11 +280,11 @@ const mediaType = verificationData.mediaType || kind || 'image';
   // ========================================
   // FINAL CLASSIFICATION
   // ========================================
-  if (score >= 75) {
+ if (score >= 75) {
     return buildResponse({
       score,
       level: 'trusted',
-      label: 'VERIFIED IMAGE',
+      label: mediaType === 'video' ? 'VERIFIED VIDEO' : 'VERIFIED IMAGE',
       color: '#10B981',
       icon: 'check-circle',
       message: messages.join(', '),
@@ -297,7 +297,7 @@ const mediaType = verificationData.mediaType || kind || 'image';
     return buildResponse({
       score,
       level: 'acceptable',
-      label: 'LIKELY REAL IMAGE',
+      label: mediaType === 'video' ? 'LIKELY REAL VIDEO' : 'LIKELY REAL IMAGE',
       color: '#3B82F6',
       icon: 'camera',
       message: messages.join(', '),
@@ -310,7 +310,7 @@ const mediaType = verificationData.mediaType || kind || 'image';
     return buildResponse({
       score,
       level: 'uncertain',
-      label: 'EDITED IMAGE',
+      label: mediaType === 'video' ? 'EDITED VIDEO' : 'EDITED IMAGE',
       color: '#F59E0B',
       icon: 'edit',
       message: messages.join(', '),
@@ -323,7 +323,7 @@ const mediaType = verificationData.mediaType || kind || 'image';
     return buildResponse({
       score,
       level: 'suspicious',
-      label: 'UNCERTAIN IMAGE',
+      label: mediaType === 'video' ? 'UNCERTAIN VIDEO' : 'UNCERTAIN IMAGE',
       color: '#6B7280',
       icon: 'help-circle',
       message: messages.join(', '),
