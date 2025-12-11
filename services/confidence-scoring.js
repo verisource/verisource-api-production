@@ -241,8 +241,15 @@ const mediaType = verificationData.mediaType || kind || 'image';
         }
       }
       
-      // Require 75% authentic signals OR at least 5 individual authentic adjustments
-      if (authenticRatio >= 0.75 || authenticSignals >= 5) {
+      // Check if Sightengine strongly disagrees
+      const sightengine = verificationData.video_analysis?.sightengine_verification;
+      const sightengineDisagrees = sightengine?.checked && sightengine?.isAI && sightengine?.confidence >= 60;
+      
+      if (sightengineDisagrees) {
+        // Sightengine says AI with high confidence - don't trust authentic verdict
+        warnings.push(`Sightengine disagrees: ${sightengine.confidence}% AI confidence`);
+        // Fall through to further checks
+      } else if (authenticRatio >= 0.75 || authenticSignals >= 5) {
         return buildResponse({
           score: Math.min(85, 100 - videoAiConfidence),
           level: 'trusted',
