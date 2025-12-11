@@ -2,7 +2,7 @@
  * Enhanced Video AI Scoring
  * Combines all 9 signals: encoder, audio, audio content, bitrate, GOP, motion, watermarks, resolution
  */
-function applyEnhancedVideoScoring(videoAnalysis, encoderAnalysis, audioAnalysis, bitrateAnalysis, gopAnalysis, motionAnalysis, watermarkAnalysis, audioContentAnalysis, resolutionAnalysis) {
+function applyEnhancedVideoScoring(videoAnalysis, encoderAnalysis, audioAnalysis, bitrateAnalysis, gopAnalysis, motionAnalysis, watermarkAnalysis, audioContentAnalysis, resolutionAnalysis, platform) {
   if (!videoAnalysis) return videoAnalysis;
   
   var result = Object.assign({}, videoAnalysis);
@@ -18,10 +18,16 @@ function applyEnhancedVideoScoring(videoAnalysis, encoderAnalysis, audioAnalysis
   
   // === RESOLUTION ANALYSIS (HIGH PRIORITY - catches Sora) ===
   var hasResolutionAISignal = false;
+  var REENCODING_PLATFORMS = ['YouTube', 'YouTube Shorts', 'TikTok', 'Instagram', 'Facebook', 'Twitter', 'Twitch'];
+  var isReencodedPlatform = platform && REENCODING_PLATFORMS.includes(platform);
+  
   if (resolutionAnalysis && resolutionAnalysis.success) {
     result.resolution_analysis = resolutionAnalysis;
     
-    if (resolutionAnalysis.aiToolMatch && resolutionAnalysis.aiToolMatch.matched) {
+    if (isReencodedPlatform) {
+      // Skip resolution AI signals for re-encoded platforms - they destroy original resolution
+      adjustments.push('Resolution: skipped (platform re-encoding)');
+    } else if (resolutionAnalysis.aiToolMatch && resolutionAnalysis.aiToolMatch.matched) {
       // Exact AI tool resolution match - very strong signal
       var resBoost = resolutionAnalysis.aiToolMatch.confidence;
       totalBoost += resBoost;

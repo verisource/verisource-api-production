@@ -502,7 +502,8 @@ app.post('/verify-url', async (req, res) => {
             motionAnalysis, 
             watermarkAnalysis, 
             audioContentAnalysis, 
-            resolutionAnalysis
+            resolutionAnalysis,
+            download.platform
           );
           
           console.log('   Final: ' + (videoAnalysis.ai_confidence_original || 'N/A') + '% → ' + videoAnalysis.ai_confidence + '%');
@@ -1673,7 +1674,7 @@ module.exports = { applyHybridCameraRescue, calculateCameraAuthenticityScore };
 
               // 10. Apply enhanced combined scoring (all 9 signals)
               console.log('📊 Applying enhanced video scoring...');
-              videoAnalysis = applyEnhancedVideoScoring(videoAnalysis, encoderAnalysis, audioAnalysis, bitrateAnalysis, gopAnalysis, motionAnalysis, watermarkAnalysis, audioContentAnalysis, resolutionAnalysis);
+              videoAnalysis = applyEnhancedVideoScoring(videoAnalysis, encoderAnalysis, audioAnalysis, bitrateAnalysis, gopAnalysis, motionAnalysis, watermarkAnalysis, audioContentAnalysis, resolutionAnalysis, null);
               
               console.log('   Final: ' + videoAnalysis.ai_confidence_original + '% → ' + videoAnalysis.ai_confidence + '% (' + videoAnalysis.verdict + ')');
               
