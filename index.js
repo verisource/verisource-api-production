@@ -414,6 +414,8 @@ app.post('/verify-remote', async (req, res) => {
     // Run verification based on file type
     let aiDetection = null;
     let videoAnalysis = null;
+    let phash = null;
+    let similarImages = null;
     
     if (kind === 'video') {
       console.log('🎬 Running video analysis...');
@@ -588,9 +590,52 @@ app.post('/verify-remote', async (req, res) => {
       console.warn('⚠️ Metadata analysis error:', metaErr.message);
       aiDetection.metadata_check = { error: metaErr.message };
     }
-  } catch (aiErr) {
+
+    // Generate pHash for images
+    let phash = null;
+    try {
+      console.log('🔍 Generating pHash for image...');
+      const { generatePHash } = require('./phash-module');
+      const phashResult = await generatePHash(tempFilePath);
+      if (phashResult.success) {
+        phash = phashResult.phash;
+        console.log('✅ pHash generated:', phash);
+      }
+    } catch (phashErr) {
+      console.warn('⚠️ pHash error:', phashErr.message);
+    }
     
-  
+    // Add pHash to aiDetection or as separate field
+    aiDetection.phash = phash;
+
+  // Search for similar images
+    let similarImages = null;
+    if (phash && dbReady) {
+      try {
+        console.log('🔍 Searching for similar images...');
+        const { searchSimilarImages } = require('./phash-module');
+        const similar = await searchSimilarImages(phash, db);
+        if (similar && similar.length > 0) {
+          similarImages = {
+            found: true,
+            count: similar.length,
+            matches: similar.slice(0, 5)  // Top 5 matches
+          };
+          console.log(`✅ Found ${similar.length} similar images`);
+        } else {
+          similarImages = {
+            found: false,
+            count: 0,
+            matches: []
+          };
+          console.log('✅ No similar images found');
+        }
+      } catch (simErr) {
+        console.warn('⚠️ Similar image search error:', simErr.message);
+      }
+    }
+
+  } catch (aiErr) {
     console.error('⚠️ AI detection error:', aiErr.message);
     aiDetection = { error: aiErr.message };
   }
@@ -647,6 +692,8 @@ app.post('/verify-remote', async (req, res) => {
         hash: fingerprint,
         version: 'v1'
       },
+      phash: phash,
+      similar_images: similarImages,
       confidence: confidenceResult,
       ai_detection: aiDetection,
       video_analysis: videoAnalysis,
