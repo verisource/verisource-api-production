@@ -523,9 +523,74 @@ app.post('/verify-remote', async (req, res) => {
       external_verification: finalResult.external_verification || null
     };
     
-    console.log(`✅ Detection: ${aiDetection.verdict} (${aiDetection.ai_confidence}%)`);
+   console.log(`✅ Detection: ${aiDetection.verdict} (${aiDetection.ai_confidence}%)`);
     
+    // Run JPEG Forensics separately
+    try {
+      console.log('🔬 Running JPEG forensics...');
+      const JPEGForensics = require('./services/jpeg-forensics');
+      const forensicsResult = await JPEGForensics.analyze(tempFilePath);
+      
+      if (forensicsResult) {
+        aiDetection.jpeg_forensics = forensicsResult;
+        aiDetection.manipulation_detected = forensicsResult.manipulation_detected || false;
+        aiDetection.manipulation_confidence = forensicsResult.confidence || 0;
+        
+        // Add forensic indicators/warnings
+        if (forensicsResult.indicators) {
+          aiDetection.indicators = [...(aiDetection.indicators || []), ...forensicsResult.indicators];
+        }
+        if (forensicsResult.warnings) {
+          aiDetection.warnings = [...(aiDetection.warnings || []), ...forensicsResult.warnings];
+        }
+        
+        console.log(`✅ Forensics: ${forensicsResult.verdict || 'Complete'} (manipulation: ${forensicsResult.manipulation_detected ? 'YES' : 'NO'})`);
+      }
+    } catch (forensicsErr) {
+      console.warn('⚠️ JPEG forensics error:', forensicsErr.message);
+      aiDetection.jpeg_forensics = { error: forensicsErr.message };
+    }
+    
+    // Run Metadata Analysis
+    try {
+      console.log('📋 Analyzing metadata...');
+      const ExifReader = require('exifreader');
+      const fileBuffer = fs.readFileSync(tempFilePath);
+      const tags = ExifReader.load(fileBuffer);
+      
+      const hasExif = Object.keys(tags).length > 0;
+      const hasCameraInfo = !!(tags.Make || tags.Model);
+      
+      aiDetection.metadata_check = {
+        has_exif: hasExif,
+        has_camera_info: hasCameraInfo,
+        camera_info: hasCameraInfo ? {
+          make: tags.Make?.description || null,
+          model: tags.Model?.description || null,
+          software: tags.Software?.description || null,
+          date_time: tags.DateTime?.description || tags.DateTimeOriginal?.description || null
+        } : null,
+        gps: tags.GPSLatitude ? {
+          latitude: tags.GPSLatitude.description,
+          longitude: tags.GPSLongitude?.description
+        } : null
+      };
+      
+      // Add warning if no camera metadata
+      if (!hasCameraInfo) {
+        aiDetection.warnings = aiDetection.warnings || [];
+        aiDetection.warnings.push('Missing camera metadata - common in AI-generated images');
+      }
+      
+      console.log(`✅ Metadata: ${hasExif ? 'EXIF found' : 'No EXIF'}, Camera: ${hasCameraInfo ? 'Yes' : 'No'}`);
+      
+    } catch (metaErr) {
+      console.warn('⚠️ Metadata analysis error:', metaErr.message);
+      aiDetection.metadata_check = { error: metaErr.message };
+    }
   } catch (aiErr) {
+    
+  
     console.error('⚠️ AI detection error:', aiErr.message);
     aiDetection = { error: aiErr.message };
   }
