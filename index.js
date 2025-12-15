@@ -330,6 +330,216 @@ app.get('/blockchain/verify/:hash', async (req, res) => {
   });
 })();
 // ============================================
+// REMOTE FILE VERIFY ENDPOINT (for Base44, Bubble, etc.)
+// ============================================
+app.post('/verify-remote', async (req, res) => {
+  const requestId = Date.now();
+  console.log(`\n📡 [${requestId}] Remote File Verification Request`);
+  
+  const { file_url } = req.body;
+  
+  if (!file_url) {
+    return res.status(400).json({ error: 'No file_url provided' });
+  }
+  
+  console.log(`🔗 File URL: ${file_url}`);
+  
+  try {
+    const fs = require('fs');
+    const path = require('path');
+    const https = require('https');
+    const http = require('http');
+    
+    // Download file from URL
+    const tempDir = '/tmp';
+    const urlObj = new URL(file_url);
+    const ext = path.extname(urlObj.pathname) || '.jpg';
+    const tempFileName = `remote_${requestId}${ext}`;
+    const tempFilePath = path.join(tempDir, tempFileName);
+    
+    console.log(`📥 Downloading to: ${tempFilePath}`);
+    
+    // Download the file
+    await new Promise((resolve, reject) => {
+      const protocol = file_url.startsWith('https') ? https : http;
+      const file = fs.createWriteStream(tempFilePath);
+      
+      protocol.get(file_url, (response) => {
+        // Handle redirects
+        if (response.statusCode === 301 || response.statusCode === 302) {
+          const redirectUrl = response.headers.location;
+          protocol.get(redirectUrl, (redirectResponse) => {
+            redirectResponse.pipe(file);
+            file.on('finish', () => {
+              file.close();
+              resolve();
+            });
+          }).on('error', reject);
+        } else {
+          response.pipe(file);
+          file.on('finish', () => {
+            file.close();
+            resolve();
+          });
+        }
+      }).on('error', (err) => {
+        fs.unlink(tempFilePath, () => {});
+        reject(err);
+      });
+    });
+    
+    // Check file exists and get stats
+    const stats = fs.statSync(tempFilePath);
+    console.log(`✅ Downloaded: ${tempFileName} (${(stats.size / 1024 / 1024).toFixed(2)} MB)`);
+    
+    // Determine file type
+    const imageExts = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp'];
+    const videoExts = ['.mp4', '.mov', '.avi', '.webm', '.mkv', '.m4v'];
+    const extLower = ext.toLowerCase();
+    
+    let kind = 'image';
+    if (videoExts.includes(extLower)) {
+      kind = 'video';
+    }
+    
+    // Generate fingerprint
+    console.log('🔐 Generating fingerprint...');
+    const fileBuffer = fs.readFileSync(tempFilePath);
+    const fingerprint = crypto.createHash('sha256').update(fileBuffer).digest('hex');
+    
+    // Check database for existing verification
+    console.log('🔍 Checking verification history...');
+    const searchResults = await searchByFingerprint(fingerprint);
+    
+    // Run verification based on file type
+    let aiDetection = null;
+    let videoAnalysis = null;
+    
+    if (kind === 'video') {
+      console.log('🎬 Running video analysis...');
+      try {
+        videoAnalysis = await analyzeVideo(tempFilePath);
+        
+        const { adjustFrameAnalysisForVideo } = require('./services/video-frame-analysis-fix');
+        videoAnalysis = adjustFrameAnalysisForVideo(videoAnalysis, null);
+        
+        const { applyEnhancedVideoScoring } = require('./services/enhanced-video-scoring');
+        const { analyzeEncoderSignature } = require('./services/encoder-fingerprinting');
+        const { analyzeVideoAudio } = require('./services/video-audio-analysis');
+        const { analyzeBitrate } = require('./services/bitrate-anomaly-detection');
+        const { analyzeGOP } = require('./services/gop-structure-analysis');
+        const { analyzeResolution } = require('./services/resolution-analysis');
+        const { analyzeMotion } = require('./services/motion-analysis');
+        
+        const encoderAnalysis = await analyzeEncoderSignature(tempFilePath);
+        const audioAnalysis = await analyzeVideoAudio(tempFilePath);
+        const bitrateAnalysis = await analyzeBitrate(tempFilePath);
+        const gopAnalysis = await analyzeGOP(tempFilePath);
+        const resolutionAnalysis = analyzeResolution(videoAnalysis.metadata);
+        const motionAnalysis = await analyzeMotion(tempFilePath);
+        
+        videoAnalysis.encoder_analysis = encoderAnalysis;
+        videoAnalysis.audio_analysis = audioAnalysis;
+        videoAnalysis.bitrate_analysis = bitrateAnalysis;
+        videoAnalysis.gop_analysis = gopAnalysis;
+        videoAnalysis.resolution_analysis = resolutionAnalysis;
+        videoAnalysis.motion_analysis = motionAnalysis;
+        
+        videoAnalysis = applyEnhancedVideoScoring(
+          videoAnalysis, encoderAnalysis, audioAnalysis, bitrateAnalysis,
+          gopAnalysis, motionAnalysis, null, null, resolutionAnalysis, null
+        );
+        
+      } catch (videoErr) {
+        console.error('⚠️ Video analysis error:', videoErr.message);
+        videoAnalysis = { error: videoErr.message };
+      }
+    } else {
+      console.log('🖼️ Running image AI detection...');
+      try {
+        const { detectAI } = require('./services/enhanced-ai-detector-v2');
+        aiDetection = await detectAI(tempFilePath);
+      } catch (aiErr) {
+        console.error('⚠️ AI detection error:', aiErr.message);
+        aiDetection = { error: aiErr.message };
+      }
+    }
+    
+    // Calculate confidence score
+    const { calculateConfidenceScore } = require('./services/confidence-scoring');
+    const confidenceResult = calculateConfidenceScore({
+      kind,
+      ai_detection: aiDetection,
+      video_analysis: videoAnalysis,
+      verification: searchResults
+    });
+    
+    // Blockchain timestamping
+    let blockchainVerification = { enabled: false };
+    try {
+      const { submitToBlockchain, checkExistingTimestamp } = require('./services/blockchain-timestamp');
+      const existingProof = await checkExistingTimestamp(fingerprint);
+      if (existingProof) {
+        blockchainVerification = {
+          success: true,
+          status: 'previously_timestamped',
+          ...existingProof
+        };
+      } else {
+        blockchainVerification = await submitToBlockchain(fingerprint, tempFilePath);
+      }
+    } catch (bcErr) {
+      console.error('⚠️ Blockchain error:', bcErr.message);
+      blockchainVerification = { enabled: true, error: bcErr.message };
+    }
+    
+    // Clean up temp file
+    try {
+      fs.unlinkSync(tempFilePath);
+      console.log('🧹 Cleaned up temp file');
+    } catch (cleanErr) {
+      console.warn('⚠️ Cleanup warning:', cleanErr.message);
+    }
+    
+    // Build response
+    const response = {
+      success: true,
+      source: 'remote_url',
+      file_url: file_url,
+      filename: tempFileName,
+      kind,
+      size_bytes: stats.size,
+      fingerprint: {
+        algorithm: 'sha256',
+        hash: fingerprint,
+        version: 'v1'
+      },
+      confidence: confidenceResult,
+      ai_detection: aiDetection,
+      video_analysis: videoAnalysis,
+      blockchain_verification: blockchainVerification,
+      verification: {
+        status: searchResults.found ? 'PREVIOUSLY_VERIFIED' : 'NEW',
+        is_first: !searchResults.found,
+        first_seen: searchResults.found ? searchResults.first_seen : new Date().toISOString(),
+        times_verified: searchResults.found ? searchResults.times_verified : 1
+      },
+      verified_at: new Date().toISOString()
+    };
+    
+    console.log(`✅ [${requestId}] Remote verification complete: ${confidenceResult.label}`);
+    res.json(response);
+    
+  } catch (err) {
+    console.error(`❌ [${requestId}] Remote verification error:`, err.message);
+    res.status(500).json({
+      error: 'Remote verification failed',
+      message: err.message,
+      file_url: file_url
+    });
+  }
+});
+// ============================================
 // URL VERIFY ENDPOINT
 // ============================================
 const UrlVerification = require('./services/url-verification');
