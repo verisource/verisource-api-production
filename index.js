@@ -457,8 +457,9 @@ app.post('/verify-remote', async (req, res) => {
     } else {
       console.log('🖼️ Running image AI detection...');
       try {
-        const { detectAI } = require('./services/enhanced-ai-detector-v2');
-        aiDetection = await detectAI(tempFilePath);
+        const EnhancedAIDetector = require('./services/enhanced-ai-detector-v2');
+        const detector = new EnhancedAIDetector();
+        aiDetection = await detector.analyze(tempFilePath);
       } catch (aiErr) {
         console.error('⚠️ AI detection error:', aiErr.message);
         aiDetection = { error: aiErr.message };
@@ -475,23 +476,25 @@ app.post('/verify-remote', async (req, res) => {
     });
     
     // Blockchain timestamping
-    let blockchainVerification = { enabled: false };
+    let blockchainVerification = null;
+    let polygonVerification = null;
+
+    if (!searchResults.found) {
+    console.log('⛓️ Submitting to blockchain...');
     try {
-      const { submitToBlockchain, checkExistingTimestamp } = require('./services/blockchain-timestamp');
-      const existingProof = await checkExistingTimestamp(fingerprint);
-      if (existingProof) {
-        blockchainVerification = {
-          success: true,
-          status: 'previously_timestamped',
-          ...existingProof
-        };
-      } else {
-        blockchainVerification = await submitToBlockchain(fingerprint, tempFilePath);
-      }
-    } catch (bcErr) {
-      console.error('⚠️ Blockchain error:', bcErr.message);
-      blockchainVerification = { enabled: true, error: bcErr.message };
-    }
+    const BlockchainService = require('./services/opentimestamps-service');
+    blockchainVerification = await BlockchainService.timestamp(fingerprint, tempFileName);
+  } catch (bcErr) {
+    console.error('⚠️ Blockchain error:', bcErr.message);
+  }
+  
+  try {
+    const PolygonService = require('./services/polygon-timestamp');
+    polygonVerification = await PolygonService.timestamp(fingerprint, tempFileName);
+  } catch (polyErr) {
+    console.error('⚠️ Polygon error:', polyErr.message);
+  }
+}
     
     // Clean up temp file
     try {
