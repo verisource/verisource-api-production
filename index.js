@@ -455,15 +455,81 @@ app.post('/verify-remote', async (req, res) => {
         videoAnalysis = { error: videoErr.message };
       }
     } else {
-      console.log('🖼️ Running image AI detection...');
-      try {
-        const EnhancedAIDetector = require('./services/enhanced-ai-detector-v2');
-        aiDetection = await EnhancedAIDetector.detect(tempFilePath);
-      } catch (aiErr) {
-        console.error('⚠️ AI detection error:', aiErr.message);
-        aiDetection = { error: aiErr.message };
-      }
+  console.log('🖼️ Running image AI detection...');
+  try {
+    const { detectAIGeneration } = require('./services/ensemble-ai-detection');
+    const sightengineDetector = require('./services/sightengine-ai-detection');
+    
+    const localResult = await detectAIGeneration(tempFilePath);
+    
+    // Smart routing: decide if we need Sightengine
+    let needsExternalCheck = false;
+    
+    if (localResult.ai_confidence >= 20 && localResult.ai_confidence < 80) {
+      needsExternalCheck = true;
+      console.log(`⚠️ Local confidence: ${localResult.ai_confidence}% - calling Sightengine`);
     }
+    
+    let finalResult = localResult;
+    
+    // Call Sightengine if needed
+    if (needsExternalCheck && process.env.SIGHTENGINE_API_USER) {
+      try {
+        const sightengineResult = await sightengineDetector.detectAI(tempFilePath);
+        console.log(`✅ Sightengine: ${sightengineResult.isAI ? 'AI' : 'Authentic'} (${(sightengineResult.confidence * 100).toFixed(1)}%)`);
+        
+        finalResult = {
+          ...localResult,
+          ai_confidence: sightengineResult.confidence * 100,
+          likely_ai_generated: sightengineResult.isAI,
+          external_verification: {
+            provider: 'sightengine',
+            confidence: sightengineResult.confidence,
+            isAI: sightengineResult.isAI
+          },
+          routing_decision: 'external_used',
+          confidence_source: 'sightengine'
+        };
+      } catch (sightengineError) {
+        console.warn('⚠️ Sightengine failed:', sightengineError.message);
+        finalResult.routing_decision = 'external_failed';
+        finalResult.confidence_source = 'local';
+      }
+    } else {
+      finalResult.routing_decision = needsExternalCheck ? 'external_not_configured' : 'local_confident';
+      finalResult.confidence_source = 'local';
+    }
+    
+    // Map to expected format
+    aiDetection = {
+      likely_ai_generated: finalResult.likely_ai_generated,
+      ai_confidence: finalResult.ai_confidence,
+      indicators: finalResult.indicators || [],
+      warnings: [],
+      recommendations: [],
+      ensemble_results: finalResult.individual_results || null,
+      ensemble_agreement: finalResult.agreement || null,
+      detector_count: finalResult.detector_count || 1,
+      forensic_analysis: {
+        manipulation_detected: finalResult.ai_confidence >= 50,
+        manipulation_confidence: finalResult.ai_confidence,
+        compression_quality: finalResult.individual_results?.jpeg?.details?.quality || 0,
+        double_compressed: finalResult.individual_results?.jpeg?.details?.doubleCompressed || false,
+        noise_level: finalResult.individual_results?.jpeg?.details?.noise || 'unknown'
+      },
+      verdict: finalResult.likely_ai_generated ? 'AI-GENERATED IMAGE' : 'LIKELY REAL IMAGE',
+      routing_decision: finalResult.routing_decision,
+      confidence_source: finalResult.confidence_source,
+      external_verification: finalResult.external_verification || null
+    };
+    
+    console.log(`✅ Detection: ${aiDetection.verdict} (${aiDetection.ai_confidence}%)`);
+    
+  } catch (aiErr) {
+    console.error('⚠️ AI detection error:', aiErr.message);
+    aiDetection = { error: aiErr.message };
+  }
+}
     
     // Calculate confidence score
     const { calculateConfidenceScore } = require('./services/confidence-scoring');
