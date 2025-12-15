@@ -592,7 +592,6 @@ app.post('/verify-remote', async (req, res) => {
     }
 
     // Generate pHash for images
-    let phash = null;
     try {
       console.log('🔍 Generating pHash for image...');
       const { generatePHash } = require('./phash-module');
@@ -609,7 +608,6 @@ app.post('/verify-remote', async (req, res) => {
     aiDetection.phash = phash;
 
   // Search for similar images
-    let similarImages = null;
     if (phash && dbReady) {
       try {
         console.log('🔍 Searching for similar images...');
