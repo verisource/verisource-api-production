@@ -458,8 +458,7 @@ app.post('/verify-remote', async (req, res) => {
       console.log('🖼️ Running image AI detection...');
       try {
         const EnhancedAIDetector = require('./services/enhanced-ai-detector-v2');
-        const detector = new EnhancedAIDetector();
-        aiDetection = await detector.analyze(tempFilePath);
+        aiDetection = await EnhancedAIDetector.detect(tempFilePath);
       } catch (aiErr) {
         console.error('⚠️ AI detection error:', aiErr.message);
         aiDetection = { error: aiErr.message };
