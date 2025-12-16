@@ -923,23 +923,20 @@ app.post('/verify-remote', async (req, res) => {
             if (aiDetection && !aiDetection.error && aiDetection.ai_confidence > 40) {
               try {
                 console.log('📷 Running hybrid camera rescue...');
-                const { applyHybridCameraRescue } = require('./services/hybrid-camera-rescue') || { applyHybridCameraRescue: null };
-                if (typeof applyHybridCameraRescue === 'function') {
-                  aiDetection = await applyHybridCameraRescue(
-                    aiDetection,
-                    {
-                      camera_verification: cameraVerification,
-                      google_vision: googleVisionResult,
-                      deepfake_detection: deepfakeAnalysis
-                    },
-                    async () => {
-                      const result = await sightengineDetector.detectAI(tempFilePath);
-                      return { provider: 'sightengine', isAI: result.isAI, confidence: result.confidence * 100 };
-                    }
-                  );
-                  if (aiDetection.hybrid_rescue_applied) {
-                    console.log(`📷 Hybrid rescue applied: Camera score ${aiDetection.camera_authenticity_score}, AI ${aiDetection.pre_rescue_confidence}% → ${aiDetection.ai_confidence}%`);
+                aiDetection = await applyHybridCameraRescue(
+                  aiDetection,
+                  {
+                    camera_verification: cameraVerification,
+                    google_vision: googleVisionResult,
+                    deepfake_detection: deepfakeAnalysis
+                  },
+                  async () => {
+                    const result = await sightengineDetector.detectAI(tempFilePath);
+                    return { provider: 'sightengine', isAI: result.isAI, confidence: result.confidence * 100 };
                   }
+                );
+                if (aiDetection.hybrid_rescue_applied) {
+                  console.log(`📷 Hybrid rescue applied: Camera score ${aiDetection.camera_authenticity_score}, AI ${aiDetection.pre_rescue_confidence}% → ${aiDetection.ai_confidence}%`);
                 }
               } catch (err) {
                 console.error('⚠️ Hybrid camera rescue error:', err.message);
