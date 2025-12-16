@@ -235,14 +235,7 @@ class JPEGForensics {
             }
           }
         }
-          
-          if (line.includes('Compression:')) {
-            if (line.includes('JPEG')) {
-              compression.compression_artifacts = 'jpeg';
-            }
-          }
-        }
-
+      
         // Check for quantization table anomalies
         const qtCmd = `djpeg -verbose "${imagePath}" 2>&1 | head -20`;
         exec(qtCmd, { timeout: 5000 }, (qtError, qtOut) => {
