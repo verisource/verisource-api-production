@@ -696,6 +696,7 @@ app.post('/verify-remote', async (req, res) => {
       ai_detection: aiDetection,
       video_analysis: videoAnalysis,
       blockchain_verification: blockchainVerification,
+      polygon_verification: polygonVerification,
       verification: {
         status: searchResults.found ? 'PREVIOUSLY_VERIFIED' : 'NEW',
         is_first: !searchResults.found,
