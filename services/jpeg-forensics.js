@@ -196,19 +196,45 @@ class JPEGForensics {
             if (match) {
               compression.quality_estimate = parseInt(match[1]);
               
-              // Very specific quality levels suggest re-encoding
-              if (compression.quality_estimate === 71 || 
-                  compression.quality_estimate === 72 ||
-                  compression.quality_estimate === 73) {
+              // Smarter double compression detection
+              // Social media platforms use specific quality levels
+              const socialMediaQualities = [71, 72, 73, 75, 80, 85]; // Instagram, Facebook, Twitter
+              
+              // Professional cameras typically save at 95-100
+              // Editing software (Lightroom, Capture One) typically saves at 90-100
+              // Quality below 90 strongly suggests re-compression or web delivery
+              
+              if (socialMediaQualities.includes(compression.quality_estimate)) {
                 compression.double_compressed = true;
-                compression.indicators.push('Quality level suggests social media re-compression');
-              } else if (compression.quality_estimate < 85) {
-                compression.indicators.push('Lower quality - may be re-compressed');
+                compression.recompression_source = 'social_media';
+                compression.indicators.push(`Quality ${compression.quality_estimate}% matches social media compression`);
+              } else if (compression.quality_estimate < 90 && compression.quality_estimate >= 60) {
+                compression.double_compressed = true;
+                compression.recompression_source = 'web_optimized';
+                compression.indicators.push(`Quality ${compression.quality_estimate}% suggests web/CMS re-compression`);
+              } else if (compression.quality_estimate < 60) {
+                compression.double_compressed = true;
+                compression.recompression_source = 'heavy_compression';
+                compression.indicators.push(`Quality ${compression.quality_estimate}% indicates heavy re-compression`);
               } else if (compression.quality_estimate >= 95) {
-                compression.indicators.push('High quality preserved');
+                compression.double_compressed = false;
+                compression.recompression_source = 'original';
+                compression.indicators.push('High quality preserved - likely original or minimal re-compression');
+              } else {
+                // 90-94 range - could be either
+                compression.double_compressed = false;
+                compression.recompression_source = 'possibly_edited';
+                compression.indicators.push(`Quality ${compression.quality_estimate}% - possibly edited but not heavily compressed`);
               }
             }
           }
+          
+          if (line.includes('Compression:')) {
+            if (line.includes('JPEG')) {
+              compression.compression_artifacts = 'jpeg';
+            }
+          }
+        }
           
           if (line.includes('Compression:')) {
             if (line.includes('JPEG')) {
