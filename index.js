@@ -547,6 +547,7 @@ app.post('/verify-remote', async (req, res) => {
   let deepfakeAnalysis = null;
   let screenshotDetection = null;
   let tempFilePath = null;
+  let jpegForensics = null;
   
   try {
     // ============================================
@@ -852,7 +853,29 @@ app.post('/verify-remote', async (req, res) => {
         aiDetection = { error: err.message };
       }
     }
-
+// ============================================
+    // STEP 7B: JPEG Forensics Analysis
+    // ============================================
+    let jpegForensics = null;
+    if (kind === 'image') {
+      try {
+        console.log('🔬 Running JPEG forensics analysis...');
+        jpegForensics = await JPEGForensics.analyze(tempFilePath);
+        
+        if (jpegForensics) {
+          console.log(`✅ Forensics: ${jpegForensics.verdict}`);
+          console.log(`   ELA: ${jpegForensics.ela_analysis?.performed ? 'Performed' : 'Skipped'}, Double Compressed: ${jpegForensics.compression_analysis?.double_compressed ? 'Yes' : 'No'}`);
+          
+          // Attach to aiDetection
+          if (aiDetection && !aiDetection.error) {
+            aiDetection.jpeg_forensics = jpegForensics;
+          }
+        }
+      } catch (err) {
+        console.error('⚠️ JPEG forensics error:', err.message);
+        jpegForensics = { error: err.message };
+      }
+    }
     // ============================================
     // STEP 8: Google Vision Analysis
     // ============================================
@@ -2191,13 +2214,13 @@ if (kind === 'image') {
       detector_count: finalResult.detector_count || 1,
       
       forensic_analysis: {
-        manipulation_detected: finalResult.ai_confidence >= 50,
-        manipulation_confidence: finalResult.ai_confidence,
-        ela_performed: false, // ELA not part of ensemble yet
-        compression_quality: finalResult.individual_results?.jpeg?.details?.quality || 0,
-        double_compressed: finalResult.individual_results?.jpeg?.details?.doubleCompressed || false,
-        noise_level: finalResult.individual_results?.jpeg?.details?.noise || 'unknown'
-      },
+            manipulation_detected: finalResult.ai_confidence >= 50,
+            manipulation_confidence: finalResult.ai_confidence,
+            ela_performed: jpegForensics?.ela_analysis?.performed || false,
+            compression_quality: jpegForensics?.compression_analysis?.quality_estimate || finalResult.individual_results?.jpeg?.details?.quality || 0,
+            double_compressed: jpegForensics?.compression_analysis?.double_compressed || finalResult.individual_results?.jpeg?.details?.doubleCompressed || false,
+            noise_level: jpegForensics?.noise_analysis?.noise_level || finalResult.individual_results?.jpeg?.details?.noise || 'unknown'
+          },
       
  verdict: finalResult.likely_ai_generated ? 'AI-GENERATED IMAGE' : 'LIKELY REAL IMAGE',
       analysis_time_ms: 0,
