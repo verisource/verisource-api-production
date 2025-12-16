@@ -35,32 +35,45 @@ const KNOWN_CAMERAS = {
       'iPhone 5s': 2013, 'iPhone 5c': 2013, 'iPhone 5': 2012, 'iPhone 4S': 2011, 'iPhone 4': 2010
     }
   },
-
-  // Canon cameras
+// Canon cameras
   'Canon': {
     models: [
-      'EOS R5', 'EOS R6', 'EOS R3', 'EOS R', 'EOS RP', 'EOS R7', 'EOS R8', 'EOS R10', 'EOS R50',
+      // RF Mount (Mirrorless)
+      'EOS R1', 'EOS R5 II', 'EOS R5', 'EOS R6 II', 'EOS R6', 'EOS R3', 'EOS R', 'EOS RP', 'EOS R7', 'EOS R8', 'EOS R10', 'EOS R50', 'EOS R100',
+      // Full Frame DSLR
       'EOS 5D Mark IV', 'EOS 5D Mark III', 'EOS 5D Mark II', 'EOS 5D',
       'EOS 6D Mark II', 'EOS 6D',
       'EOS-1D X Mark III', 'EOS-1D X Mark II', 'EOS-1D X', 'EOS-1D Mark IV', 'EOS-1Ds Mark III',
+      // APS-C DSLR
       'EOS 7D Mark II', 'EOS 7D',
       'EOS 90D', 'EOS 80D', 'EOS 70D', 'EOS 60D', 'EOS 50D', 'EOS 40D', 'EOS 30D', 'EOS 20D',
       'EOS Rebel T8i', 'EOS Rebel T7i', 'EOS Rebel T7', 'EOS Rebel T6i', 'EOS Rebel T6', 'EOS Rebel T5i', 'EOS Rebel T5',
       'EOS Rebel SL3', 'EOS Rebel SL2', 'EOS 850D', 'EOS 800D', 'EOS 750D', 'EOS 700D', 'EOS 650D', 'EOS 600D', 'EOS 550D',
+      // EOS M (Mirrorless APS-C)
       'EOS M50 Mark II', 'EOS M50', 'EOS M6 Mark II', 'EOS M6', 'EOS M5', 'EOS M3', 'EOS M',
-      'PowerShot G7 X Mark III', 'PowerShot G7 X Mark II', 'PowerShot G5 X Mark II', 'PowerShot G1 X Mark III'
+      // PowerShot
+      'PowerShot G7 X Mark III', 'PowerShot G7 X Mark II', 'PowerShot G5 X Mark II', 'PowerShot G1 X Mark III',
+      // Cinema
+      'EOS C70', 'EOS C300 Mark III', 'EOS C500 Mark II'
     ],
     releaseYears: {
-      'EOS R5': 2020, 'EOS R6': 2020, 'EOS R3': 2021, 'EOS R': 2018, 'EOS RP': 2019, 'EOS R7': 2022, 'EOS R8': 2023, 'EOS R10': 2022, 'EOS R50': 2023,
+      // RF Mount
+      'EOS R1': 2024, 'EOS R5 II': 2024, 'EOS R5': 2020, 'EOS R6 II': 2022, 'EOS R6': 2020, 'EOS R3': 2021, 'EOS R': 2018, 'EOS RP': 2019, 'EOS R7': 2022, 'EOS R8': 2023, 'EOS R10': 2022, 'EOS R50': 2023, 'EOS R100': 2023,
+      // Full Frame DSLR
       'EOS 5D Mark IV': 2016, 'EOS 5D Mark III': 2012, 'EOS 5D Mark II': 2008, 'EOS 5D': 2005,
       'EOS 6D Mark II': 2017, 'EOS 6D': 2012,
       'EOS-1D X Mark III': 2020, 'EOS-1D X Mark II': 2016, 'EOS-1D X': 2011, 'EOS-1D Mark IV': 2009, 'EOS-1Ds Mark III': 2007,
+      // APS-C DSLR
       'EOS 7D Mark II': 2014, 'EOS 7D': 2009,
       'EOS 90D': 2019, 'EOS 80D': 2016, 'EOS 70D': 2013, 'EOS 60D': 2010, 'EOS 50D': 2008, 'EOS 40D': 2007, 'EOS 30D': 2006, 'EOS 20D': 2004,
       'EOS Rebel T8i': 2020, 'EOS Rebel T7i': 2017, 'EOS Rebel T7': 2018, 'EOS Rebel T6i': 2015, 'EOS Rebel T6': 2016, 'EOS Rebel T5i': 2013, 'EOS Rebel T5': 2014,
       'EOS Rebel SL3': 2019, 'EOS Rebel SL2': 2017, 'EOS 850D': 2020, 'EOS 800D': 2017, 'EOS 750D': 2015, 'EOS 700D': 2013, 'EOS 650D': 2012, 'EOS 600D': 2011, 'EOS 550D': 2010,
+      // EOS M
       'EOS M50 Mark II': 2020, 'EOS M50': 2018, 'EOS M6 Mark II': 2019, 'EOS M6': 2017, 'EOS M5': 2016, 'EOS M3': 2015, 'EOS M': 2012,
-      'PowerShot G7 X Mark III': 2019, 'PowerShot G7 X Mark II': 2016, 'PowerShot G5 X Mark II': 2019, 'PowerShot G1 X Mark III': 2017
+      // PowerShot
+      'PowerShot G7 X Mark III': 2019, 'PowerShot G7 X Mark II': 2016, 'PowerShot G5 X Mark II': 2019, 'PowerShot G1 X Mark III': 2017,
+      // Cinema
+      'EOS C70': 2020, 'EOS C300 Mark III': 2020, 'EOS C500 Mark II': 2019
     }
   },
 
@@ -82,16 +95,24 @@ const KNOWN_CAMERAS = {
     }
   },
 
-  // Sony cameras
+ // Sony cameras (includes both α names and ILCE codes as EXIF reports ILCE)
   'Sony': {
     models: [
+      // Alpha marketing names
       'α7 IV', 'α7 III', 'α7 II', 'α7', 'α7R V', 'α7R IV', 'α7R III', 'α7R II', 'α7R',
       'α7S III', 'α7S II', 'α7S', 'α1', 'α9 II', 'α9',
       'α6700', 'α6600', 'α6500', 'α6400', 'α6300', 'α6100', 'α6000', 'α5100',
       'ZV-E1', 'ZV-E10', 'ZV-1', 'ZV-1F',
       'α99 II', 'α77 II', 'α68', 'α58',
       'RX100 VII', 'RX100 VI', 'RX100 V', 'RX100 IV', 'RX100 III', 'RX10 IV',
-      'ILCE-7M4', 'ILCE-7RM5', 'ILCE-7M3', 'ILCE-6400', 'ILCE-6000'
+      // ILCE codes (how cameras report in EXIF)
+      'ILCE-1', 'ILCE-9M2', 'ILCE-9', 
+      'ILCE-7RM5', 'ILCE-7RM4', 'ILCE-7RM3', 'ILCE-7RM2', 'ILCE-7R',
+      'ILCE-7M4', 'ILCE-7M3', 'ILCE-7M2', 'ILCE-7',
+      'ILCE-7SM3', 'ILCE-7SM2', 'ILCE-7S',
+      'ILCE-6700', 'ILCE-6600', 'ILCE-6500', 'ILCE-6400', 'ILCE-6300', 'ILCE-6100', 'ILCE-6000', 'ILCE-5100',
+      // DSC codes (Cyber-shot / RX series)
+      'DSC-RX100M7', 'DSC-RX100M6', 'DSC-RX100M5', 'DSC-RX100M4', 'DSC-RX100M3', 'DSC-RX10M4'
     ],
     releaseYears: {
       'α7 IV': 2021, 'α7 III': 2018, 'α7 II': 2014, 'α7': 2013, 'α7R V': 2022, 'α7R IV': 2019, 'α7R III': 2017, 'α7R II': 2015, 'α7R': 2013,
@@ -100,7 +121,14 @@ const KNOWN_CAMERAS = {
       'ZV-E1': 2023, 'ZV-E10': 2021, 'ZV-1': 2020, 'ZV-1F': 2022,
       'α99 II': 2016, 'α77 II': 2014, 'α68': 2016, 'α58': 2014,
       'RX100 VII': 2019, 'RX100 VI': 2018, 'RX100 V': 2016, 'RX100 IV': 2015, 'RX100 III': 2014, 'RX10 IV': 2017,
-      'ILCE-7M4': 2021, 'ILCE-7RM5': 2022, 'ILCE-7M3': 2018, 'ILCE-6400': 2019, 'ILCE-6000': 2014
+      // ILCE codes
+      'ILCE-1': 2021, 'ILCE-9M2': 2019, 'ILCE-9': 2017,
+      'ILCE-7RM5': 2022, 'ILCE-7RM4': 2019, 'ILCE-7RM3': 2017, 'ILCE-7RM2': 2015, 'ILCE-7R': 2013,
+      'ILCE-7M4': 2021, 'ILCE-7M3': 2018, 'ILCE-7M2': 2014, 'ILCE-7': 2013,
+      'ILCE-7SM3': 2020, 'ILCE-7SM2': 2015, 'ILCE-7S': 2014,
+      'ILCE-6700': 2023, 'ILCE-6600': 2019, 'ILCE-6500': 2016, 'ILCE-6400': 2019, 'ILCE-6300': 2016, 'ILCE-6100': 2019, 'ILCE-6000': 2014, 'ILCE-5100': 2014,
+      // DSC codes
+      'DSC-RX100M7': 2019, 'DSC-RX100M6': 2018, 'DSC-RX100M5': 2016, 'DSC-RX100M4': 2015, 'DSC-RX100M3': 2014, 'DSC-RX10M4': 2017
     }
   },
 
