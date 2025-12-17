@@ -23,25 +23,34 @@ class PolygonTimestampService {
       return;
     }
 
-    try {
-      const JsonRpcProvider = ethers.JsonRpcProvider || ethers.providers?.JsonRpcProvider;
+   try {
+      // Use StaticJsonRpcProvider to skip network detection entirely
+      const StaticJsonRpcProvider = ethers.providers?.StaticJsonRpcProvider;
+      const JsonRpcProvider = ethers.providers?.JsonRpcProvider;
       const Wallet = ethers.Wallet;
       
-      if (!JsonRpcProvider) {
-        throw new Error('JsonRpcProvider not available in ethers module');
-      }
-
       const polygonNetwork = {
         name: 'matic',
         chainId: 137
       };
-      this.provider = new JsonRpcProvider(rpcUrl, polygonNetwork);
+      
+      // Prefer StaticJsonRpcProvider (no network detection), fallback to JsonRpcProvider
+      if (StaticJsonRpcProvider) {
+        this.provider = new StaticJsonRpcProvider(rpcUrl, polygonNetwork);
+        console.log('📡 Using StaticJsonRpcProvider (no network detection)');
+      } else if (JsonRpcProvider) {
+        this.provider = new JsonRpcProvider(rpcUrl, polygonNetwork);
+        console.log('📡 Using JsonRpcProvider with explicit network');
+      } else {
+        throw new Error('No JsonRpcProvider available in ethers module');
+      }
+      
       this.wallet = new Wallet(privateKey, this.provider);
       this.enabled = true;
       console.log('✅ Polygon service initialized:', this.wallet.address);
     } catch (error) {
       console.error('❌ Polygon initialization failed:', error.message);
-    }
+    } 
   }
 
   async timestamp(fileHash, filename = 'unknown') {
