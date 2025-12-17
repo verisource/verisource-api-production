@@ -1044,7 +1044,7 @@ app.post('/verify-remote', async (req, res) => {
               if (cameraVerification.warnings.length > 0) {
                 console.log('⚠️ Camera warnings:', cameraVerification.warnings);
               }
-
+              
               // Camera EXIF Validation Rescue
               if (cameraVerification.camera_found && cameraVerification.is_valid && aiDetection) {
                 const camConf = cameraVerification.confidence || 0;
@@ -1061,6 +1061,42 @@ app.post('/verify-remote', async (req, res) => {
                     aiDetection.adjustments.push('Verdict changed: AI-GENERATED → UNCERTAIN');
                   }
                 }
+              }
+              // Camera EXIF Validation Rescue
+              if (cameraVerification.camera_found && cameraVerification.is_valid && aiDetection) {
+                // ... existing code stays the same ...
+              }
+
+              // Samsung Firmware Decoder
+              let softwareAnalysis = null;
+              try {
+                const { analyzeSoftwareField, decodeSamsungFirmware } = require('./services/samsung-firmware-decoder');
+                softwareAnalysis = analyzeSoftwareField(exifData.Software, exifData.Make);
+                
+                // If Samsung firmware decoded a device but camera not found, use it
+                if (softwareAnalysis.decoded_device && !cameraVerification?.camera_found) {
+                  const firmwareInfo = decodeSamsungFirmware(exifData.Software);
+                  if (firmwareInfo.decoded) {
+                    cameraVerification = cameraVerification || { warnings: [] };
+                    cameraVerification.camera_found = true;
+                    cameraVerification.confidence = 90;
+                    cameraVerification.is_valid = true;
+                    cameraVerification.details = cameraVerification.details || {};
+                    cameraVerification.details.recognized_model = firmwareInfo.device;
+                    cameraVerification.details.manufacturer = 'Samsung';
+                    cameraVerification.details.decoded_from_firmware = true;
+                    cameraVerification.details.firmware_version = exifData.Software;
+                    console.log(`📱 Samsung device decoded from firmware: ${firmwareInfo.device}`);
+                  }
+                }
+                
+                if (softwareAnalysis.is_edited) {
+                  console.log(`✏️ Editing software detected: ${softwareAnalysis.display_value}`);
+                } else if (softwareAnalysis.is_firmware) {
+                  console.log(`📱 Device firmware detected: Original (unedited)`);
+                }
+              } catch (err) {
+                console.error('⚠️ Software analysis error:', err.message);
               }
 
               // Historical photo detection
@@ -1569,6 +1605,7 @@ app.post('/verify-remote', async (req, res) => {
         ...(reverseSearchResults && { reverse_image_search: reverseSearchResults }),
         ...(cameraVerification && { camera_verification: cameraVerification }),
         ...(exifData && { metadata: { has_exif: true, exif: exifData } }),
+        ...(softwareAnalysis && { software_analysis: softwareAnalysis }),
       };
       console.log('📊 Calculating confidence score...');
       confidence = ConfidenceScoring.calculateConfidenceScore(confidenceData);
