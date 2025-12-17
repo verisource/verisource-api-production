@@ -1513,7 +1513,7 @@ app.post('/verify-remote', async (req, res) => {
     if (kind === 'image' && !screenshotDetection) {
       try {
         console.log('📱 Checking for screenshot...');
-        const { detectScreenshot, getScreenshotVerdictAdjustment } = require('./services/screenshot-detection');
+        const { detectScreenshot, getScreenshotVerdictAdjustment } = require('./screenshot-detection');
         const imgMeta = await sharp(tempFilePath).metadata();
         screenshotDetection = detectScreenshot({
           width: imgMeta.width,
@@ -1527,6 +1527,7 @@ app.post('/verify-remote', async (req, res) => {
 
         if (screenshotDetection.is_screenshot) {
           console.log(`📱 Screenshot detected: ${screenshotDetection.detected_device || 'Unknown device'} (${screenshotDetection.confidence}%)`);
+          console.log(`   Indicators: ${screenshotDetection.indicators.slice(0, 2).join(', ')}`);
           
           if (aiDetection && !aiDetection.error) {
             const adjustment = getScreenshotVerdictAdjustment(screenshotDetection);
@@ -1537,9 +1538,19 @@ app.post('/verify-remote', async (req, res) => {
               `Screenshot detected (${screenshotDetection.confidence}% confidence, ${adjustment.severity} severity)`
             );
           }
+          
+          // Add separate screenshot verdict (does not override AI detection)
+          screenshotDetection.verdict = 'SCREENSHOT_DETECTED';
+          screenshotDetection.verdict_message = `This appears to be a screenshot${screenshotDetection.detected_device ? ` from ${screenshotDetection.detected_device}` : ''}. AI detection analyzes the visible content, not the original source.`;
+          screenshotDetection.interpretation_note = 'Screenshot detection provides capture context. AI detection results reflect analysis of the screenshot content, which may differ from the original media.';
         } else {
           console.log('📱 Not a screenshot');
+          screenshotDetection.verdict = 'NOT_SCREENSHOT';
+          screenshotDetection.verdict_message = null;
+          screenshotDetection.interpretation_note = null;
         }
+        
+        
       } catch (err) {
         console.error('⚠️ Screenshot detection error:', err.message);
       }
@@ -3281,36 +3292,34 @@ module.exports = { applyHybridCameraRescue, calculateCameraAuthenticityScore };
           filename: req.file.originalname
         });
 
-        if (screenshotDetection.is_screenshot) {
+      if (screenshotDetection.is_screenshot) {
           console.log(`📱 Screenshot detected: ${screenshotDetection.detected_device || 'Unknown device'} (${screenshotDetection.confidence}%)`);
           console.log(`   Indicators: ${screenshotDetection.indicators.slice(0, 2).join(', ')}`);
           
-          // Add screenshot caveat to AI detection
           if (aiDetection && !aiDetection.error) {
             const adjustment = getScreenshotVerdictAdjustment(screenshotDetection);
-            
             aiDetection.screenshot_caveat = true;
             aiDetection.screenshot_severity = adjustment.severity;
             aiDetection.adjustments = aiDetection.adjustments || [];
             aiDetection.adjustments.push(
-              `Screenshot detected (${screenshotDetection.confidence}% confidence, ${adjustment.severity} severity): ` +
-              `AI detection analyzes the screenshot, not original content`
+              `Screenshot detected (${screenshotDetection.confidence}% confidence, ${adjustment.severity} severity)`
             );
-            
-            aiDetection.warnings = aiDetection.warnings || [];
-            if (adjustment.add_warning) {
-              aiDetection.warnings.push(adjustment.add_warning);
-            }
-            
-            console.log(`📱 Screenshot caveat added (severity: ${adjustment.severity})`);
           }
+          
+          // Add separate screenshot verdict (does not override AI detection)
+          screenshotDetection.verdict = 'SCREENSHOT_DETECTED';
+          screenshotDetection.verdict_message = `This appears to be a screenshot${screenshotDetection.detected_device ? ` from ${screenshotDetection.detected_device}` : ''}. AI detection analyzes the visible content, not the original source.`;
+          screenshotDetection.interpretation_note = 'Screenshot detection provides capture context. AI detection results reflect analysis of the screenshot content, which may differ from the original media.';
         } else {
           console.log('📱 Not a screenshot');
+          screenshotDetection.verdict = 'NOT_SCREENSHOT';
+          screenshotDetection.verdict_message = null;
+          screenshotDetection.interpretation_note = null;
         }
       } catch (err) {
         console.error('⚠️ Screenshot detection error:', err.message);
       }
-    }
+    } 
     // ============================================================================
 
     // Await blockchain results before sending response
