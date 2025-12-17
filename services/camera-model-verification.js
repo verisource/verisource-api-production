@@ -132,9 +132,10 @@ const KNOWN_CAMERAS = {
     }
   },
 
-  // Samsung phones
+  // Samsung phones (includes both marketing names and SM- model codes as EXIF reports SM-)
   'Samsung': {
     models: [
+      // Marketing names
       'Galaxy S24', 'Galaxy S24+', 'Galaxy S24 Ultra',
       'Galaxy S23', 'Galaxy S23+', 'Galaxy S23 Ultra', 'Galaxy S23 FE',
       'Galaxy S22', 'Galaxy S22+', 'Galaxy S22 Ultra',
@@ -146,9 +147,68 @@ const KNOWN_CAMERAS = {
       'Galaxy Note 9', 'Galaxy Note 8',
       'Galaxy A54', 'Galaxy A53', 'Galaxy A52', 'Galaxy A51', 'Galaxy A50',
       'Galaxy Z Fold 5', 'Galaxy Z Fold 4', 'Galaxy Z Fold 3',
-      'Galaxy Z Flip 5', 'Galaxy Z Flip 4', 'Galaxy Z Flip 3'
+      'Galaxy Z Flip 5', 'Galaxy Z Flip 4', 'Galaxy Z Flip 3',
+      // SM- model codes (how Samsung phones report in EXIF)
+      // Galaxy S24 series
+      'SM-S928U', 'SM-S928B', 'SM-S928N', 'SM-S928W',
+      'SM-S926U', 'SM-S926B', 'SM-S926N', 'SM-S926W',
+      'SM-S921U', 'SM-S921B', 'SM-S921N', 'SM-S921W',
+      // Galaxy S23 series
+      'SM-S918U', 'SM-S918B', 'SM-S918N', 'SM-S918W',
+      'SM-S916U', 'SM-S916B', 'SM-S916N', 'SM-S916W',
+      'SM-S911U', 'SM-S911B', 'SM-S911N', 'SM-S911W',
+      'SM-S711U', 'SM-S711B', // S23 FE
+      // Galaxy S22 series
+      'SM-S908U', 'SM-S908B', 'SM-S908N', 'SM-S908W',
+      'SM-S906U', 'SM-S906B', 'SM-S906N', 'SM-S906W',
+      'SM-S901U', 'SM-S901B', 'SM-S901N', 'SM-S901W',
+      // Galaxy S21 series
+      'SM-G998U', 'SM-G998B', 'SM-G998N', 'SM-G998W',
+      'SM-G996U', 'SM-G996B', 'SM-G996N', 'SM-G996W',
+      'SM-G991U', 'SM-G991B', 'SM-G991N', 'SM-G991W',
+      'SM-G990U', 'SM-G990B', // S21 FE
+      // Galaxy S20 series
+      'SM-G988U', 'SM-G988B', 'SM-G988N', 'SM-G988W',
+      'SM-G986U', 'SM-G986B', 'SM-G986N', 'SM-G986W',
+      'SM-G981U', 'SM-G981B', 'SM-G981N', 'SM-G981W',
+      'SM-G780F', 'SM-G780G', // S20 FE
+      // Galaxy S10 series
+      'SM-G975U', 'SM-G975F', 'SM-G975N', 'SM-G975W',
+      'SM-G973U', 'SM-G973F', 'SM-G973N', 'SM-G973W',
+      'SM-G970U', 'SM-G970F', 'SM-G970N', 'SM-G970W',
+      // Galaxy S9 series
+      'SM-G965U', 'SM-G965F', 'SM-G965N', 'SM-G965W',
+      'SM-G960U', 'SM-G960F', 'SM-G960N', 'SM-G960W',
+      // Galaxy S8 series
+      'SM-G955U', 'SM-G955F', 'SM-G955N', 'SM-G955W',
+      'SM-G950U', 'SM-G950F', 'SM-G950N', 'SM-G950W',
+      // Galaxy S7 series
+      'SM-G935F', 'SM-G935U', 'SM-G935A', 'SM-G935V',
+      'SM-G930F', 'SM-G930U', 'SM-G930A', 'SM-G930V',
+      // Galaxy Note series
+      'SM-N986U', 'SM-N986B', 'SM-N985F', // Note 20 Ultra
+      'SM-N981U', 'SM-N981B', 'SM-N980F', // Note 20
+      'SM-N976U', 'SM-N976B', 'SM-N975F', // Note 10+
+      'SM-N971U', 'SM-N971N', 'SM-N970F', // Note 10
+      'SM-N960U', 'SM-N960F', 'SM-N960N', // Note 9
+      'SM-N950U', 'SM-N950F', 'SM-N950N', // Note 8
+      // Galaxy Z Fold series
+      'SM-F946U', 'SM-F946B', 'SM-F946N', 'SM-F946W', // Fold 5
+      'SM-F936U', 'SM-F936B', 'SM-F936N', 'SM-F936W', // Fold 4
+      'SM-F926U', 'SM-F926B', 'SM-F926N', 'SM-F926W', // Fold 3
+      // Galaxy Z Flip series
+      'SM-F731U', 'SM-F731B', 'SM-F731N', 'SM-F731W', // Flip 5
+      'SM-F721U', 'SM-F721B', 'SM-F721N', 'SM-F721W', // Flip 4
+      'SM-F711U', 'SM-F711B', 'SM-F711N', 'SM-F711W', // Flip 3
+      // Galaxy A series
+      'SM-A546U', 'SM-A546B', 'SM-A546E', // A54
+      'SM-A536U', 'SM-A536B', 'SM-A536E', // A53
+      'SM-A526U', 'SM-A526B', 'SM-A526F', // A52
+      'SM-A516U', 'SM-A516B', 'SM-A516F', // A51
+      'SM-A505U', 'SM-A505F', 'SM-A505G'  // A50
     ],
     releaseYears: {
+      // Marketing names
       'Galaxy S24': 2024, 'Galaxy S24+': 2024, 'Galaxy S24 Ultra': 2024,
       'Galaxy S23': 2023, 'Galaxy S23+': 2023, 'Galaxy S23 Ultra': 2023, 'Galaxy S23 FE': 2023,
       'Galaxy S22': 2022, 'Galaxy S22+': 2022, 'Galaxy S22 Ultra': 2022,
@@ -160,7 +220,221 @@ const KNOWN_CAMERAS = {
       'Galaxy Note 9': 2018, 'Galaxy Note 8': 2017,
       'Galaxy A54': 2023, 'Galaxy A53': 2022, 'Galaxy A52': 2021, 'Galaxy A51': 2020, 'Galaxy A50': 2019,
       'Galaxy Z Fold 5': 2023, 'Galaxy Z Fold 4': 2022, 'Galaxy Z Fold 3': 2021,
-      'Galaxy Z Flip 5': 2023, 'Galaxy Z Flip 4': 2022, 'Galaxy Z Flip 3': 2021
+      'Galaxy Z Flip 5': 2023, 'Galaxy Z Flip 4': 2022, 'Galaxy Z Flip 3': 2021,
+      // SM- model codes - S24 series
+      'SM-S928U': 2024, 'SM-S928B': 2024, 'SM-S928N': 2024, 'SM-S928W': 2024,
+      'SM-S926U': 2024, 'SM-S926B': 2024, 'SM-S926N': 2024, 'SM-S926W': 2024,
+      'SM-S921U': 2024, 'SM-S921B': 2024, 'SM-S921N': 2024, 'SM-S921W': 2024,
+      // SM- model codes - S23 series
+      'SM-S918U': 2023, 'SM-S918B': 2023, 'SM-S918N': 2023, 'SM-S918W': 2023,
+      'SM-S916U': 2023, 'SM-S916B': 2023, 'SM-S916N': 2023, 'SM-S916W': 2023,
+      'SM-S911U': 2023, 'SM-S911B': 2023, 'SM-S911N': 2023, 'SM-S911W': 2023,
+      'SM-S711U': 2023, 'SM-S711B': 2023,
+      // SM- model codes - S22 series
+      'SM-S908U': 2022, 'SM-S908B': 2022, 'SM-S908N': 2022, 'SM-S908W': 2022,
+      'SM-S906U': 2022, 'SM-S906B': 2022, 'SM-S906N': 2022, 'SM-S906W': 2022,
+      'SM-S901U': 2022, 'SM-S901B': 2022, 'SM-S901N': 2022, 'SM-S901W': 2022,
+      // SM- model codes - S21 series
+      'SM-G998U': 2021, 'SM-G998B': 2021, 'SM-G998N': 2021, 'SM-G998W': 2021,
+      'SM-G996U': 2021, 'SM-G996B': 2021, 'SM-G996N': 2021, 'SM-G996W': 2021,
+      'SM-G991U': 2021, 'SM-G991B': 2021, 'SM-G991N': 2021, 'SM-G991W': 2021,
+      'SM-G990U': 2022, 'SM-G990B': 2022,
+      // SM- model codes - S20 series
+      'SM-G988U': 2020, 'SM-G988B': 2020, 'SM-G988N': 2020, 'SM-G988W': 2020,
+      'SM-G986U': 2020, 'SM-G986B': 2020, 'SM-G986N': 2020, 'SM-G986W': 2020,
+      'SM-G981U': 2020, 'SM-G981B': 2020, 'SM-G981N': 2020, 'SM-G981W': 2020,
+      'SM-G780F': 2020, 'SM-G780G': 2020,
+      // SM- model codes - S10 series
+      'SM-G975U': 2019, 'SM-G975F': 2019, 'SM-G975N': 2019, 'SM-G975W': 2019,
+      'SM-G973U': 2019, 'SM-G973F': 2019, 'SM-G973N': 2019, 'SM-G973W': 2019,
+      'SM-G970U': 2019, 'SM-G970F': 2019, 'SM-G970N': 2019, 'SM-G970W': 2019,
+      // SM- model codes - S9 series
+      'SM-G965U': 2018, 'SM-G965F': 2018, 'SM-G965N': 2018, 'SM-G965W': 2018,
+      'SM-G960U': 2018, 'SM-G960F': 2018, 'SM-G960N': 2018, 'SM-G960W': 2018,
+      // SM- model codes - S8 series
+      'SM-G955U': 2017, 'SM-G955F': 2017, 'SM-G955N': 2017, 'SM-G955W': 2017,
+      'SM-G950U': 2017, 'SM-G950F': 2017, 'SM-G950N': 2017, 'SM-G950W': 2017,
+      // SM- model codes - S7 series
+      'SM-G935F': 2016, 'SM-G935U': 2016, 'SM-G935A': 2016, 'SM-G935V': 2016,
+      'SM-G930F': 2016, 'SM-G930U': 2016, 'SM-G930A': 2016, 'SM-G930V': 2016,
+      // SM- model codes - Note series
+      'SM-N986U': 2020, 'SM-N986B': 2020, 'SM-N985F': 2020,
+      'SM-N981U': 2020, 'SM-N981B': 2020, 'SM-N980F': 2020,
+      'SM-N976U': 2019, 'SM-N976B': 2019, 'SM-N975F': 2019,
+      'SM-N971U': 2019, 'SM-N971N': 2019, 'SM-N970F': 2019,
+      'SM-N960U': 2018, 'SM-N960F': 2018, 'SM-N960N': 2018,
+      'SM-N950U': 2017, 'SM-N950F': 2017, 'SM-N950N': 2017,
+      // SM- model codes - Fold series
+      'SM-F946U': 2023, 'SM-F946B': 2023, 'SM-F946N': 2023, 'SM-F946W': 2023,
+      'SM-F936U': 2022, 'SM-F936B': 2022, 'SM-F936N': 2022, 'SM-F936W': 2022,
+      'SM-F926U': 2021, 'SM-F926B': 2021, 'SM-F926N': 2021, 'SM-F926W': 2021,
+      // SM- model codes - Flip series
+      'SM-F731U': 2023, 'SM-F731B': 2023, 'SM-F731N': 2023, 'SM-F731W': 2023,
+      'SM-F721U': 2022, 'SM-F721B': 2022, 'SM-F721N': 2022, 'SM-F721W': 2022,
+      'SM-F711U': 2021, 'SM-F711B': 2021, 'SM-F711N': 2021, 'SM-F711W': 2021,
+      // SM- model codes - A series
+      'SM-A546U': 2023, 'SM-A546B': 2023, 'SM-A546E': 2023,
+      'SM-A536U': 2022, 'SM-A536B': 2022, 'SM-A536E': 2022,
+      'SM-A526U': 2021, 'SM-A526B': 2021, 'SM-A526F': 2021,
+      'SM-A516U': 2020, 'SM-A516B': 2020, 'SM-A516F': 2020,
+      'SM-A505U': 2019, 'SM-A505F': 2019, 'SM-A505G': 2019
+    }
+  },
+
+  // Xiaomi phones (includes Mi, Redmi, POCO, and model codes)
+  'Xiaomi': {
+    models: [
+      // Xiaomi numbered series
+      'Xiaomi 14', 'Xiaomi 14 Pro', 'Xiaomi 14 Ultra',
+      'Xiaomi 13', 'Xiaomi 13 Pro', 'Xiaomi 13 Ultra', 'Xiaomi 13 Lite', 'Xiaomi 13T', 'Xiaomi 13T Pro',
+      'Xiaomi 12', 'Xiaomi 12 Pro', 'Xiaomi 12 Ultra', 'Xiaomi 12 Lite', 'Xiaomi 12T', 'Xiaomi 12T Pro',
+      'Xiaomi 11', 'Xiaomi 11 Pro', 'Xiaomi 11 Ultra', 'Xiaomi 11 Lite', 'Xiaomi 11T', 'Xiaomi 11T Pro',
+      // Mi series (older naming)
+      'Mi 11', 'Mi 11 Pro', 'Mi 11 Ultra', 'Mi 11 Lite',
+      'Mi 10', 'Mi 10 Pro', 'Mi 10 Ultra', 'Mi 10 Lite',
+      'Mi 9', 'Mi 9 Pro', 'Mi 9 SE', 'Mi 9 Lite',
+      'Mi 8', 'Mi 8 Pro', 'Mi 8 SE', 'Mi 8 Lite',
+      'Mi Note 10', 'Mi Note 10 Pro', 'Mi Note 10 Lite',
+      'Mi Mix 4', 'Mi Mix 3', 'Mi Mix 2S', 'Mi Mix 2',
+      // Redmi series
+      'Redmi Note 13', 'Redmi Note 13 Pro', 'Redmi Note 13 Pro+',
+      'Redmi Note 12', 'Redmi Note 12 Pro', 'Redmi Note 12 Pro+',
+      'Redmi Note 11', 'Redmi Note 11 Pro', 'Redmi Note 11 Pro+',
+      'Redmi Note 10', 'Redmi Note 10 Pro', 'Redmi Note 10 Pro Max',
+      'Redmi Note 9', 'Redmi Note 9 Pro', 'Redmi Note 9 Pro Max',
+      'Redmi Note 8', 'Redmi Note 8 Pro',
+      'Redmi 13', 'Redmi 12', 'Redmi 11', 'Redmi 10', 'Redmi 9', 'Redmi 8',
+      'Redmi K70', 'Redmi K70 Pro', 'Redmi K60', 'Redmi K60 Pro', 'Redmi K50', 'Redmi K40',
+      // POCO series
+      'POCO F6', 'POCO F6 Pro', 'POCO F5', 'POCO F5 Pro', 'POCO F4', 'POCO F4 GT', 'POCO F3', 'POCO F2 Pro', 'POCO F1',
+      'POCO X6', 'POCO X6 Pro', 'POCO X5', 'POCO X5 Pro', 'POCO X4', 'POCO X4 Pro', 'POCO X3', 'POCO X3 Pro',
+      'POCO M6', 'POCO M6 Pro', 'POCO M5', 'POCO M5s', 'POCO M4', 'POCO M4 Pro', 'POCO M3',
+      'POCO C65', 'POCO C55', 'POCO C40',
+      // Model codes (how they report in EXIF)
+      '2311DRK48G', '23127PN0CG', '2210132G', '2207122MC', // Xiaomi 14 series
+      '2211133G', '2211133C', '2210132C', '2304FPN6DC', // Xiaomi 13 series
+      '2201123G', '2201123C', '2203129G', '2207116BG', // Xiaomi 12 series
+      '2107113SG', '2107113SR', 'M2102K1G', 'M2101K9G', // Xiaomi 11 series
+      'M2007J3SG', 'M2007J3SP', 'M2007J1SC', // Mi 10 series
+      '23049RAD8C', '23053RN02A', '22101316G', // Redmi Note series
+      '23013RK75C', '22041219PG', '21091116AG', // Redmi K series
+      '23049PCD8G', '22021211RG', '21121210G' // POCO series
+    ],
+    releaseYears: {
+      // Xiaomi numbered series
+      'Xiaomi 14': 2024, 'Xiaomi 14 Pro': 2024, 'Xiaomi 14 Ultra': 2024,
+      'Xiaomi 13': 2023, 'Xiaomi 13 Pro': 2023, 'Xiaomi 13 Ultra': 2023, 'Xiaomi 13 Lite': 2023, 'Xiaomi 13T': 2023, 'Xiaomi 13T Pro': 2023,
+      'Xiaomi 12': 2022, 'Xiaomi 12 Pro': 2022, 'Xiaomi 12 Ultra': 2022, 'Xiaomi 12 Lite': 2022, 'Xiaomi 12T': 2022, 'Xiaomi 12T Pro': 2022,
+      'Xiaomi 11': 2021, 'Xiaomi 11 Pro': 2021, 'Xiaomi 11 Ultra': 2021, 'Xiaomi 11 Lite': 2021, 'Xiaomi 11T': 2021, 'Xiaomi 11T Pro': 2021,
+      // Mi series
+      'Mi 11': 2021, 'Mi 11 Pro': 2021, 'Mi 11 Ultra': 2021, 'Mi 11 Lite': 2021,
+      'Mi 10': 2020, 'Mi 10 Pro': 2020, 'Mi 10 Ultra': 2020, 'Mi 10 Lite': 2020,
+      'Mi 9': 2019, 'Mi 9 Pro': 2019, 'Mi 9 SE': 2019, 'Mi 9 Lite': 2019,
+      'Mi 8': 2018, 'Mi 8 Pro': 2018, 'Mi 8 SE': 2018, 'Mi 8 Lite': 2018,
+      'Mi Note 10': 2019, 'Mi Note 10 Pro': 2019, 'Mi Note 10 Lite': 2020,
+      'Mi Mix 4': 2021, 'Mi Mix 3': 2018, 'Mi Mix 2S': 2018, 'Mi Mix 2': 2017,
+      // Redmi Note series
+      'Redmi Note 13': 2024, 'Redmi Note 13 Pro': 2024, 'Redmi Note 13 Pro+': 2024,
+      'Redmi Note 12': 2023, 'Redmi Note 12 Pro': 2023, 'Redmi Note 12 Pro+': 2023,
+      'Redmi Note 11': 2022, 'Redmi Note 11 Pro': 2022, 'Redmi Note 11 Pro+': 2022,
+      'Redmi Note 10': 2021, 'Redmi Note 10 Pro': 2021, 'Redmi Note 10 Pro Max': 2021,
+      'Redmi Note 9': 2020, 'Redmi Note 9 Pro': 2020, 'Redmi Note 9 Pro Max': 2020,
+      'Redmi Note 8': 2019, 'Redmi Note 8 Pro': 2019,
+      'Redmi 13': 2024, 'Redmi 12': 2023, 'Redmi 11': 2022, 'Redmi 10': 2021, 'Redmi 9': 2020, 'Redmi 8': 2019,
+      'Redmi K70': 2024, 'Redmi K70 Pro': 2024, 'Redmi K60': 2023, 'Redmi K60 Pro': 2023, 'Redmi K50': 2022, 'Redmi K40': 2021,
+      // POCO series
+      'POCO F6': 2024, 'POCO F6 Pro': 2024, 'POCO F5': 2023, 'POCO F5 Pro': 2023, 'POCO F4': 2022, 'POCO F4 GT': 2022, 'POCO F3': 2021, 'POCO F2 Pro': 2020, 'POCO F1': 2018,
+      'POCO X6': 2024, 'POCO X6 Pro': 2024, 'POCO X5': 2023, 'POCO X5 Pro': 2023, 'POCO X4': 2022, 'POCO X4 Pro': 2022, 'POCO X3': 2020, 'POCO X3 Pro': 2021,
+      'POCO M6': 2024, 'POCO M6 Pro': 2024, 'POCO M5': 2022, 'POCO M5s': 2022, 'POCO M4': 2022, 'POCO M4 Pro': 2021, 'POCO M3': 2020,
+      'POCO C65': 2023, 'POCO C55': 2023, 'POCO C40': 2022,
+      // Model codes
+      '2311DRK48G': 2024, '23127PN0CG': 2024, '2210132G': 2022, '2207122MC': 2022,
+      '2211133G': 2023, '2211133C': 2023, '2210132C': 2022, '2304FPN6DC': 2023,
+      '2201123G': 2022, '2201123C': 2022, '2203129G': 2022, '2207116BG': 2022,
+      '2107113SG': 2021, '2107113SR': 2021, 'M2102K1G': 2021, 'M2101K9G': 2021,
+      'M2007J3SG': 2020, 'M2007J3SP': 2020, 'M2007J1SC': 2020,
+      '23049RAD8C': 2024, '23053RN02A': 2024, '22101316G': 2022,
+      '23013RK75C': 2024, '22041219PG': 2022, '21091116AG': 2021,
+      '23049PCD8G': 2024, '22021211RG': 2022, '21121210G': 2021
+    }
+  },
+
+  // OnePlus phones
+  'OnePlus': {
+    models: [
+      // Numbered series
+      'OnePlus 12', 'OnePlus 12R',
+      'OnePlus 11', 'OnePlus 11R',
+      'OnePlus 10 Pro', 'OnePlus 10T', 'OnePlus 10R',
+      'OnePlus 9', 'OnePlus 9 Pro', 'OnePlus 9R', 'OnePlus 9RT',
+      'OnePlus 8', 'OnePlus 8 Pro', 'OnePlus 8T',
+      'OnePlus 7', 'OnePlus 7 Pro', 'OnePlus 7T', 'OnePlus 7T Pro',
+      'OnePlus 6', 'OnePlus 6T',
+      'OnePlus 5', 'OnePlus 5T',
+      'OnePlus 3', 'OnePlus 3T',
+      // Nord series
+      'OnePlus Nord 4', 'OnePlus Nord 3', 'OnePlus Nord 2T', 'OnePlus Nord 2', 'OnePlus Nord',
+      'OnePlus Nord CE 4', 'OnePlus Nord CE 3', 'OnePlus Nord CE 2', 'OnePlus Nord CE',
+      'OnePlus Nord N30', 'OnePlus Nord N20', 'OnePlus Nord N10', 'OnePlus Nord N100',
+      // Open (foldable)
+      'OnePlus Open',
+      // Model codes (how they report in EXIF)
+      'CPH2573', 'CPH2575', // OnePlus 12
+      'CPH2449', 'CPH2451', // OnePlus 11
+      'CPH2487', 'NE2210', 'NE2215', // OnePlus 10 Pro
+      'CPH2413', 'LE2115', 'LE2111', // OnePlus 9
+      'LE2125', 'LE2123', 'LE2121', // OnePlus 9 Pro
+      'IN2025', 'IN2023', 'IN2021', 'IN2020', // OnePlus 8 Pro
+      'IN2015', 'IN2013', 'IN2011', 'IN2010', // OnePlus 8
+      'KB2005', 'KB2003', 'KB2001', 'KB2000', // OnePlus 8T
+      'GM1917', 'GM1915', 'GM1913', 'GM1911', // OnePlus 7 Pro
+      'GM1905', 'GM1903', 'GM1901', 'GM1900', // OnePlus 7
+      'HD1907', 'HD1905', 'HD1903', 'HD1901', // OnePlus 7T Pro
+      'HD1917', 'HD1913', 'HD1910', 'HD1900', // OnePlus 7T
+      'A6013', 'A6010', 'A6003', 'A6000', // OnePlus 6T
+      'A6003', 'A6000', // OnePlus 6
+      'A5010', 'A5000', // OnePlus 5T / 5
+      'CPH2581', 'CPH2585', // OnePlus Open
+      'CPH2493', 'CPH2497', // Nord 3
+      'IV2201', 'CPH2409', // Nord 2
+      'AC2003', 'AC2001' // Nord
+    ],
+    releaseYears: {
+      // Numbered series
+      'OnePlus 12': 2024, 'OnePlus 12R': 2024,
+      'OnePlus 11': 2023, 'OnePlus 11R': 2023,
+      'OnePlus 10 Pro': 2022, 'OnePlus 10T': 2022, 'OnePlus 10R': 2022,
+      'OnePlus 9': 2021, 'OnePlus 9 Pro': 2021, 'OnePlus 9R': 2021, 'OnePlus 9RT': 2021,
+      'OnePlus 8': 2020, 'OnePlus 8 Pro': 2020, 'OnePlus 8T': 2020,
+      'OnePlus 7': 2019, 'OnePlus 7 Pro': 2019, 'OnePlus 7T': 2019, 'OnePlus 7T Pro': 2019,
+      'OnePlus 6': 2018, 'OnePlus 6T': 2018,
+      'OnePlus 5': 2017, 'OnePlus 5T': 2017,
+      'OnePlus 3': 2016, 'OnePlus 3T': 2016,
+      // Nord series
+      'OnePlus Nord 4': 2024, 'OnePlus Nord 3': 2023, 'OnePlus Nord 2T': 2022, 'OnePlus Nord 2': 2021, 'OnePlus Nord': 2020,
+      'OnePlus Nord CE 4': 2024, 'OnePlus Nord CE 3': 2023, 'OnePlus Nord CE 2': 2022, 'OnePlus Nord CE': 2021,
+      'OnePlus Nord N30': 2023, 'OnePlus Nord N20': 2022, 'OnePlus Nord N10': 2020, 'OnePlus Nord N100': 2020,
+      // Foldable
+      'OnePlus Open': 2023,
+      // Model codes
+      'CPH2573': 2024, 'CPH2575': 2024,
+      'CPH2449': 2023, 'CPH2451': 2023,
+      'CPH2487': 2022, 'NE2210': 2022, 'NE2215': 2022,
+      'CPH2413': 2021, 'LE2115': 2021, 'LE2111': 2021,
+      'LE2125': 2021, 'LE2123': 2021, 'LE2121': 2021,
+      'IN2025': 2020, 'IN2023': 2020, 'IN2021': 2020, 'IN2020': 2020,
+      'IN2015': 2020, 'IN2013': 2020, 'IN2011': 2020, 'IN2010': 2020,
+      'KB2005': 2020, 'KB2003': 2020, 'KB2001': 2020, 'KB2000': 2020,
+      'GM1917': 2019, 'GM1915': 2019, 'GM1913': 2019, 'GM1911': 2019,
+      'GM1905': 2019, 'GM1903': 2019, 'GM1901': 2019, 'GM1900': 2019,
+      'HD1907': 2019, 'HD1905': 2019, 'HD1903': 2019, 'HD1901': 2019,
+      'HD1917': 2019, 'HD1913': 2019, 'HD1910': 2019, 'HD1900': 2019,
+      'A6013': 2018, 'A6010': 2018, 'A6003': 2018, 'A6000': 2018,
+      'A5010': 2017, 'A5000': 2017,
+      'CPH2581': 2023, 'CPH2585': 2023,
+      'CPH2493': 2023, 'CPH2497': 2023,
+      'IV2201': 2021, 'CPH2409': 2021,
+      'AC2003': 2020, 'AC2001': 2020
     }
   },
 
@@ -287,6 +561,34 @@ const CAMERA_MAX_RESOLUTIONS = {
   'Galaxy S24 Ultra': { maxWidth: 9248, maxHeight: 6936, megapixels: 200 },
   'Galaxy S23 Ultra': { maxWidth: 9248, maxHeight: 6936, megapixels: 200 },
   
+  // Add these to the CAMERA_MAX_RESOLUTIONS object:
+
+  // Xiaomi
+  'Xiaomi 14 Ultra': { maxWidth: 8192, maxHeight: 6144, megapixels: 50 },
+  'Xiaomi 14 Pro': { maxWidth: 8192, maxHeight: 6144, megapixels: 50 },
+  'Xiaomi 14': { maxWidth: 8192, maxHeight: 6144, megapixels: 50 },
+  'Xiaomi 13 Ultra': { maxWidth: 8192, maxHeight: 6144, megapixels: 50 },
+  'Xiaomi 13 Pro': { maxWidth: 8192, maxHeight: 6144, megapixels: 50 },
+  'Xiaomi 12 Ultra': { maxWidth: 8192, maxHeight: 6144, megapixels: 50 },
+  'Mi 11 Ultra': { maxWidth: 8192, maxHeight: 6144, megapixels: 50 },
+  'Mi Note 10 Pro': { maxWidth: 12032, maxHeight: 9024, megapixels: 108 },
+  'Mi Note 10': { maxWidth: 12032, maxHeight: 9024, megapixels: 108 },
+  'Redmi Note 13 Pro+': { maxWidth: 9248, maxHeight: 6936, megapixels: 200 },
+  'Redmi Note 12 Pro+': { maxWidth: 9248, maxHeight: 6936, megapixels: 200 },
+  
+  // OnePlus
+  'OnePlus 12': { maxWidth: 8192, maxHeight: 6144, megapixels: 50 },
+  'OnePlus 11': { maxWidth: 8192, maxHeight: 6144, megapixels: 50 },
+  'OnePlus 10 Pro': { maxWidth: 8192, maxHeight: 6144, megapixels: 48 },
+  'OnePlus 9 Pro': { maxWidth: 8192, maxHeight: 6144, megapixels: 48 },
+  'OnePlus 9': { maxWidth: 8192, maxHeight: 6144, megapixels: 48 },
+  'OnePlus Open': { maxWidth: 8192, maxHeight: 6144, megapixels: 48 },
+  
+  // Samsung (add these if missing)
+  'SM-S928U': { maxWidth: 9248, maxHeight: 6936, megapixels: 200 },
+  'SM-S928B': { maxWidth: 9248, maxHeight: 6936, megapixels: 200 },
+  'SM-S918U': { maxWidth: 9248, maxHeight: 6936, megapixels: 200 },
+  'SM-S918B': { maxWidth: 9248, maxHeight: 6936, megapixels: 200 },
   // Default for unknown models (generous limit)
   '_default': { maxWidth: 12000, maxHeight: 9000, megapixels: 108 }
 };
