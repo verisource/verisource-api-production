@@ -31,7 +31,11 @@ class PolygonTimestampService {
         throw new Error('JsonRpcProvider not available in ethers module');
       }
 
-      this.provider = new JsonRpcProvider(rpcUrl);
+      const polygonNetwork = {
+        name: 'matic',
+        chainId: 137
+      };
+      this.provider = new JsonRpcProvider(rpcUrl, polygonNetwork);
       this.wallet = new Wallet(privateKey, this.provider);
       this.enabled = true;
       console.log('✅ Polygon service initialized:', this.wallet.address);
