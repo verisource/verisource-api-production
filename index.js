@@ -548,6 +548,8 @@ app.post('/verify-remote', async (req, res) => {
   let screenshotDetection = null;
   let tempFilePath = null;
   let jpegForensics = null;
+  let softwareAnalysis = null;
+  
   
   try {
     // ============================================
@@ -856,7 +858,7 @@ app.post('/verify-remote', async (req, res) => {
 // ============================================
     // STEP 7B: JPEG Forensics Analysis
     // ============================================
-    let jpegForensics = null;
+    jpegForensics = null;
     if (kind === 'image') {
       try {
         console.log('🔬 Running JPEG forensics analysis...');
@@ -1068,7 +1070,7 @@ app.post('/verify-remote', async (req, res) => {
               }
 
               // Samsung Firmware Decoder
-              let softwareAnalysis = null;
+              softwareAnalysis = null;
               try {
                 const { analyzeSoftwareField, decodeSamsungFirmware } = require('./services/samsung-firmware-decoder');
                 softwareAnalysis = analyzeSoftwareField(exifData.Software, exifData.Make);
