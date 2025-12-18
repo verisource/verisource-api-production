@@ -203,8 +203,34 @@ async function searchVirusTotal(sha256) {
   }
 }
 
-app.get("/health", (req, res) => res.json({ status: "ok", uptime: process.uptime() }));
-
+app.get("/health", async (req, res) => {
+  let polygonStatus = { enabled: false };
+  
+  try {
+    const PolygonService = require('./services/polygon-timestamp');
+    if (PolygonService.enabled) {
+      const balance = await PolygonService.getBalance();
+      const balanceNum = parseFloat(balance) || 0;
+      polygonStatus = {
+        enabled: true,
+        wallet: PolygonService.wallet?.address || 'unknown',
+        balance_matic: balanceNum.toFixed(4),
+        balance_usd: (balanceNum * 0.45).toFixed(2),
+        status: balanceNum < 0.1 ? 'LOW_BALANCE' : 'ok',
+        warning: balanceNum < 0.1 ? 'Polygon wallet balance is low. Please add MATIC.' : null
+      };
+    }
+  } catch (error) {
+    polygonStatus = { enabled: false, error: error.message };
+  }
+  
+  res.json({ 
+    status: "ok", 
+    uptime: process.uptime(),
+    polygon: polygonStatus,
+    timestamp: new Date().toISOString()
+  });
+});
 app.get("/debug-env", (req, res) => res.json({
   has_database_url: !!process.env.DATABASE_URL,
   database_url_format: process.env.DATABASE_URL ? process.env.DATABASE_URL.substring(0, 20) + '...' : 'NOT SET',
