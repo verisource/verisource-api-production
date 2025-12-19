@@ -25,6 +25,7 @@ const BlockchainService = require('./services/opentimestamps-service');
 const PolygonService = require('./services/polygon-timestamp');
 const sightengineDetector = require('./services/sightengine-ai-detection');
 const PlatformDetection = require('./services/platform-signature-detection');
+const FeatureLogger = require('./services/feature-logger');
 // Import canonicalization only (workers not needed for minimal endpoint)
 let canonicalizeImage;
 try { 
@@ -1510,6 +1511,30 @@ app.post('/verify-remote', async (req, res) => {
       console.log('💾 Verification saved to database');
     } catch (err) {
       console.error('⚠️ Database save error:', err.message);
+    }
+
+    // ============================================
+    // STEP 15B: Log Features for ML Training
+    // ============================================
+    try {
+      FeatureLogger.logFeatures({
+        fingerprint,
+        filePath: tempFilePath,
+        fileStats: stats,
+        mimeType: mockFile.mimetype,
+        mediaKind: kind,
+        imageMetadata: imgMeta || null,
+        exifData,
+        jpegForensics: jpegForensics || null,
+        sensorNoise: aiDetection?.sensor_noise_analysis || null,
+        aiDetection,
+        screenshotDetection,
+        googleVision: googleVisionResult,
+        phash,
+        cameraVerification
+      });
+    } catch (err) {
+      console.error('⚠️ Feature logging error:', err.message);
     }
 
     // ============================================
