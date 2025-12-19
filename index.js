@@ -1621,8 +1621,24 @@ app.post('/verify-remote', async (req, res) => {
     }
     if (polygonPromise) {
       polygonVerification = await polygonPromise;
+      
+      // Update database with Polygon data (fire and forget - don't block response)
+      if (polygonVerification?.success && polygonVerification?.transaction_hash) {
+        db.query(`
+          UPDATE verifications 
+          SET polygon_block_number = $1, polygon_tx_hash = $2, polygon_timestamp = $3
+          WHERE fingerprint = $4 
+          AND polygon_tx_hash IS NULL
+        `, [
+          polygonVerification.block_number,
+          polygonVerification.transaction_hash,
+          polygonVerification.timestamp,
+          fingerprint
+        ]).then(() => {
+          console.log('✅ Polygon data saved to database');
+        }).catch(err => console.error('⚠️ Polygon DB update error:', err.message));
+      }
     }
-
     // ============================================
     // STEP 21: Calculate Confidence Score
     // ============================================
