@@ -599,7 +599,7 @@ app.post('/verify-remote', async (req, res) => {
   let tempFilePath = null;
   let jpegForensics = null;
   let softwareAnalysis = null;
-  
+  let imgMeta = null;
   
   try {
     // ============================================
@@ -1088,7 +1088,7 @@ app.post('/verify-remote', async (req, res) => {
 
             // Camera Model Verification
             try {
-              const imgMeta = await sharp(tempFilePath).metadata();
+              imgMeta = await sharp(tempFilePath).metadata();
               cameraVerification = verifyCameraModel(exifData, { width: imgMeta.width, height: imgMeta.height });
               if (cameraVerification.camera_found) {
                 console.log(`📷 Camera: ${cameraVerification.details.manufacturer} ${cameraVerification.details.recognized_model}`);
