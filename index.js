@@ -232,6 +232,29 @@ app.get("/health", async (req, res) => {
     timestamp: new Date().toISOString()
   });
 });
+app.get("/ml-features/stats", (req, res) => {
+  try {
+    const stats = FeatureLogger.getStats();
+    res.json(stats);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get("/ml-features/export", (req, res) => {
+  try {
+    const csv = FeatureLogger.exportCsv();
+    if (!csv) {
+      return res.status(404).json({ error: 'No feature data available' });
+    }
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', 'attachment; filename=ml-features.csv');
+    res.send(csv);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.get("/debug-env", (req, res) => res.json({
   has_database_url: !!process.env.DATABASE_URL,
   database_url_format: process.env.DATABASE_URL ? process.env.DATABASE_URL.substring(0, 20) + '...' : 'NOT SET',
