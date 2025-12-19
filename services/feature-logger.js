@@ -460,18 +460,28 @@ class FeatureLogger {
    * Get feature count
    */
   getStats() {
-    if (!fs.existsSync(this.logFile)) {
-      return { count: 0, file: this.logFile };
+    const dirExists = fs.existsSync(this.logDir);
+    const jsonlExists = fs.existsSync(this.logFile);
+    const csvExists = fs.existsSync(this.csvFile);
+    
+    let count = 0;
+    if (jsonlExists) {
+      const content = fs.readFileSync(this.logFile, 'utf8');
+      const lines = content.trim().split('\n').filter(l => l.length > 0);
+      count = lines.length;
     }
-    const content = fs.readFileSync(this.logFile, 'utf8');
-    const lines = content.trim().split('\n').filter(l => l.length > 0);
+    
     return {
-      count: lines.length,
+      enabled: this.enabled,
+      log_dir: this.logDir,
+      dir_exists: dirExists,
       jsonl_file: this.logFile,
+      jsonl_exists: jsonlExists,
       csv_file: this.csvFile,
-      enabled: this.enabled
+      csv_exists: csvExists,
+      count: count
     };
-  }
+  } 
 }
 
 module.exports = new FeatureLogger();
