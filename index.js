@@ -1542,32 +1542,9 @@ app.post('/verify-remote', async (req, res) => {
     }
 
     // ============================================
-    // STEP 15B: Log Features for ML Training
-    // ============================================
-    try {
-      FeatureLogger.logFeatures({
-        fingerprint,
-        filePath: tempFilePath,
-        fileStats: stats,
-        mimeType: mockFile.mimetype,
-        mediaKind: kind,
-        imageMetadata: imgMeta || null,
-        exifData,
-        jpegForensics: jpegForensics || null,
-        sensorNoise: aiDetection?.sensor_noise_analysis || null,
-        aiDetection,
-        screenshotDetection,
-        googleVision: googleVisionResult,
-        phash,
-        cameraVerification
-      });
-    } catch (err) {
-      console.error('⚠️ Feature logging error:', err.message);
-    }
-
-    // ============================================
     // STEP 16: Cross-Reference Analysis
     // ============================================
+
     let crossReference = null;
     try {
       console.log('🔍 Running cross-reference analysis...');
@@ -1630,9 +1607,33 @@ app.post('/verify-remote', async (req, res) => {
         }
         
         
-      } catch (err) {
+    } catch (err) {
         console.error('⚠️ Screenshot detection error:', err.message);
       }
+    }
+
+    // ============================================
+    // STEP 17B: Log Features for ML Training
+    // ============================================
+    try {
+      FeatureLogger.logFeatures({
+        fingerprint,
+        filePath: tempFilePath,
+        fileStats: stats,
+        mimeType: mockFile.mimetype,
+        mediaKind: kind,
+        imageMetadata: imgMeta || null,
+        exifData,
+        jpegForensics: jpegForensics || null,
+        sensorNoise: aiDetection?.sensor_noise_analysis || null,
+        aiDetection,
+        screenshotDetection,
+        googleVision: googleVisionResult,
+        phash,
+        cameraVerification
+      });
+    } catch (err) {
+      console.error('⚠️ Feature logging error:', err.message);
     }
 
     // ============================================
