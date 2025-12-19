@@ -232,18 +232,23 @@ app.get("/health", async (req, res) => {
     timestamp: new Date().toISOString()
   });
 });
-app.get("/ml-features/stats", (req, res) => {
+app.get("/ml-features/stats", async (req, res) => {
   try {
-    const stats = FeatureLogger.getStats();
+    const stats = await FeatureLogger.getStats();
     res.json(stats);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-app.get("/ml-features/export", (req, res) => {
+app.get("/ml-features/export", async (req, res) => {
   try {
-    const csv = FeatureLogger.exportCsv();
+    const { start_date, end_date, limit } = req.query;
+    const csv = await FeatureLogger.exportCsv({
+      startDate: start_date,
+      endDate: end_date,
+      limit: limit ? parseInt(limit) : null
+    });
     if (!csv) {
       return res.status(404).json({ error: 'No feature data available' });
     }

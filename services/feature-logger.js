@@ -8,10 +8,13 @@
  * - Platform fingerprinting
  * - Compression analysis
  * - Camera vs AI heuristics
+ * 
+ * Stores in PostgreSQL for persistence across deploys
  */
 
 const fs = require('fs');
 const path = require('path');
+const db = require('../db-minimal');
 
 class FeatureLogger {
   constructor() {
@@ -19,21 +22,104 @@ class FeatureLogger {
     this.logFile = path.join(this.logDir, 'features.jsonl');
     this.csvFile = path.join(this.logDir, 'features.csv');
     this.enabled = process.env.FEATURE_LOGGING_ENABLED !== 'false';
+    this.dbInitialized = false;
     
-    // Ensure log directory exists
+    // Initialize database table
+    this.initDatabase();
+    
+    // Ensure log directory exists (for backup file logging)
     if (this.enabled && !fs.existsSync(this.logDir)) {
       try {
         fs.mkdirSync(this.logDir, { recursive: true });
         console.log('📊 Feature logging directory created:', this.logDir);
       } catch (err) {
         console.error('⚠️ Could not create feature log directory:', err.message);
-        this.enabled = false;
       }
     }
     
     // Initialize CSV with headers if it doesn't exist
     if (this.enabled && !fs.existsSync(this.csvFile)) {
       this.writeCsvHeaders();
+    }
+  }
+
+  async initDatabase() {
+    try {
+      await db.query(`
+        CREATE TABLE IF NOT EXISTS ml_features (
+          id SERIAL PRIMARY KEY,
+          logged_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          sample_id VARCHAR(64),
+          media_kind VARCHAR(20),
+          source_env VARCHAR(20),
+          sha256 VARCHAR(64),
+          perceptual_hash VARCHAR(128),
+          quantization_hash VARCHAR(128),
+          width INTEGER,
+          height INTEGER,
+          aspect_ratio DECIMAL(10,4),
+          orientation VARCHAR(20),
+          total_pixels INTEGER,
+          file_size_bytes INTEGER,
+          file_size_per_pixel DECIMAL(10,6),
+          mime_type VARCHAR(100),
+          has_exif BOOLEAN,
+          exif_field_count INTEGER,
+          has_make BOOLEAN,
+          has_model BOOLEAN,
+          has_software BOOLEAN,
+          has_gps BOOLEAN,
+          has_datetime BOOLEAN,
+          jpeg_quality_est INTEGER,
+          quality_bucket VARCHAR(20),
+          chroma_subsampling VARCHAR(20),
+          double_compressed BOOLEAN,
+          ela_score DECIMAL(10,4),
+          ghost_score DECIMAL(10,4),
+          recompression_source VARCHAR(50),
+          sharpness_score DECIMAL(10,4),
+          edge_density DECIMAL(10,4),
+          entropy_score DECIMAL(10,4),
+          noise_level DECIMAL(10,4),
+          sensor_confidence INTEGER,
+          ai_anomalies INTEGER,
+          status_bar_detected BOOLEAN,
+          screenshot_confidence INTEGER,
+          detected_device VARCHAR(100),
+          is_screenshot BOOLEAN,
+          common_screenshot_width BOOLEAN,
+          common_screenshot_height BOOLEAN,
+          exact_screenshot_dimension BOOLEAN,
+          encoder_name VARCHAR(100),
+          encoder_confidence INTEGER,
+          platform_signature VARCHAR(100),
+          camera_match BOOLEAN,
+          camera_score INTEGER,
+          firmware_valid BOOLEAN,
+          ai_confidence INTEGER,
+          ai_verdict VARCHAR(50),
+          local_ai_score INTEGER,
+          jpeg_ai_score INTEGER,
+          ensemble_score INTEGER,
+          vision_label_count INTEGER,
+          vision_web_entities INTEGER
+        )
+      `);
+      
+      // Create index on logged_at for efficient date queries
+      await db.query(`
+        CREATE INDEX IF NOT EXISTS idx_ml_features_logged_at ON ml_features(logged_at)
+      `);
+      
+      // Create index on sha256 for deduplication checks
+      await db.query(`
+        CREATE INDEX IF NOT EXISTS idx_ml_features_sha256 ON ml_features(sha256)
+      `);
+      
+      this.dbInitialized = true;
+      console.log('📊 ML features database table initialized');
+    } catch (err) {
+      console.error('⚠️ ML features DB init error:', err.message);
     }
   }
 
@@ -47,16 +133,112 @@ class FeatureLogger {
     try {
       const features = this.extractFeatures(data);
       
-      // Write to JSONL (one JSON object per line)
-      fs.appendFileSync(this.logFile, JSON.stringify(features) + '\n');
+      // Save to PostgreSQL (primary storage)
+      await this.saveToDatabase(features);
       
-      // Write to CSV
-      this.appendCsvRow(features);
+      // Also write to local files as backup
+      try {
+        fs.appendFileSync(this.logFile, JSON.stringify(features) + '\n');
+        this.appendCsvRow(features);
+      } catch (fileErr) {
+        // File logging is optional, don't fail if it doesn't work
+      }
       
       console.log('📊 Features logged for ML training');
     } catch (err) {
       console.error('⚠️ Feature logging error:', err.message);
     }
+  }
+
+  /**
+   * Save features to PostgreSQL database
+   */
+  async saveToDatabase(features) {
+    if (!db.isAvailable()) {
+      console.log('⚠️ Database not available for feature logging');
+      return;
+    }
+
+    const query = `
+      INSERT INTO ml_features (
+        logged_at, sample_id, media_kind, source_env, sha256, perceptual_hash,
+        quantization_hash, width, height, aspect_ratio, orientation, total_pixels,
+        file_size_bytes, file_size_per_pixel, mime_type, has_exif, exif_field_count,
+        has_make, has_model, has_software, has_gps, has_datetime, jpeg_quality_est,
+        quality_bucket, chroma_subsampling, double_compressed, ela_score, ghost_score,
+        recompression_source, sharpness_score, edge_density, entropy_score, noise_level,
+        sensor_confidence, ai_anomalies, status_bar_detected, screenshot_confidence,
+        detected_device, is_screenshot, common_screenshot_width, common_screenshot_height,
+        exact_screenshot_dimension, encoder_name, encoder_confidence, platform_signature,
+        camera_match, camera_score, firmware_valid, ai_confidence, ai_verdict,
+        local_ai_score, jpeg_ai_score, ensemble_score, vision_label_count, vision_web_entities
+      ) VALUES (
+        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17,
+        $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32,
+        $33, $34, $35, $36, $37, $38, $39, $40, $41, $42, $43, $44, $45, $46, $47,
+        $48, $49, $50, $51, $52, $53, $54, $55
+      )
+    `;
+
+    const values = [
+      features.logged_at,
+      features.sample_id,
+      features.media_kind,
+      features.source_env,
+      features.sha256,
+      features.perceptual_hash,
+      features.quantization_hash,
+      features.width,
+      features.height,
+      features.aspect_ratio,
+      features.orientation,
+      features.total_pixels,
+      features.file_size_bytes,
+      features.file_size_per_pixel,
+      features.mime_type,
+      features.has_exif,
+      features.exif_field_count,
+      features.has_make,
+      features.has_model,
+      features.has_software,
+      features.has_gps,
+      features.has_datetime,
+      features.jpeg_quality_est,
+      features.quality_bucket,
+      features.chroma_subsampling,
+      features.double_compressed,
+      features.ela_score,
+      features.ghost_score,
+      features.recompression_source,
+      features.sharpness_score,
+      features.edge_density,
+      features.entropy_score,
+      features.noise_level,
+      features.sensor_confidence,
+      features.ai_anomalies,
+      features.status_bar_detected,
+      features.screenshot_confidence,
+      features.detected_device,
+      features.is_screenshot,
+      features.common_screenshot_width,
+      features.common_screenshot_height,
+      features.exact_screenshot_dimension,
+      features.encoder_name,
+      features.encoder_confidence,
+      features.platform_signature,
+      features.camera_match,
+      features.camera_score,
+      features.firmware_valid,
+      features.ai_confidence,
+      features.ai_verdict,
+      features.local_ai_score,
+      features.jpeg_ai_score,
+      features.ensemble_score,
+      features.vision_label_count,
+      features.vision_web_entities
+    ];
+
+    await db.query(query, values);
   }
 
   /**
@@ -447,39 +629,135 @@ class FeatureLogger {
   }
 
   /**
-   * Export all data as CSV (for manual download)
+   * Export all data as CSV from database
    */
-  exportCsv() {
-    if (!fs.existsSync(this.csvFile)) {
+  async exportCsv(options = {}) {
+    const { startDate, endDate, limit } = options;
+    
+    try {
+      if (!db.isAvailable()) {
+        // Fallback to file
+        if (fs.existsSync(this.csvFile)) {
+          return fs.readFileSync(this.csvFile, 'utf8');
+        }
+        return null;
+      }
+      
+      let query = 'SELECT * FROM ml_features';
+      const conditions = [];
+      const values = [];
+      let paramIndex = 1;
+      
+      if (startDate) {
+        conditions.push(`logged_at >= $${paramIndex++}`);
+        values.push(startDate);
+      }
+      if (endDate) {
+        conditions.push(`logged_at <= $${paramIndex++}`);
+        values.push(endDate);
+      }
+      
+      if (conditions.length > 0) {
+        query += ' WHERE ' + conditions.join(' AND ');
+      }
+      
+      query += ' ORDER BY logged_at DESC';
+      
+      if (limit) {
+        query += ` LIMIT $${paramIndex}`;
+        values.push(limit);
+      }
+      
+      const result = await db.query(query, values);
+      
+      if (result.rows.length === 0) {
+        return null;
+      }
+      
+      // Convert to CSV
+      const headers = Object.keys(result.rows[0]);
+      const csvRows = [headers.join(',')];
+      
+      for (const row of result.rows) {
+        const values = headers.map(h => {
+          const val = row[h];
+          if (val === null || val === undefined) return '';
+          if (typeof val === 'string' && (val.includes(',') || val.includes('"'))) {
+            return `"${val.replace(/"/g, '""')}"`;
+          }
+          if (val instanceof Date) {
+            return val.toISOString();
+          }
+          return val;
+        });
+        csvRows.push(values.join(','));
+      }
+      
+      return csvRows.join('\n');
+    } catch (err) {
+      console.error('⚠️ Error exporting ML features:', err.message);
+      // Fallback to file
+      if (fs.existsSync(this.csvFile)) {
+        return fs.readFileSync(this.csvFile, 'utf8');
+      }
       return null;
     }
-    return fs.readFileSync(this.csvFile, 'utf8');
   }
 
   /**
    * Get feature count
    */
-  getStats() {
+ async getStats() {
     const dirExists = fs.existsSync(this.logDir);
     const jsonlExists = fs.existsSync(this.logFile);
     const csvExists = fs.existsSync(this.csvFile);
     
-    let count = 0;
+    let fileCount = 0;
     if (jsonlExists) {
       const content = fs.readFileSync(this.logFile, 'utf8');
       const lines = content.trim().split('\n').filter(l => l.length > 0);
-      count = lines.length;
+      fileCount = lines.length;
+    }
+    
+    // Get database count
+    let dbCount = 0;
+    let oldestEntry = null;
+    let newestEntry = null;
+    try {
+      if (db.isAvailable()) {
+        const countResult = await db.query('SELECT COUNT(*) as count FROM ml_features');
+        dbCount = parseInt(countResult.rows[0].count) || 0;
+        
+        if (dbCount > 0) {
+          const rangeResult = await db.query(`
+            SELECT 
+              MIN(logged_at) as oldest,
+              MAX(logged_at) as newest
+            FROM ml_features
+          `);
+          oldestEntry = rangeResult.rows[0].oldest;
+          newestEntry = rangeResult.rows[0].newest;
+        }
+      }
+    } catch (err) {
+      console.error('⚠️ Error getting ML features stats:', err.message);
     }
     
     return {
       enabled: this.enabled,
-      log_dir: this.logDir,
-      dir_exists: dirExists,
-      jsonl_file: this.logFile,
-      jsonl_exists: jsonlExists,
-      csv_file: this.csvFile,
-      csv_exists: csvExists,
-      count: count
+      database: {
+        connected: db.isAvailable(),
+        count: dbCount,
+        oldest_entry: oldestEntry,
+        newest_entry: newestEntry
+      },
+      files: {
+        log_dir: this.logDir,
+        dir_exists: dirExists,
+        jsonl_exists: jsonlExists,
+        csv_exists: csvExists,
+        file_count: fileCount
+      }
     };
   } 
 }
