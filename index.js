@@ -1012,6 +1012,17 @@ app.post('/verify-remote', async (req, res) => {
     // STEP 11: EXIF Extraction and Advanced Analysis
     // ============================================
     if (kind === 'image') {
+      // Capture image metadata for ALL image formats (not just JPEG)
+      try {
+        imgMeta = await sharp(tempFilePath).metadata();
+        const imgStats = await sharp(tempFilePath).stats();
+        imgMeta.sharpness = imgStats.sharpness;
+        imgMeta.entropy = imgStats.entropy;
+        console.log(`📐 Image dimensions: ${imgMeta.width}x${imgMeta.height} (${imgMeta.format})`);
+      } catch (metaErr) {
+        console.log('⚠️ Could not get image metadata:', metaErr.message);
+      }
+
       try {
         console.log('📍 Extracting GPS and date from EXIF...');
         const ExifParser = require('exif-parser');
