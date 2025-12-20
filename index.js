@@ -1091,9 +1091,17 @@ app.post('/verify-remote', async (req, res) => {
 
             console.log(`\n📊 FINAL AI CONFIDENCE: ${aiDetection.ai_confidence}% (started at ${aiDetection.ai_confidence_raw || 'unknown'}%)\n`);
 
-            // Camera Model Verification
+           // Camera Model Verification
             try {
               imgMeta = await sharp(tempFilePath).metadata();
+              // Also get stats for sharpness and entropy
+              try {
+                const imgStats = await sharp(tempFilePath).stats();
+                imgMeta.sharpness = imgStats.sharpness;
+                imgMeta.entropy = imgStats.entropy;
+              } catch (statsErr) {
+                console.log('⚠️ Could not get image stats:', statsErr.message);
+              }
               cameraVerification = verifyCameraModel(exifData, { width: imgMeta.width, height: imgMeta.height });
               if (cameraVerification.camera_found) {
                 console.log(`📷 Camera: ${cameraVerification.details.manufacturer} ${cameraVerification.details.recognized_model}`);

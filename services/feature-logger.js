@@ -283,9 +283,9 @@ class FeatureLogger {
     const hasGps = !!(exifData?.GPSLatitude || exifData?.GPSLongitude);
     const hasDateTime = !!(exifData?.DateTimeOriginal || exifData?.CreateDate);
 
-    // JPEG forensics
+     // JPEG forensics
     const jpegQualityEst = jpegForensics?.quality_estimate || jpegForensics?.quality || null;
-    const chromaSubsampling = jpegForensics?.chroma_subsampling || null;
+    const chromaSubsampling = imageMetadata?.chromaSubsampling || jpegForensics?.chroma_subsampling || null;
     const quantizationHash = jpegForensics?.quantization_hash || jpegForensics?.dqt_hash || null;
     const doubleCompressed = jpegForensics?.double_compressed || false;
     const elaScore = jpegForensics?.ela_score || null;
