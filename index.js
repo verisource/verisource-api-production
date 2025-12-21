@@ -1849,6 +1849,7 @@ app.post('/verify-remote', async (req, res) => {
       polygon_verification: polygonVerification,
       ai_detection: aiDetection,
       ...(screenshotDetection && { screenshot_detection: screenshotDetection }),
+      ...(provenanceResult && { provenance: provenanceResult }),
       ...(crossReference && { cross_reference: crossReference }),
       verification: {
         status: searchResults.found ? 'PREVIOUSLY_VERIFIED' : 'NEW_UPLOAD',
