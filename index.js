@@ -3381,21 +3381,22 @@ module.exports = { applyHybridCameraRescue, calculateCameraAuthenticityScore };
     try {
       const ipAddress = req.ip || req.connection.remoteAddress;
       await saveVerification({
-        fingerprint: fingerprint,
-        algorithm: 'sha256',
-        filename: req.file.originalname,
-        file_size: req.file.size,
-        file_type: req.file.mimetype,
-        media_kind: kind,
-        ip_address: ipAddress,
-        polygon_block_number: polygonVerification?.block_number || null,
-        polygon_tx_hash: polygonVerification?.transaction_hash || null,
-        polygon_timestamp: polygonVerification?.timestamp || null,
-        bitcoin_proof_status: blockchainVerification?.status || null,
-        bitcoin_submitted_at: blockchainVerification?.submitted_at || null,
-        phash: phash || null,
-        google_vision_labels: googleVisionResult?.results?.labels || []
-      });
+       fingerprint: fingerprint,
+       algorithm: 'sha256',
+       filename: tempFileName,
+       file_size: stats.size,
+       file_type: mockFile.mimetype,
+       media_kind: kind,
+       ip_address: req.ip || req.connection?.remoteAddress,
+       polygon_block_number: polygonVerification?.block_number || null,
+       polygon_tx_hash: polygonVerification?.transaction_hash || null,
+       polygon_timestamp: polygonVerification?.timestamp || null,
+       bitcoin_proof_status: blockchainVerification?.status || null,
+       bitcoin_submitted_at: blockchainVerification?.submitted_at || null,
+       phash: phash || null,
+       phash_regions: phashRegions || null,
+       google_vision_labels: googleVisionResult?.results?.labels || []
+   });
     } catch (err) {
       console.error('⚠️ Database save error:', err.message);
     }
