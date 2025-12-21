@@ -113,13 +113,13 @@ async function saveVerification(data) {
       return fingerprintResult ? { fingerprint_id: fingerprintResult.id } : null;
     }
     
-    const query = `
+     const query = `
       INSERT INTO verifications (
         fingerprint, fingerprint_algorithm, original_filename,
         file_size, file_type, media_kind, ip_address,
         polygon_block_number, polygon_tx_hash, polygon_timestamp,
-        bitcoin_proof_status, bitcoin_submitted_at
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+        bitcoin_proof_status, bitcoin_submitted_at, phash
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
       RETURNING id, upload_date
     `;
     
@@ -135,7 +135,8 @@ async function saveVerification(data) {
       data.polygon_tx_hash || null,
       data.polygon_timestamp || null,
       data.bitcoin_proof_status || null,
-      data.bitcoin_submitted_at || null
+      data.bitcoin_submitted_at || null,
+      data.phash || null
     ];
     
     const result = await db.query(query, values);
