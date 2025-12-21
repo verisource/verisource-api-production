@@ -1618,6 +1618,7 @@ app.post('/verify-remote', async (req, res) => {
         bitcoin_proof_status: blockchainVerification?.status || null,
         bitcoin_submitted_at: blockchainVerification?.submitted_at || null,
         phash: phash || null,
+        phash_regions: phashRegions || null,
         google_vision_labels: googleVisionResult?.results?.labels || []
       });
       console.log('💾 Verification saved to database');
@@ -3395,6 +3396,7 @@ module.exports = { applyHybridCameraRescue, calculateCameraAuthenticityScore };
        bitcoin_proof_status: blockchainVerification?.status || null,
        bitcoin_submitted_at: blockchainVerification?.submitted_at || null,
        phash: phash || null,
+        phash_regions: phashRegions || null,
        phash_regions: phashRegions || null,
        google_vision_labels: googleVisionResult?.results?.labels || []
    });
