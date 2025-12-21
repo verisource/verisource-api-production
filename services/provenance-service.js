@@ -1,11 +1,139 @@
 /**
- * Provenance Service
+ * Provenance Service v2
  * Tracks content lineage, derivatives, and timeline
+ * Now with multi-region pHash for crop-resistant matching
  */
 
-const db = require('../db-minimal');
+const db = require('./db-minimal');
+const sharp = require('sharp');
 
 class ProvenanceService {
+  
+  // ============================================================================
+  // MULTI-REGION PHASH GENERATION
+  // ============================================================================
+  
+  /**
+   * Region definitions for multi-region pHash (18 regions)
+   * Each region is a function that takes (width, height) and returns crop bounds
+   * Designed to catch common crop patterns: social media, aspect ratio changes, etc.
+   */
+  getRegionDefinitions() {
+    return {
+      // Full image
+      full: null,
+      
+      // Center crops at different sizes
+      center50: (w, h) => ({ left: w * 0.25, top: h * 0.25, width: w * 0.5, height: h * 0.5 }),
+      center60: (w, h) => ({ left: w * 0.20, top: h * 0.20, width: w * 0.6, height: h * 0.6 }),
+      center70: (w, h) => ({ left: w * 0.15, top: h * 0.15, width: w * 0.7, height: h * 0.7 }),
+      center80: (w, h) => ({ left: w * 0.10, top: h * 0.10, width: w * 0.8, height: h * 0.8 }),
+      
+      // Quadrants
+      topLeft: (w, h) => ({ left: 0, top: 0, width: w * 0.5, height: h * 0.5 }),
+      topRight: (w, h) => ({ left: w * 0.5, top: 0, width: w * 0.5, height: h * 0.5 }),
+      bottomLeft: (w, h) => ({ left: 0, top: h * 0.5, width: w * 0.5, height: h * 0.5 }),
+      bottomRight: (w, h) => ({ left: w * 0.5, top: h * 0.5, width: w * 0.5, height: h * 0.5 }),
+      
+      // Halves
+      topHalf: (w, h) => ({ left: 0, top: 0, width: w, height: h * 0.5 }),
+      bottomHalf: (w, h) => ({ left: 0, top: h * 0.5, width: w, height: h * 0.5 }),
+      leftHalf: (w, h) => ({ left: 0, top: 0, width: w * 0.5, height: h }),
+      rightHalf: (w, h) => ({ left: w * 0.5, top: 0, width: w * 0.5, height: h }),
+      
+      // Thirds (for social media crops)
+      topThird: (w, h) => ({ left: 0, top: 0, width: w, height: h * 0.33 }),
+      middleThird: (w, h) => ({ left: 0, top: h * 0.33, width: w, height: h * 0.34 }),
+      bottomThird: (w, h) => ({ left: 0, top: h * 0.66, width: w, height: h * 0.34 }),
+      
+      // 2/3 crops (common aspect ratio adjustments)
+      top2Thirds: (w, h) => ({ left: 0, top: 0, width: w, height: h * 0.66 }),
+      bottom2Thirds: (w, h) => ({ left: 0, top: h * 0.34, width: w, height: h * 0.66 })
+    };
+  }
+
+  /**
+   * Generate pHash for a single region of an image
+   * @param {Buffer|string} input - Image buffer or file path
+   * @param {Function|null} regionFn - Region function or null for full image
+   * @returns {string} Hex pHash string
+   */
+  async generateRegionPHash(input, regionFn = null) {
+    try {
+      let image = sharp(input);
+      
+      if (regionFn) {
+        const meta = await sharp(input).metadata();
+        const bounds = regionFn(meta.width, meta.height);
+        image = image.extract({
+          left: Math.floor(bounds.left),
+          top: Math.floor(bounds.top),
+          width: Math.floor(bounds.width),
+          height: Math.floor(bounds.height)
+        });
+      }
+      
+      // Resize to 32x32 grayscale for pHash
+      const { data } = await sharp(await image.toBuffer())
+        .resize(32, 32, { fit: 'fill' })
+        .grayscale()
+        .raw()
+        .toBuffer({ resolveWithObject: true });
+      
+      // Calculate average pixel value
+      let sum = 0;
+      for (let i = 0; i < data.length; i++) {
+        sum += data[i];
+      }
+      const avg = sum / data.length;
+      
+      // Generate binary hash based on above/below average
+      let binaryHash = '';
+      for (let i = 0; i < data.length; i++) {
+        binaryHash += data[i] > avg ? '1' : '0';
+      }
+      
+      // Convert to hex
+      let hexHash = '';
+      for (let i = 0; i < binaryHash.length; i += 4) {
+        hexHash += parseInt(binaryHash.substr(i, 4), 2).toString(16);
+      }
+      
+      return hexHash;
+    } catch (err) {
+      console.error(`⚠️ Error generating region pHash: ${err.message}`);
+      return null;
+    }
+  }
+
+  /**
+   * Generate all 9 region pHashes for an image
+   * @param {Buffer|string} input - Image buffer or file path
+   * @returns {Object} Object with region names as keys and pHashes as values
+   */
+  async generateAllRegionHashes(input) {
+    const regions = this.getRegionDefinitions();
+    const hashes = {};
+    
+    console.log('🔍 Generating multi-region pHashes (18 regions)...');
+    const startTime = Date.now();
+    
+    for (const [name, regionFn] of Object.entries(regions)) {
+      const hash = await this.generateRegionPHash(input, regionFn);
+      if (hash) {
+        hashes[name] = hash;
+      }
+    }
+    
+    const elapsed = Date.now() - startTime;
+    console.log(`✅ Generated ${Object.keys(hashes).length} region pHashes in ${elapsed}ms`);
+    
+    return hashes;
+  }
+
+  // ============================================================================
+  // PHASH COMPARISON
+  // ============================================================================
   
   /**
    * Calculate Hamming distance between two hex pHash strings
@@ -40,15 +168,56 @@ class ProvenanceService {
   }
 
   /**
-   * Find similar content by pHash
+   * Compare two sets of region hashes and find best match
+   * @param {Object} hashes1 - Region hashes from first image
+   * @param {Object} hashes2 - Region hashes from second image
+   * @returns {Object} Best match info with similarity, regions matched
    */
-  async findSimilarContent(phash, excludeFingerprint = null, threshold = 85) {
-    if (!phash) return [];
+  compareRegionHashes(hashes1, hashes2) {
+    let bestMatch = {
+      similarity: 0,
+      region1: null,
+      region2: null
+    };
+    
+    const regions1 = Object.keys(hashes1);
+    const regions2 = Object.keys(hashes2);
+    
+    for (const r1 of regions1) {
+      for (const r2 of regions2) {
+        const sim = this.similarityScore(hashes1[r1], hashes2[r2]);
+        if (sim > bestMatch.similarity) {
+          bestMatch = {
+            similarity: sim,
+            region1: r1,
+            region2: r2
+          };
+        }
+      }
+    }
+    
+    return bestMatch;
+  }
+
+  // ============================================================================
+  // DATABASE OPERATIONS
+  // ============================================================================
+
+  /**
+   * Find similar content using multi-region pHash comparison
+   * @param {string} phash - Primary pHash (for backward compatibility)
+   * @param {Object} regionHashes - All region hashes for the image
+   * @param {string} excludeFingerprint - Fingerprint to exclude from results
+   * @param {number} threshold - Minimum similarity threshold (default 70 for crops)
+   */
+  async findSimilarContent(phash, regionHashes = null, excludeFingerprint = null, threshold = 70) {
+    if (!phash && !regionHashes) return [];
     
     try {
+      // Query for content with region hashes
       let query = `
         SELECT DISTINCT ON (fingerprint) 
-          fingerprint, phash, upload_date, media_kind, original_filename
+          fingerprint, phash, phash_regions, upload_date, media_kind, original_filename
         FROM verifications 
         WHERE phash IS NOT NULL
       `;
@@ -64,34 +233,70 @@ class ProvenanceService {
         : await db.query(query);
       
       const similar = [];
+      
       for (const row of result.rows) {
-        const similarity = this.similarityScore(phash, row.phash);
-        if (similarity >= threshold) {
+        let bestSimilarity = 0;
+        let matchDetails = { region1: 'full', region2: 'full' };
+        
+        // First try full pHash comparison (backward compatible)
+        if (phash && row.phash) {
+          bestSimilarity = this.similarityScore(phash, row.phash);
+        }
+        
+        // If we have region hashes, do multi-region comparison
+        if (regionHashes && row.phash_regions) {
+          try {
+            const storedRegions = typeof row.phash_regions === 'string' 
+              ? JSON.parse(row.phash_regions) 
+              : row.phash_regions;
+            
+            const regionMatch = this.compareRegionHashes(regionHashes, storedRegions);
+            
+            if (regionMatch.similarity > bestSimilarity) {
+              bestSimilarity = regionMatch.similarity;
+              matchDetails = {
+                region1: regionMatch.region1,
+                region2: regionMatch.region2
+              };
+            }
+          } catch (e) {
+            // Ignore JSON parse errors, fall back to full hash
+          }
+        }
+        
+        if (bestSimilarity >= threshold) {
           similar.push({
             fingerprint: row.fingerprint,
-            similarity,
+            similarity: bestSimilarity,
             first_seen: row.upload_date,
             media_kind: row.media_kind,
-            filename: row.original_filename
+            filename: row.original_filename,
+            match_type: matchDetails.region1 === 'full' && matchDetails.region2 === 'full' 
+              ? 'full_image' 
+              : 'region_match',
+            matched_regions: matchDetails
           });
         }
       }
       
+      // Sort by similarity descending
       similar.sort((a, b) => b.similarity - a.similarity);
+      
       return similar;
     } catch (err) {
-      console.error('Error finding similar content:', err.message);
+      console.error('⚠️ Error finding similar content:', err.message);
       return [];
     }
   }
 
   /**
-   * Determine relationship type based on similarity
+   * Determine relationship type based on similarity and match details
    */
-  getRelationshipType(similarity, isScreenshot = false) {
+  getRelationshipType(similarity, isScreenshot = false, matchType = 'full_image') {
     if (similarity === 100) return 'exact_match';
     if (isScreenshot) return 'screenshot';
     if (similarity >= 95) return 'recompressed';
+    if (matchType === 'region_match') return 'cropped';
     if (similarity >= 85) return 'derivative';
     return 'similar';
   }
@@ -117,7 +322,7 @@ class ProvenanceService {
       
       return true;
     } catch (err) {
-      console.error('Error recording relationship:', err.message);
+      console.error('⚠️ Error recording relationship:', err.message);
       return false;
     }
   }
@@ -243,19 +448,27 @@ class ProvenanceService {
       };
       
     } catch (err) {
-      console.error('Error getting timeline:', err.message);
+      console.error('⚠️ Error getting timeline:', err.message);
       return { found: false, error: err.message };
     }
   }
 
   /**
-   * Check for relationships during verification
+   * Check for relationships during verification (with multi-region support)
+   * @param {string} fingerprint - SHA256 fingerprint of the file
+   * @param {string} phash - Primary pHash
+   * @param {Object} regionHashes - All region hashes
+   * @param {boolean} isScreenshot - Whether this is detected as a screenshot
    */
-  async checkAndRecordProvenance(fingerprint, phash, isScreenshot = false) {
+  async checkAndRecordProvenance(fingerprint, phash, regionHashes = null, isScreenshot = false) {
     try {
-      const similar = await this.findSimilarContent(phash, fingerprint, 85);
+      console.log('🔗 Checking content provenance...');
+      
+      // Find similar content using multi-region comparison
+      const similar = await this.findSimilarContent(phash, regionHashes, fingerprint, 70);
       
       if (similar.length === 0) {
+        console.log('   ✅ Original content (no similar content found)');
         return {
           is_original: true,
           similar_content: [],
@@ -263,16 +476,26 @@ class ProvenanceService {
         };
       }
       
+      console.log(`   ⚠️ Found ${similar.length} similar content matches`);
+      
+      // Record relationships with the most similar content
       let recorded = 0;
       for (const match of similar.slice(0, 5)) {
-        const relType = this.getRelationshipType(match.similarity, isScreenshot);
+        const relType = this.getRelationshipType(
+          match.similarity, 
+          isScreenshot, 
+          match.match_type
+        );
         const success = await this.recordRelationship(
           match.fingerprint,
           fingerprint,
           relType,
           match.similarity
         );
-        if (success) recorded++;
+        if (success) {
+          recorded++;
+          console.log(`   📎 Linked to ${match.fingerprint.substring(0, 8)}... (${match.similarity}% ${relType})`);
+        }
       }
       
       return {
@@ -283,7 +506,7 @@ class ProvenanceService {
       };
       
     } catch (err) {
-      console.error('Error checking provenance:', err.message);
+      console.error('⚠️ Error checking provenance:', err.message);
       return { is_original: true, error: err.message };
     }
   }
@@ -296,11 +519,13 @@ class ProvenanceService {
       const relationshipsCount = await db.query('SELECT COUNT(*) as count FROM content_relationships');
       const derivativesCount = await db.query('SELECT COUNT(*) as count FROM verifications WHERE is_derivative = TRUE');
       const uniqueParents = await db.query('SELECT COUNT(DISTINCT parent_fingerprint) as count FROM content_relationships');
+      const withRegionHashes = await db.query('SELECT COUNT(*) as count FROM verifications WHERE phash_regions IS NOT NULL');
       
       return {
         total_relationships: parseInt(relationshipsCount.rows[0].count),
         total_derivatives: parseInt(derivativesCount.rows[0].count),
-        unique_originals_with_derivatives: parseInt(uniqueParents.rows[0].count)
+        unique_originals_with_derivatives: parseInt(uniqueParents.rows[0].count),
+        verifications_with_region_hashes: parseInt(withRegionHashes.rows[0].count)
       };
     } catch (err) {
       return { error: err.message };

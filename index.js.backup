@@ -1,17 +1,66 @@
 require('dotenv').config();
 const express = require('express');
 const mime = require('mime-types');
+const sharp = require('sharp');
 const multer = require('multer');
 const rateLimit = require('express-rate-limit');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
+const crypto = require('crypto');
+const db = require('./db-minimal');
+const { searchByFingerprint, saveVerification } = require('./search');
+const c2paVerification = require('./services/c2pa-verification');
+const shadowPhysics = require('./services/shadow-physics-verification');
+const reverseImageSearch = require('./services/reverse-image-search');
+const deepfakeDetection = require('./services/deepfake-detection');
+const stockPhotoDetection = require('./services/stock-photo-detection');
+const CameraValidation = require('./services/camera-validation');
+const AudioSpectralAnalysis = require('./services/audio-spectral-analysis');
+const EnhancedAIDetector = require('./services/enhanced-ai-detector');
+const JPEGForensics = require('./services/jpeg-forensics');
+const BlockchainService = require('./services/opentimestamps-service');
+const PolygonService = require('./services/polygon-timestamp');
+const sightengineDetector = require('./services/sightengine-ai-detection');
+const PlatformDetection = require('./services/platform-signature-detection');
+// Import canonicalization only (workers not needed for minimal endpoint)
+let canonicalizeImage;
+try { 
+  const canon = require('./canonicalization');
+  canonicalizeImage = canon.canonicalizeImage;
+} catch(e) {
+  console.log('⚠️ Canonicalization not available:', e.message);
+}
+
+// Import analysis and detection services
+const { analyzeVideo } = require('./video-analyzer');
+const { loadFaceModels } = require("./deepfake-detector");
+const { analyzeImage } = require('./google-vision-search');
+const { AudioAIDetection } = require('./services/audio-ai-detection');
+const { detectAIGeneration } = require('./services/ensemble-ai-detection');
+const { generatePHash, searchSimilarImages } = require('./phash-module');
+const { analyzeCrossReference, analyzeTemporalConsistency, cacheExternalSearchResults, analyzeExternalSources } = require('./services/fingerprint-index');
+const ConfidenceScoring = require('./services/confidence-scoring');
+const ChromaprintService = require('./services/chromaprint');
+const acoustid = require('./acoustid-integration');
+const WeatherVerification = require('./services/weather-verification');
+const LandmarkVerification = require('./services/landmark-verification');
+const PortraitModeDetection = require('./services/enhanced-portrait-detection');
+const { verifyCameraModel, detectHistoricalPhoto } = require('./services/camera-model-verification');
+const AIGeneratorDetector = require('./services/ai-generator-detector');
+// View engine for batch dashboard
+const HEICDetection = require('./services/heic-detection');
+const SensorNoiseAnalysis = require('./services/sensor-noise-analysis');
+const LivePhotoValidator = require('./services/live-photo-validator');
+const CompressionSignature = require('./services/compression-signature-detector');
+const { detectScreenshot, getScreenshotVerdictAdjustment } = require('./screenshot-detection');
+
+const app = express();
+
 // View engine for batch dashboard
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
 app.use(express.static(path.join(__dirname, 'public')));
-
-const app = express();
 
 // Configure trust proxy for Railway deployment
 // Only trust Railway's proxy, not arbitrary proxies
@@ -25,6 +74,7 @@ if (process.env.RAILWAY_ENVIRONMENT) {
 
 
 app.use(express.json());
+app.use(express.urlencoded({ extended: true })); // For parsing form data
 
 // --- CORS ---
 app.use((req, res, next) => {
@@ -52,451 +102,7 @@ app.use(limiter);
 // Batch upload routes
 const batchRoutes = require('./routes/batch');
 app.use('/api', batchRoutes);
-app.use('/', batchRoutes);
 
-const { analyzeVideo } = require('./video-analyzer');
-const db = require('./db-minimal');
-const { analyzeImage } = require('./google-vision-search');
-const { generatePHash, searchSimilarImages } = require('./phash-module');
-const { detectAIGeneration } = require('./ai-image-detector');
-const { calculateConfidenceScore } = require('./confidence-scoring');
-
-// Track database readiness
-let dbReady = false;
-
-// --- Database initialization ---
-async function initializeDatabase() {
-  try {
-    console.log('🔌 Initializing database connection...');
-    
-    // Test connection
-    const testResult = await db.query('SELECT NOW() as time, version() as version');
-    console.log('✅ Database connected:', testResult.rows[0].time);
-    console.log('📊 PostgreSQL version:', testResult.rows[0].version);
-    
-    // Create tables (split into separate queries)
-    console.log('🔨 Creating verifications table...');
-    await db.query(`
-      CREATE TABLE IF NOT EXISTS verifications (
-        id SERIAL PRIMARY KEY,
-        fingerprint VARCHAR(64) NOT NULL,
-        fingerprint_algorithm VARCHAR(20) DEFAULT 'sha256',
-        original_filename VARCHAR(255),
-        file_size INTEGER,
-        file_type VARCHAR(50),
-        media_kind VARCHAR(20),
-        upload_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        ip_address VARCHAR(45)
-      )
-    `);
-    
-    console.log('🔨 Creating indexes...');
-    // Add pHash column if it doesn't exist (for similar image detection)
-    await db.query(`
-      ALTER TABLE verifications 
-      ADD COLUMN IF NOT EXISTS phash VARCHAR(64)
-    `);
-    
-    console.log('🔨 Creating pHash index...');
-    await db.query('CREATE INDEX IF NOT EXISTS idx_phash ON verifications(phash) WHERE phash IS NOT NULL');
-    // Add pHash column if it doesn't exist (for similar image detection)
-    await db.query(`
-      ALTER TABLE verifications 
-      ADD COLUMN IF NOT EXISTS phash VARCHAR(64)
-    `);
-    
-    console.log('🔨 Creating pHash index...');
-    await db.query('CREATE INDEX IF NOT EXISTS idx_phash ON verifications(phash) WHERE phash IS NOT NULL');
-    
-    await db.query('CREATE INDEX IF NOT EXISTS idx_fingerprint ON verifications(fingerprint)');
-    await db.query('CREATE INDEX IF NOT EXISTS idx_upload_date ON verifications(upload_date DESC)');
-    
-    // Get record count
-    const countResult = await db.query('SELECT COUNT(*) as count FROM verifications');
-    console.log(`✅ Database initialized successfully. Current records: ${countResult.rows[0].count}`);
-    
-    dbReady = true;
-    return true;
-  } catch (err) {
-    console.error('❌ Database initialization error:', err.message);
-    console.error('⚠️ Application will continue without database features');
-    dbReady = false;
-    return false;
-  }
-}
-
-// --- Helper function to search database ---
-async function searchByFingerprint(fingerprint) {
-  if (!dbReady) {
-    return { found: false, is_first_verification: true, message: 'Database not available' };
-  }
-  
-  try {
-    const result = await db.query(
-      'SELECT * FROM verifications WHERE fingerprint = $1 ORDER BY upload_date',
-      [fingerprint]
-    );
-    
-    if (result.rows.length === 0) {
-      return { found: false, is_first_verification: true };
-    }
-    
-    const firstVerification = result.rows[0];
-    const allVerifications = result.rows.map(row => ({
-      date: row.upload_date,
-      filename: row.original_filename,
-      size: row.file_size,
-      ip: row.ip_address
-    }));
-    
-    return {
-      found: true,
-      is_first_verification: false,
-      first_seen: firstVerification.upload_date,
-      verification_count: result.rows.length,
-      verifications: allVerifications
-    };
-  } catch (err) {
-    console.error('Database search error:', err.message);
-    return { found: false, is_first_verification: true, message: 'Database search failed' };
-  }
-}
-
-// --- Helper function to save verification ---
-async function saveVerification(fingerprint, filename, fileSize, mediaKind, ipAddress, phash = null) {
-  if (!dbReady) {
-    console.log('⚠️ Skipping database save - database not ready');
-    return null;
-  }
-  
-  try {
-    const result = await db.query(
-      `INSERT INTO verifications (fingerprint, original_filename, file_size, media_kind, ip_address, phash)
-       VALUES ($1, $2, $3, $4, $5, $6)
-       RETURNING id, upload_date`,
-      [fingerprint, filename, fileSize, mediaKind, ipAddress, phash]
-    );
-    
-    console.log(`✅ Saved verification to database: ID ${result.rows[0].id}`);
-    return result.rows[0];
-  } catch (err) {
-    console.error('Database save error:', err.message);
-    return null;
-  }
-}
-
-// --- File verification endpoint ---
-let canonicalizeImage, runVideoWorker, runAudioWorker;
-try { ({ canonicalizeImage } = require('./imageCanonicalize.cjs')); } catch {}
-try { ({ runWorker: runVideoWorker } = require('./videoWorker.cjs')); } catch {}
-try { ({ runWorker: runAudioWorker } = require('./audioWorker.cjs')); } catch {}
-
-app.post("/verify", upload.single("file"), async (req, res) => {
-    let kind = "unknown";
-
-  let wp = req.file?.path;
-  try {
-    if (!req.file) return res.status(400).json({ error: "No file uploaded" });
-    
-    const buf = fs.readFileSync(req.file.path);
-    const dm = req.file.mimetype === "application/octet-stream" ? (mime.lookup(req.file.originalname) || req.file.mimetype) : req.file.mimetype;
-    const isImg = /^image\//i.test(dm);
-    const isVid = dm.startsWith("video/") || ['.mp4','.mov','.avi','.webm'].some(e => req.file.originalname.toLowerCase().endsWith(e));
-    const isAud = /^audio\//i.test(dm);
-    kind = isImg ? "image" : (isVid ? "video" : (isAud ? "audio" : "unknown"));
-                
-    if (isVid || isAud) {
-      wp = req.file.path + (path.extname(req.file.originalname) || (isVid ? '.mp4' : '.mp3'));
-      fs.copyFileSync(req.file.path, wp);
-    }
-    
-    let r = { 
-      kind: kind, 
-      filename: req.file.originalname, 
-      size_bytes: req.file.size 
-    };
-    
-    const crypto = require('crypto');
-    
-    // Generate fingerprint
-    if (isImg && canonicalizeImage) {
-      const canonBuf = await canonicalizeImage(buf);
-      r.canonical = { 
-        algorithm: 'sha256', 
-        fingerprint: crypto.createHash('sha256').update(canonBuf).digest('hex'), 
-        version: 'img:v2' 
-      };
-      
-      // Search for similar images in database
-      if (r.phash && dbReady) {
-        try {
-          console.log('🔎 Searching for similar images...');
-          const similarImages = await searchSimilarImages(r.phash, db);
-          r.similar_images = {
-            found: similarImages.length > 0,
-            count: similarImages.length,
-            matches: similarImages.slice(0, 10) // Limit to top 10
-          };
-          console.log(`✅ Similar image search complete: ${similarImages.length} matches found`);
-        } catch (err) {
-          console.error('⚠️ Similar image search failed:', err.message);
-        }
-      }
-      
-      // Search for similar images in database
-      if (r.phash && dbReady) {
-        try {
-          console.log('🔎 Searching for similar images...');
-          const similarImages = await searchSimilarImages(r.phash, db);
-          r.similar_images = {
-            found: similarImages.length > 0,
-            count: similarImages.length,
-            matches: similarImages.slice(0, 10) // Limit to top 10
-          };
-          console.log(`✅ Similar image search complete: ${similarImages.length} matches found`);
-        } catch (err) {
-          console.error('⚠️ Similar image search failed:', err.message);
-        }
-      }
-    } else if (isVid && runVideoWorker) {
-      const vidResult = runVideoWorker(wp);
-      r.canonical = vidResult.canonical;
-    } else if (isAud && runAudioWorker) {
-      const audResult = runAudioWorker(wp);
-      r.canonical = audResult.canonical;
-    } else {
-      r.canonical = { 
-        algorithm: 'sha256', 
-        fingerprint: crypto.createHash('sha256').update(buf).digest('hex'), 
-        version: 'raw:v1' 
-      };
-      console.log('Generated fallback fingerprint');
-    }
-    
-    // Search database for existing verifications
-    const fingerprint = r.canonical.fingerprint;
-    const searchResults = await searchByFingerprint(fingerprint);
-
-    // Analyze video if file is video
-    if (kind === 'video') {
-      try {
-        console.log('🎥 Analyzing video file...');
-        r.video_analysis = await analyzeVideo(req.file.path, {
-          fps: 1,
-          maxFrames: 30
-        });
-        console.log('✅ Video analysis complete:', r.video_analysis.analysis?.verdict);
-      } catch (err) {
-        console.error('⚠️ Video analysis error:', err.message);
-        r.video_analysis = {
-          success: false,
-          error: err.message
-        };
-      }
-    }
-    
-    // Generate pHash for images (BEFORE saving to database)
-    if (r.kind === 'image' && req.file && req.file.path) {
-      try {
-        console.log('🔍 Generating pHash...');
-        const phashResult = await generatePHash(req.file.path);
-        if (phashResult.success) {
-          r.phash = phashResult.phash;
-          console.log('✅ pHash generated:', r.phash);
-        }
-      } catch (err) {
-        console.error('⚠️ pHash error:', err.message);
-      }
-    }
-    
-    // Save this verification to database
-    const ipAddress = req.ip || req.connection.remoteAddress;
-    await saveVerification(fingerprint, req.file.originalname, req.file.size, r.kind, ipAddress, r.phash || null);
-    
-    // Search for similar images in database
-    if (r.phash && dbReady) {
-      try {
-        console.log('🔎 Searching for similar images...');
-        const similarImages = await searchSimilarImages(r.phash, db);
-        r.similar_images = {
-          found: similarImages.length > 0,
-          count: similarImages.length,
-          matches: similarImages.slice(0, 10)
-        };
-        console.log(`✅ Similar search: ${similarImages.length} matches`);
-      } catch (err) {
-        console.error('⚠️ Similar search error:', err.message);
-      }
-    }
-    
-    // Add verification history to response
-    r.verification_history = { internal: searchResults };
-    
-    // Add external search if we have a fingerprint
-    if (r.canonical && r.canonical.fingerprint) {
-      try {
-        console.log('🔍 Searching VirusTotal for:', r.canonical.fingerprint);
-        r.external_search = await searchVirusTotal(r.canonical.fingerprint);
-        console.log('✅ VirusTotal search complete:', r.external_search.found ? 'FOUND' : 'NOT FOUND');
-    
-    
-        // Add Google Vision analysis for images
-    if (r.kind === 'image' && req.file && req.file.path) {
-      try {
-        console.log('🔍 Analyzing with Google Vision...');
-        const fs = require('fs');
-        const imageBuffer = fs.readFileSync(req.file.path);
-        r.google_vision = await analyzeImage(imageBuffer);
-        console.log('✅ Google Vision analysis complete');
-      } catch (err) {
-        console.error('❌ Google Vision error:', err);
-        r.google_vision = {
-          enabled: false,
-          error: 'Google Vision analysis failed: ' + err.message
-        };
-      }
-    }
-      } catch (err) {
-        console.error('❌ External search error:', err);
-        r.external_search = {
-          enabled: false,
-          error: 'External search failed: ' + err.message
-        };
-      }
-    }
-    
-// Calculate confidence score
-    // Run AI detection for images
-    if (r.kind === 'image' && req.file && req.file.path) {
-      try {
-        console.log('🤖 Running AI detection...');
-        r.ai_detection = await detectAIGeneration(req.file.path);
-        console.log('✅ AI detection:', r.ai_detection.likely_ai_generated ? 'LIKELY AI' : 'LIKELY REAL');
-      } catch (err) {
-        console.error('⚠️ AI detection error:', err.message);
-      }
-    }
-    
-    r.confidence = calculateConfidenceScore({
-      kind: r.kind,
-      google_vision: r.google_vision,
-      phash: r.phash,
-      verified_at: new Date(),
-      ai_detection: r.ai_detection,
-      dispute_count: 0
-    });
-    
-        res.json(r);
-  } catch (e) {
-    console.error('Verification error:', e);
-    res.status(500).json({ error: e.message });
-  } finally {
-    try {
-      if (req.file && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
-      if (req.file && wp && wp !== req.file.path && fs.existsSync(wp)) fs.unlinkSync(wp);
-    } catch (cleanupErr) { console.error('Cleanup error:', cleanupErr); }
-  }
-});
-
-// --- Database test endpoints ---
-app.get("/db-test", async (req, res) => {
-  try {
-    const result = await db.query('SELECT NOW() as time, version() as version');
-    res.json({ 
-      success: true, 
-      connected: true, 
-      time: result.rows[0].time, 
-      version: result.rows[0].version 
-    });
-  } catch (error) {
-    res.json({ success: false, connected: false, error: error.message });
-  }
-});
-
-app.post("/db-create-tables", async (req, res) => {
-  try {
-    await db.query(`
-      CREATE TABLE IF NOT EXISTS verifications (
-        id SERIAL PRIMARY KEY,
-        fingerprint VARCHAR(64) NOT NULL,
-        fingerprint_algorithm VARCHAR(20) DEFAULT 'sha256',
-        original_filename VARCHAR(255),
-        file_size INTEGER,
-        file_type VARCHAR(50),
-        media_kind VARCHAR(20),
-        upload_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        ip_address VARCHAR(45)
-      )
-    `);
-    await db.query('CREATE INDEX IF NOT EXISTS idx_fingerprint ON verifications(fingerprint)');
-    await db.query('CREATE INDEX IF NOT EXISTS idx_upload_date ON verifications(upload_date DESC)');
-    
-    const count = await db.query('SELECT COUNT(*) as count FROM verifications');
-    res.json({ success: true, message: 'Tables created', records: count.rows[0].count });
-  } catch (error) {
-    res.json({ success: false, error: error.message });
-  }
-});
-
-app.post("/db-save-test", async (req, res) => {
-  try {
-    const { fingerprint, filename } = req.body;
-    const result = await db.query(
-      `INSERT INTO verifications (fingerprint, original_filename, file_size, media_kind)
-       VALUES ($1, $2, $3, $4)
-       RETURNING id, upload_date`,
-      [fingerprint || 'test123', filename || 'test.txt', 100, 'test']
-    );
-    res.json({ 
-      success: true, 
-      saved: true, 
-      id: result.rows[0].id, 
-      date: result.rows[0].upload_date 
-    });
-  } catch (error) {
-    res.json({ success: false, error: error.message });
-  }
-});
-
-app.get("/db-search-test/:fingerprint", async (req, res) => {
-  try {
-    const { fingerprint } = req.params;
-    const result = await db.query(
-      'SELECT * FROM verifications WHERE fingerprint = $1 ORDER BY upload_date',
-      [fingerprint]
-    );
-    res.json({ 
-      success: true, 
-      found: result.rows.length > 0, 
-      count: result.rows.length, 
-      matches: result.rows 
-    });
-  } catch (error) {
-    res.json({ success: false, error: error.message });
-  }
-});
-
-// --- Stats endpoint ---
-app.get("/stats", async (req, res) => {
-  if (!dbReady) {
-    return res.json({ message: 'Database being configured', total_verifications: 0 });
-  }
-  
-  try {
-    const result = await db.query('SELECT COUNT(*) as count FROM verifications');
-    res.json({ 
-      total_verifications: parseInt(result.rows[0].count),
-      database_status: 'connected'
-    });
-  } catch (error) {
-    res.json({ message: 'Database error', total_verifications: 0, error: error.message });
-  }
-});
-
-// --- Misc endpoints ---
-
-
-// ============================================================================
 // VIRUSTOTAL EXTERNAL SEARCH
 // ============================================================================
 
@@ -621,15 +227,2451 @@ app.post("/init-database", async (req, res) => {
 // --- Start server with proper async initialization ---
 const PORT = process.env.PORT || 3000;
 
+
+// --- Database initialization ---
+let dbReady = false;
+
+async function initializeDatabase() {
+  if (!db) {
+    console.log('⚠️ Database not configured - skipping initialization');
+    return;
+  }
+  
+  try {
+    console.log('🔌 Initializing database connection...');
+    
+    // Test connection
+    const result = await db.query('SELECT NOW() as current_time, version() as pg_version');
+    console.log('✅ Database connected:', result.rows[0].current_time);
+    console.log('📊 PostgreSQL version:', result.rows[0].pg_version);
+    
+    // Create tables
+    console.log('🔨 Creating verifications table...');
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS verifications (
+        id SERIAL PRIMARY KEY,
+        fingerprint VARCHAR(64) NOT NULL,
+        original_filename TEXT,
+        file_size INTEGER,
+        media_kind VARCHAR(20),
+        ip_address VARCHAR(45),
+        phash VARCHAR(64),
+        audio_fingerprint TEXT,
+        upload_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    
+    // Create indexes
+    console.log('🔨 Creating indexes...');
+    await db.query('CREATE INDEX IF NOT EXISTS idx_fingerprint ON verifications(fingerprint)');
+    await db.query('CREATE INDEX IF NOT EXISTS idx_upload_date ON verifications(upload_date)');
+    
+    console.log('🔨 Creating pHash index...');
+    await db.query('CREATE INDEX IF NOT EXISTS idx_phash ON verifications(phash) WHERE phash IS NOT NULL');
+    
+    console.log('🔨 Creating audio fingerprint index...');
+    await db.query('CREATE INDEX IF NOT EXISTS idx_audio_fingerprint ON verifications(audio_fingerprint) WHERE audio_fingerprint IS NOT NULL');
+    
+    // Get record count
+    const countResult = await db.query('SELECT COUNT(*) as count FROM verifications');
+    const recordCount = countResult.rows[0].count;
+    
+    dbReady = true;
+    console.log(`✅ Database initialized successfully. Current records: ${recordCount}`);
+    
+  } catch (err) {
+    console.error('❌ Database initialization failed:', err.message);
+    dbReady = false;
+  }
+}
+
 (async () => {
   console.log('🚀 Starting VeriSource API...');
   
+  // Weather API test endpoint
+app.get('/test/weather', async (req, res) => {
+  const result = await WeatherVerification.getHistoricalWeather(
+    { lat: 36.1699, lon: -115.1398 }, // Las Vegas
+    '2024-10-15'
+  );
+  res.json({ 
+    configured: WeatherVerification.isConfigured(),
+    weather_data: result 
+  });
+});
+
+// Check blockchain verification status
+app.get('/blockchain/verify/:hash', async (req, res) => {
+  try {
+    const { hash } = req.params;
+    const verification = await BlockchainService.verify(hash);
+    res.json(verification);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
   // Initialize database before starting server
   await initializeDatabase();
   
+  // Preload face detection models for faster video analysis
+  console.log("🎭 Preloading face detection models...");
+  try {
+    await loadFaceModels();
+    console.log("✅ Face detection models preloaded");
+  } catch (err) {
+    console.warn("⚠️ Face model preload failed:", err.message);
+  }
+
   // Start server
   app.listen(PORT, () => {
     console.log(`✅ VeriSource API running on port ${PORT}`);
-    console.log(`📊 Database status: ${dbReady ? 'READY' : 'NOT AVAILABLE'}`);
+    console.log(`📊 Database status: ${dbReady ? "READY" : "NOT AVAILABLE"}`);
   });
 })();
+// ============================================
+// REMOTE FILE VERIFY ENDPOINT (for Base44, Bubble, etc.)
+// ============================================
+app.post('/verify-remote', async (req, res) => {
+  const requestId = Date.now();
+  console.log(`\n📡 [${requestId}] Remote File Verification Request`);
+  
+  const { file_url } = req.body;
+  
+  if (!file_url) {
+    return res.status(400).json({ error: 'No file_url provided' });
+  }
+  
+  console.log(`🔗 File URL: ${file_url}`);
+  
+  try {
+    const fs = require('fs');
+    const path = require('path');
+    const https = require('https');
+    const http = require('http');
+    
+    // Download file from URL
+    const tempDir = '/tmp';
+    const urlObj = new URL(file_url);
+    const ext = path.extname(urlObj.pathname) || '.jpg';
+    const tempFileName = `remote_${requestId}${ext}`;
+    const tempFilePath = path.join(tempDir, tempFileName);
+    
+    console.log(`📥 Downloading to: ${tempFilePath}`);
+    
+    // Download the file
+    await new Promise((resolve, reject) => {
+      const protocol = file_url.startsWith('https') ? https : http;
+      const file = fs.createWriteStream(tempFilePath);
+      
+      protocol.get(file_url, (response) => {
+        // Handle redirects
+        if (response.statusCode === 301 || response.statusCode === 302) {
+          const redirectUrl = response.headers.location;
+          protocol.get(redirectUrl, (redirectResponse) => {
+            redirectResponse.pipe(file);
+            file.on('finish', () => {
+              file.close();
+              resolve();
+            });
+          }).on('error', reject);
+        } else {
+          response.pipe(file);
+          file.on('finish', () => {
+            file.close();
+            resolve();
+          });
+        }
+      }).on('error', (err) => {
+        fs.unlink(tempFilePath, () => {});
+        reject(err);
+      });
+    });
+    
+    // Check file exists and get stats
+    const stats = fs.statSync(tempFilePath);
+    console.log(`✅ Downloaded: ${tempFileName} (${(stats.size / 1024 / 1024).toFixed(2)} MB)`);
+    
+    // Determine file type
+    const imageExts = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp'];
+    const videoExts = ['.mp4', '.mov', '.avi', '.webm', '.mkv', '.m4v'];
+    const extLower = ext.toLowerCase();
+    
+    let kind = 'image';
+    if (videoExts.includes(extLower)) {
+      kind = 'video';
+    }
+    
+    // Generate fingerprint
+    console.log('🔐 Generating fingerprint...');
+    const fileBuffer = fs.readFileSync(tempFilePath);
+    const fingerprint = crypto.createHash('sha256').update(fileBuffer).digest('hex');
+    
+    // Check database for existing verification
+    console.log('🔍 Checking verification history...');
+    const searchResults = await searchByFingerprint(fingerprint);
+    
+    // Run verification based on file type
+    let aiDetection = null;
+    let videoAnalysis = null;
+    let phash = null;
+    let similarImages = null;
+    
+    if (kind === 'video') {
+      console.log('🎬 Running video analysis...');
+      try {
+        videoAnalysis = await analyzeVideo(tempFilePath);
+        
+        const { adjustFrameAnalysisForVideo } = require('./services/video-frame-analysis-fix');
+        videoAnalysis = adjustFrameAnalysisForVideo(videoAnalysis, null);
+        
+        const { applyEnhancedVideoScoring } = require('./services/enhanced-video-scoring');
+        const { analyzeEncoderSignature } = require('./services/encoder-fingerprinting');
+        const { analyzeVideoAudio } = require('./services/video-audio-analysis');
+        const { analyzeBitrate } = require('./services/bitrate-anomaly-detection');
+        const { analyzeGOP } = require('./services/gop-structure-analysis');
+        const { analyzeResolution } = require('./services/resolution-analysis');
+        const { analyzeMotion } = require('./services/motion-analysis');
+        
+        const encoderAnalysis = await analyzeEncoderSignature(tempFilePath);
+        const audioAnalysis = await analyzeVideoAudio(tempFilePath);
+        const bitrateAnalysis = await analyzeBitrate(tempFilePath);
+        const gopAnalysis = await analyzeGOP(tempFilePath);
+        const resolutionAnalysis = analyzeResolution(videoAnalysis.metadata);
+        const motionAnalysis = await analyzeMotion(tempFilePath);
+        
+        videoAnalysis.encoder_analysis = encoderAnalysis;
+        videoAnalysis.audio_analysis = audioAnalysis;
+        videoAnalysis.bitrate_analysis = bitrateAnalysis;
+        videoAnalysis.gop_analysis = gopAnalysis;
+        videoAnalysis.resolution_analysis = resolutionAnalysis;
+        videoAnalysis.motion_analysis = motionAnalysis;
+        
+        videoAnalysis = applyEnhancedVideoScoring(
+          videoAnalysis, encoderAnalysis, audioAnalysis, bitrateAnalysis,
+          gopAnalysis, motionAnalysis, null, null, resolutionAnalysis, null
+        );
+        
+      } catch (videoErr) {
+        console.error('⚠️ Video analysis error:', videoErr.message);
+        videoAnalysis = { error: videoErr.message };
+      }
+    } else {
+  console.log('🖼️ Running image AI detection...');
+  try {
+    const { detectAIGeneration } = require('./services/ensemble-ai-detection');
+    const sightengineDetector = require('./services/sightengine-ai-detection');
+    
+    const localResult = await detectAIGeneration(tempFilePath);
+    
+    // Smart routing: decide if we need Sightengine
+    let needsExternalCheck = false;
+    
+    if (localResult.ai_confidence >= 20 && localResult.ai_confidence < 80) {
+      needsExternalCheck = true;
+      console.log(`⚠️ Local confidence: ${localResult.ai_confidence}% - calling Sightengine`);
+    }
+    
+    let finalResult = localResult;
+    
+    // Call Sightengine if needed
+    if (needsExternalCheck && process.env.SIGHTENGINE_API_USER) {
+      try {
+        const sightengineResult = await sightengineDetector.detectAI(tempFilePath);
+        console.log(`✅ Sightengine: ${sightengineResult.isAI ? 'AI' : 'Authentic'} (${(sightengineResult.confidence * 100).toFixed(1)}%)`);
+        
+        finalResult = {
+          ...localResult,
+          ai_confidence: sightengineResult.confidence * 100,
+          likely_ai_generated: sightengineResult.isAI,
+          external_verification: {
+            provider: 'sightengine',
+            confidence: sightengineResult.confidence,
+            isAI: sightengineResult.isAI
+          },
+          routing_decision: 'external_used',
+          confidence_source: 'sightengine'
+        };
+      } catch (sightengineError) {
+        console.warn('⚠️ Sightengine failed:', sightengineError.message);
+        finalResult.routing_decision = 'external_failed';
+        finalResult.confidence_source = 'local';
+      }
+    } else {
+      finalResult.routing_decision = needsExternalCheck ? 'external_not_configured' : 'local_confident';
+      finalResult.confidence_source = 'local';
+    }
+    
+    // Map to expected format
+    aiDetection = {
+      likely_ai_generated: finalResult.likely_ai_generated,
+      ai_confidence: finalResult.ai_confidence,
+      indicators: finalResult.indicators || [],
+      warnings: [],
+      recommendations: [],
+      ensemble_results: finalResult.individual_results || null,
+      ensemble_agreement: finalResult.agreement || null,
+      detector_count: finalResult.detector_count || 1,
+      forensic_analysis: {
+        manipulation_detected: finalResult.ai_confidence >= 50,
+        manipulation_confidence: finalResult.ai_confidence,
+        compression_quality: finalResult.individual_results?.jpeg?.details?.quality || 0,
+        double_compressed: finalResult.individual_results?.jpeg?.details?.doubleCompressed || false,
+        noise_level: finalResult.individual_results?.jpeg?.details?.noise || 'unknown'
+      },
+      verdict: finalResult.likely_ai_generated ? 'AI-GENERATED IMAGE' : 'LIKELY REAL IMAGE',
+      routing_decision: finalResult.routing_decision,
+      confidence_source: finalResult.confidence_source,
+      external_verification: finalResult.external_verification || null
+    };
+    
+   console.log(`✅ Detection: ${aiDetection.verdict} (${aiDetection.ai_confidence}%)`);
+    
+    // Run JPEG Forensics separately
+    try {
+      console.log('🔬 Running JPEG forensics...');
+      const JPEGForensics = require('./services/jpeg-forensics');
+      const forensicsResult = await JPEGForensics.analyze(tempFilePath);
+      
+      if (forensicsResult) {
+        aiDetection.jpeg_forensics = forensicsResult;
+        aiDetection.manipulation_detected = forensicsResult.manipulation_detected || false;
+        aiDetection.manipulation_confidence = forensicsResult.confidence || 0;
+        
+        // Add forensic indicators/warnings
+        if (forensicsResult.indicators) {
+          aiDetection.indicators = [...(aiDetection.indicators || []), ...forensicsResult.indicators];
+        }
+        if (forensicsResult.warnings) {
+          aiDetection.warnings = [...(aiDetection.warnings || []), ...forensicsResult.warnings];
+        }
+        
+        console.log(`✅ Forensics: ${forensicsResult.verdict || 'Complete'} (manipulation: ${forensicsResult.manipulation_detected ? 'YES' : 'NO'})`);
+      }
+    } catch (forensicsErr) {
+      console.warn('⚠️ JPEG forensics error:', forensicsErr.message);
+      aiDetection.jpeg_forensics = { error: forensicsErr.message };
+    }
+    
+    // Run Metadata Analysis
+    try {
+      console.log('📋 Analyzing metadata...');
+      const ExifReader = require('exifreader');
+      const fileBuffer = fs.readFileSync(tempFilePath);
+      const tags = ExifReader.load(fileBuffer);
+      
+      const hasExif = Object.keys(tags).length > 0;
+      const hasCameraInfo = !!(tags.Make || tags.Model);
+      
+      aiDetection.metadata_check = {
+        has_exif: hasExif,
+        has_camera_info: hasCameraInfo,
+        camera_info: hasCameraInfo ? {
+          make: tags.Make?.description || null,
+          model: tags.Model?.description || null,
+          software: tags.Software?.description || null,
+          date_time: tags.DateTime?.description || tags.DateTimeOriginal?.description || null
+        } : null,
+        gps: tags.GPSLatitude ? {
+          latitude: tags.GPSLatitude.description,
+          longitude: tags.GPSLongitude?.description
+        } : null
+      };
+      
+      // Add warning if no camera metadata
+      if (!hasCameraInfo) {
+        aiDetection.warnings = aiDetection.warnings || [];
+        aiDetection.warnings.push('Missing camera metadata - common in AI-generated images');
+      }
+      
+      console.log(`✅ Metadata: ${hasExif ? 'EXIF found' : 'No EXIF'}, Camera: ${hasCameraInfo ? 'Yes' : 'No'}`);
+      
+    } catch (metaErr) {
+      console.warn('⚠️ Metadata analysis error:', metaErr.message);
+      aiDetection.metadata_check = { error: metaErr.message };
+    }
+
+    // Generate pHash for images
+    try {
+      console.log('🔍 Generating pHash for image...');
+      const { generatePHash } = require('./phash-module');
+      const phashResult = await generatePHash(tempFilePath);
+      if (phashResult.success) {
+        phash = phashResult.phash;
+        console.log('✅ pHash generated:', phash);
+      }
+    } catch (phashErr) {
+      console.warn('⚠️ pHash error:', phashErr.message);
+    }
+    
+    // Add pHash to aiDetection or as separate field
+    aiDetection.phash = phash;
+
+  // Search for similar images
+    if (phash && dbReady) {
+      try {
+        console.log('🔍 Searching for similar images...');
+        const { searchSimilarImages } = require('./phash-module');
+        const similar = await searchSimilarImages(phash, db);
+        if (similar && similar.length > 0) {
+          similarImages = {
+            found: true,
+            count: similar.length,
+            matches: similar.slice(0, 5)  // Top 5 matches
+          };
+          console.log(`✅ Found ${similar.length} similar images`);
+        } else {
+          similarImages = {
+            found: false,
+            count: 0,
+            matches: []
+          };
+          console.log('✅ No similar images found');
+        }
+      } catch (simErr) {
+        console.warn('⚠️ Similar image search error:', simErr.message);
+      }
+    }
+
+  } catch (aiErr) {
+    console.error('⚠️ AI detection error:', aiErr.message);
+    aiDetection = { error: aiErr.message };
+  }
+}
+    
+    // Calculate confidence score
+    const { calculateConfidenceScore } = require('./services/confidence-scoring');
+    const confidenceResult = calculateConfidenceScore({
+      kind,
+      ai_detection: aiDetection,
+      video_analysis: videoAnalysis,
+      verification: searchResults
+    });
+    
+    // Blockchain timestamping
+    let blockchainVerification = null;
+    let polygonVerification = null;
+
+    if (!searchResults.found) {
+    console.log('⛓️ Submitting to blockchain...');
+    try {
+    const BlockchainService = require('./services/opentimestamps-service');
+    blockchainVerification = await BlockchainService.timestamp(fingerprint, tempFileName);
+  } catch (bcErr) {
+    console.error('⚠️ Blockchain error:', bcErr.message);
+  }
+  
+  try {
+    const PolygonService = require('./services/polygon-timestamp');
+    polygonVerification = await PolygonService.timestamp(fingerprint, tempFileName);
+  } catch (polyErr) {
+    console.error('⚠️ Polygon error:', polyErr.message);
+  }
+}
+    
+    // Clean up temp file
+    try {
+      fs.unlinkSync(tempFilePath);
+      console.log('🧹 Cleaned up temp file');
+    } catch (cleanErr) {
+      console.warn('⚠️ Cleanup warning:', cleanErr.message);
+    }
+    
+    // Build response
+    const response = {
+      success: true,
+      source: 'remote_url',
+      file_url: file_url,
+      filename: tempFileName,
+      kind,
+      size_bytes: stats.size,
+      fingerprint: {
+        algorithm: 'sha256',
+        hash: fingerprint,
+        version: 'v1'
+      },
+      phash: phash,
+      similar_images: similarImages,
+      confidence: confidenceResult,
+      ai_detection: aiDetection,
+      video_analysis: videoAnalysis,
+      blockchain_verification: blockchainVerification,
+      polygon_verification: polygonVerification,
+      verification: {
+        status: searchResults.found ? 'PREVIOUSLY_VERIFIED' : 'NEW',
+        is_first: !searchResults.found,
+        first_seen: searchResults.found ? searchResults.first_seen : new Date().toISOString(),
+        times_verified: searchResults.found ? searchResults.times_verified : 1
+      },
+      verified_at: new Date().toISOString()
+    };
+    
+    console.log(`✅ [${requestId}] Remote verification complete: ${confidenceResult.label}`);
+    res.json(response);
+    
+  } catch (err) {
+    console.error(`❌ [${requestId}] Remote verification error:`, err.message);
+    res.status(500).json({
+      error: 'Remote verification failed',
+      message: err.message,
+      file_url: file_url
+    });
+  }
+});
+// ============================================
+// URL VERIFY ENDPOINT
+// ============================================
+const UrlVerification = require('./services/url-verification');
+
+app.post('/verify-url', async (req, res) => {
+  const requestId = Date.now();
+  console.log(`\n🌐 [${requestId}] URL Verification Request`);
+  
+  const { url } = req.body;
+  
+  if (!url) {
+    return res.status(400).json({ error: 'No URL provided' });
+  }
+  
+  console.log(`🔗 URL: ${url}`);
+  
+  // Download media from URL
+  const download = await UrlVerification.downloadMedia(url, '/tmp');
+  
+  if (!download.success) {
+    return res.status(400).json({ 
+      error: download.error,
+      platform: download.platform,
+      url: url
+    });
+  }
+  
+  let filePath = download.file_path;
+  
+  try {
+    console.log(`✅ Downloaded: ${download.filename} (${download.media_type})`);
+    console.log(`📋 Platform: ${download.platform}`);
+    
+    const fs = require('fs');
+    const stats = fs.statSync(filePath);
+    const kind = download.media_type; // 'video' or 'image'
+    
+    // 1. Generate fingerprint
+    console.log('🔐 Generating fingerprint...');
+    const fileBuffer = fs.readFileSync(filePath);
+    const fingerprint = crypto.createHash('sha256').update(fileBuffer).digest('hex');
+    
+    // 2. Check database for existing verification
+    console.log('🔍 Checking verification history...');
+    const searchResults = await searchByFingerprint(fingerprint);
+    
+    // 3. Run AI detection
+    let aiDetection = null;
+    if (kind === 'video') {
+      console.log('🎬 Running video AI detection...');
+      try {
+        let videoAnalysis = await analyzeVideo(filePath);
+        
+        // Apply frame analysis fix (compression artifacts cause false positives)
+        const { adjustFrameAnalysisForVideo } = require('./services/video-frame-analysis-fix');
+        videoAnalysis = adjustFrameAnalysisForVideo(videoAnalysis, download.platform);
+        
+        try {
+          const { getVideoMetadata } = require('./video-analyzer');
+          const { applyVideoAuthenticityRescue } = require('./services/video-authenticity-rescue');
+          const { analyzeEncoderSignature, getEncoderVerdict } = require('./services/encoder-fingerprinting');
+          const { analyzeVideoAudio } = require('./services/video-audio-analysis');
+          const { applyEnhancedVideoScoring } = require('./services/enhanced-video-scoring');
+          const { analyzeBitrate } = require('./services/bitrate-anomaly-detection');
+          const { analyzeGOP, getGOPSummary } = require('./services/gop-structure-analysis');
+          const { analyzeResolution } = require('./services/resolution-analysis');
+          const { analyzeMotion } = require('./services/motion-analysis');
+          const { analyzeVideoWatermarks } = require('./services/watermark-detection');
+          const { analyzeAudioContent } = require('./services/audio-content-analysis');
+          
+          const videoMeta = await getVideoMetadata(filePath);
+          
+          // 1. Device signature rescue
+          if (videoMeta && videoMeta.format && videoMeta.format.tags) {
+            videoAnalysis = applyVideoAuthenticityRescue(videoAnalysis, videoMeta.format.tags);
+          }
+          
+          // 2. Encoder fingerprinting
+          let encoderAnalysis = null;
+          if (videoMeta) {
+            console.log('🔍 Analyzing encoder signature...');
+            encoderAnalysis = analyzeEncoderSignature(videoMeta);
+            encoderAnalysis.verdict = getEncoderVerdict(encoderAnalysis);
+            console.log('   Encoder: ' + (encoderAnalysis.encoderDetected || 'unknown') + ' - ' + encoderAnalysis.verdict.verdict);
+          }
+          
+          // 3. Audio analysis
+          console.log('🔊 Analyzing audio track...');
+          const audioAnalysis = await analyzeVideoAudio(filePath);
+          if (!audioAnalysis.hasAudio) {
+            console.log('   ⚠️ No audio track');
+          } else {
+            console.log('   Audio: ' + audioAnalysis.verdict);
+          }
+          
+          // 4. Bitrate anomaly detection
+          console.log('📊 Analyzing bitrate patterns...');
+          const bitrateAnalysis = await analyzeBitrate(filePath);
+          if (bitrateAnalysis.success) {
+            console.log('   Bitrate: ' + bitrateAnalysis.verdict);
+          }
+          
+          // 5. GOP structure analysis
+          console.log('🎞️ Analyzing GOP structure...');
+          const gopAnalysis = await analyzeGOP(filePath);
+          if (gopAnalysis.success) {
+            const summary = getGOPSummary(gopAnalysis);
+            console.log('   GOP: ' + summary);
+          }
+          
+          // 6. Resolution analysis
+          console.log('📐 Analyzing resolution...');
+          const resolutionAnalysis = analyzeResolution(videoMeta);
+          
+          // 7. Motion analysis + Watermark detection
+          console.log('🎬 Analyzing motion patterns...');
+          let motionAnalysis = null;
+          let watermarkAnalysis = null;
+          try {
+            const os = require('os');
+            const motionTempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'motion-'));
+            const ffmpeg = require('fluent-ffmpeg');
+            await new Promise((resolve, reject) => {
+              ffmpeg(filePath)
+                .on('end', resolve)
+                .on('error', reject)
+                .outputOptions(['-vf', 'fps=2', '-q:v', '2', '-frames:v', '30'])
+                .output(path.join(motionTempDir, 'frame-%04d.jpg'))
+                .run();
+            });
+            const motionFrames = fs.readdirSync(motionTempDir)
+              .filter(f => f.endsWith('.jpg'))
+              .map(f => path.join(motionTempDir, f))
+              .sort();
+            if (motionFrames.length >= 3) {
+              motionAnalysis = await analyzeMotion(filePath, motionFrames);
+              if (motionAnalysis.success) {
+                console.log('   Motion: ' + motionAnalysis.verdict);
+              }
+              watermarkAnalysis = await analyzeVideoWatermarks(filePath, motionFrames);
+              if (watermarkAnalysis.watermarkDetected) {
+                console.log('   🏷️ AI Watermark: ' + watermarkAnalysis.tool);
+              }
+            }
+            fs.rmSync(motionTempDir, { recursive: true, force: true });
+          } catch (motionErr) {
+            console.log('   Motion analysis error:', motionErr.message);
+          }
+          
+          // 8. Audio content analysis
+          console.log('🔊 Analyzing audio content...');
+          let audioContentAnalysis = null;
+          try {
+            audioContentAnalysis = await analyzeAudioContent(filePath);
+            if (audioContentAnalysis.success && audioContentAnalysis.hasAudio) {
+              console.log('   Audio content: ' + audioContentAnalysis.verdict);
+            }
+          } catch (audioContentErr) {
+            console.log('   Audio content error:', audioContentErr.message);
+          }
+          
+          // 9. Apply enhanced combined scoring (all signals)
+          console.log('📊 Applying enhanced video scoring...');
+          videoAnalysis = applyEnhancedVideoScoring(
+            videoAnalysis, 
+            encoderAnalysis, 
+            audioAnalysis, 
+            bitrateAnalysis, 
+            gopAnalysis, 
+            motionAnalysis, 
+            watermarkAnalysis, 
+            audioContentAnalysis, 
+            resolutionAnalysis,
+            download.platform
+          );
+          
+          console.log('   Final: ' + (videoAnalysis.ai_confidence_original || 'N/A') + '% → ' + videoAnalysis.ai_confidence + '%');
+          
+        } catch (enhancedErr) {
+          console.log('Enhanced analysis error:', enhancedErr.message);
+        }
+        
+        aiDetection = {
+          ai_confidence: videoAnalysis.ai_confidence || videoAnalysis.analysis?.aiPercentage || 0,
+          likely_ai_generated: (videoAnalysis.ai_confidence || 0) >= 50 || videoAnalysis.analysis?.verdict === 'LIKELY_AI_GENERATED',
+          method: 'video_frame_analysis',
+          details: videoAnalysis.analysis,
+          adjustments: videoAnalysis.ai_adjustments || []
+        };
+      } catch (err) {
+        console.error('Video analysis error:', err.message);
+      }
+    }
+    
+    // 4. Blockchain timestamping
+    let blockchainVerification = null;
+    let polygonVerification = null;
+    
+    if (!searchResults.found) {
+      console.log('⛓️ Submitting to blockchain...');
+      try {
+      blockchainVerification = await BlockchainService.timestamp(fingerprint, download.filename);  
+      } catch (err) {
+        console.error('Blockchain error:', err.message);
+      }
+      
+      try {
+       polygonVerification = await PolygonService.timestamp(fingerprint, download.filename); 
+      } catch (err) {
+        console.error('Polygon error:', err.message);
+      }
+    }
+    
+    // 5. Save to database
+    console.log('💾 Saving verification...');
+    await saveVerification({
+      fingerprint,
+      filename: download.filename,
+      size_bytes: stats.size,
+      kind,
+      source_url: url,
+      platform: download.platform
+    });
+    
+    // 6. Calculate confidence score
+    const confidenceData = {
+      kind,
+      ai_detection: aiDetection,
+      verification: searchResults
+    };
+    const confidence = ConfidenceScoring.calculateConfidenceScore(confidenceData);
+    console.log('DEBUG confidenceData:', JSON.stringify({ kind: confidenceData.kind, mediaType: confidenceData.mediaType }));
+    console.log(`✅ Confidence: ${confidence.level} (${confidence.percentage}%)`);
+    
+    // 7. Return response
+    res.json({
+      kind,
+      source: {
+        url: url,
+        platform: download.platform,
+        title: download.metadata.title,
+        uploader: download.metadata.uploader,
+        upload_date: download.metadata.upload_date,
+        duration: download.metadata.duration,
+        view_count: download.metadata.view_count,
+        thumbnail: download.metadata.thumbnail
+      },
+      fingerprint: {
+        algorithm: 'sha256',
+        hash: fingerprint
+      },
+      verification: {
+        status: searchResults.found ? 'PREVIOUSLY_VERIFIED' : 'NEW_UPLOAD',
+        is_first: searchResults.is_first_verification,
+        first_seen: searchResults.found ? searchResults.first_seen : new Date().toISOString(),
+        times_verified: searchResults.found ? searchResults.total_verifications : 1
+      },
+      ai_detection: aiDetection,
+      blockchain_verification: blockchainVerification,
+      polygon_verification: polygonVerification,
+      confidence
+    });
+    
+  } catch (err) {
+    console.error('❌ URL verification error:', err.message);
+    res.status(500).json({ error: err.message });
+  } finally {
+    // Clean up downloaded file
+    UrlVerification.cleanupFile(filePath);
+  }
+
+});
+
+app.get('/verify-url/platforms', (req, res) => {
+  res.json({
+    supported_platforms: UrlVerification.getSupportedPlatforms()
+  });
+});
+// ============================================
+// SINGLE FILE VERIFY ENDPOINT
+// ============================================
+app.post('/verify', upload.single('file'), async (req, res) => {
+  const requestId = Date.now();
+  if (!req.file) {
+    return res.status(400).json({ error: 'No file uploaded' });
+  }
+
+  let weatherVerification = null;
+  let landmarkVerification = null;
+  let exifData = null; 
+  let cameraVerification = null;
+  let platformDetection = null;
+  let shadowPhysicsResult = null;
+  let audioAIDetection = null;
+  let videoAnalysis = null;
+  let deepfakeAnalysis = null;
+  let screenshotDetection = null;
+
+  try {
+    const buf = fs.readFileSync(req.file.path);
+    const crypto = require('crypto');
+    const fingerprint = crypto.createHash('sha256').update(buf).digest('hex');
+
+    // Search database FIRST for existing verifications
+    let searchResults = { found: false, is_first_verification: true };
+    try {
+      searchResults = await searchByFingerprint(fingerprint);
+      if (searchResults.found) {
+        console.log(`✅ Previously verified: ${searchResults.total_verifications} times`);
+      }
+    } catch (err) {
+      console.error('⚠️ Database search error:', err.message);
+    }
+
+    // Only timestamp if NEW (not previously verified)
+    let blockchainVerification = null;
+    let polygonVerification = null;
+    
+    // Start blockchain submissions in parallel (dont await yet - will resolve before response)
+    let blockchainPromise = null;
+    let polygonPromise = null;
+    
+    if (!searchResults.found) {
+      console.log("📦 Timestamping to Bitcoin blockchain (async)...");
+      blockchainPromise = BlockchainService.timestamp(fingerprint, req.file.originalname)
+        .then(result => {
+          console.log(`✅ Blockchain: ${result.status}`);
+          return result;
+        })
+        .catch(error => {
+          console.error("⚠️ Blockchain timestamping failed:", error.message);
+          return { success: false, error: error.message };
+        });
+      
+      console.log("🔷 Timestamping to Polygon blockchain (async)...");
+      polygonPromise = PolygonService.timestamp(fingerprint, req.file.originalname)
+        .then(result => {
+          if (result.success) console.log(`✅ Polygon: Block: ${result.block_number}`);
+          return result;
+        })
+        .catch(error => {
+          console.error("⚠️ Polygon timestamping failed:", error.message);
+          return { success: false, error: error.message };
+        });
+    } else {
+      console.log("⏭️ Skipping blockchain - already timestamped");
+      // Return existing proof info from database
+      const proofPath = `blockchain-stamps/${fingerprint}.ots`;
+      const proofExists = require('fs').existsSync(proofPath);
+      blockchainVerification = { 
+        success: true, 
+        status: 'previously_timestamped', 
+        skipped: true,
+        hash: fingerprint,
+        proof_file: proofExists ? proofPath : null,
+        first_timestamped: searchResults.first_seen,
+        submitted_at: searchResults.bitcoin_submitted_at,
+        message: 'File was previously timestamped. Original proof preserved.'
+      };
+      polygonVerification = { 
+        success: true, 
+        status: 'previously_timestamped', 
+        skipped: true,
+        block_number: searchResults.polygon_block_number,
+        transaction_hash: searchResults.polygon_tx_hash,
+        timestamp: searchResults.polygon_timestamp,
+        first_timestamped: searchResults.first_seen,
+        message: 'File was previously timestamped on Polygon.'
+      };
+    }
+
+    const dm = req.file.mimetype || mime.lookup(req.file.originalname) || 'application/octet-stream';
+    const isImg = /^image\//i.test(dm) || /\.(png|jpe?g|gif|webp)$/i.test(req.file.originalname);
+    const isVid = /^video\//i.test(dm) || /\.(mp4|mov|avi|mkv)$/i.test(req.file.originalname);
+    const isAud = /^audio\//i.test(dm) || /\.(mp3|wav|m4a|flac)$/i.test(req.file.originalname);
+    const kind = isImg ? 'image' : (isVid ? 'video' : (isAud ? 'audio' : 'unknown'));
+    // Generate Chromaprint for audio files
+    let chromaprint = null;
+    let audioDuration = null;
+    if (kind === 'audio') {
+      try {
+        console.log('🎵 Generating Chromaprint for audio...');
+        const chromaprintResult = await ChromaprintService.generateFingerprint(req.file.path);
+        if (chromaprintResult.success) {
+          chromaprint = chromaprintResult.fingerprint;
+          audioDuration = chromaprintResult.duration;
+          console.log('✅ Chromaprint generated');
+        }
+      } catch (err) {
+        console.error('⚠️ Chromaprint error:', err.message);
+      }
+    }
+
+      // Identify music with AcoustID/MusicBrainz (if audio and configured)
+      let musicIdentification = null;
+      if (kind === 'audio' && chromaprint && acoustid.isConfigured()) {
+        try {
+          console.log('🎵 Attempting music identification...');
+          musicIdentification = await acoustid.identifyAudio(req.file.path);
+          
+          if (musicIdentification.identified) {
+            console.log(`✅ Identified: ${musicIdentification.recording.title} - ${musicIdentification.recording.artist}`);
+          } else {
+            console.log('ℹ️ Music not identified in database');
+          }
+        } catch (err) {
+          console.error('⚠️ Music identification error:', err.message);
+          musicIdentification = {
+            identified: false,
+            error: err.message
+          };
+        }
+      } else if (kind === 'audio' && !acoustid.isConfigured()) {
+        console.log('⚠️ AcoustID not configured - skipping music identification');
+      }
+
+      // Audio Spectral Analysis for AI voice detection
+      let audioSpectralAnalysis = null;
+      if (kind === 'audio') {
+        try {
+          console.log('🔊 Running audio spectral analysis...');
+          audioSpectralAnalysis = await AudioSpectralAnalysis.analyze(req.file.path);
+          
+          if (audioSpectralAnalysis.is_likely_ai_voice) {
+            console.log(`⚠️ AI voice detected: ${audioSpectralAnalysis.ai_confidence}% confidence`);
+          } else {
+            console.log(`✅ Audio analysis: ${audioSpectralAnalysis.verdict}`);
+          }
+        } catch (err) {
+          console.error('⚠️ Audio spectral analysis error:', err.message);
+          audioSpectralAnalysis = { error: err.message };
+        }
+      }
+    
+    // Generate pHash for images
+    let phash = null;
+    let similarImages = null;
+    if (kind === 'image') {
+      try {
+        console.log('🔍 Generating pHash for image...');
+        const phashResult = await generatePHash(req.file.path);
+        if (phashResult.success) {
+          phash = phashResult.phash;
+          console.log('✅ pHash generated:', phash);
+          
+          // Search for similar images
+          if (dbReady) {
+            const similar = await searchSimilarImages(phash, db);
+            if (similar.length > 0) {
+              similarImages = {
+                found: true,
+                count: similar.length,
+                matches: similar.slice(0, 5)  // Top 5 matches
+              };
+              console.log(`✅ Found ${similar.length} similar images`);
+            }
+          }
+        }
+      } catch (err) {
+        console.error('⚠️ pHash error:', err.message);
+      }
+  
+    }
+
+   // Detect AI-generated images with smart routing (local + Sightengine)
+let aiDetection = null;
+if (kind === 'image') {
+  try {
+   console.log('🤖 Running local AI detection...');
+    const localResult = await detectAIGeneration(req.file.path);
+    
+    // Smart routing: decide if we need Sightengine
+    let needsExternalCheck = false;
+    let confidenceLevel = 'high';
+    
+    // Trigger Sightengine for uncertain cases
+    if (localResult.ai_confidence >= 20 && localResult.ai_confidence < 80) {
+      needsExternalCheck = true;
+      confidenceLevel = 'uncertain';
+      console.log(`⚠️ Local confidence: ${localResult.ai_confidence}% - calling Sightengine for verification`);
+    }
+    
+    let finalResult = localResult;
+    
+    // Call Sightengine if needed
+    if (needsExternalCheck && process.env.SIGHTENGINE_API_USER) {
+      try {
+        // Create temporary accessible URL or use file path
+        const sightengineResult = await sightengineDetector.detectAI(req.file.path);
+        
+        console.log(`✅ Sightengine result: ${sightengineResult.isAI ? 'AI' : 'Authentic'} (${(sightengineResult.confidence * 100).toFixed(1)}%)`);
+        
+        // Use Sightengine result (more accurate)
+        finalResult = {
+          ...localResult,
+          ai_confidence: sightengineResult.confidence * 100,
+          likely_ai_generated: sightengineResult.isAI,
+          external_verification: {
+            provider: 'sightengine',
+            confidence: sightengineResult.confidence,
+            isAI: sightengineResult.isAI,
+            score: sightengineResult.score
+          },
+          local_result: {
+            confidence: localResult.ai_confidence,
+            likely_ai: localResult.likely_ai_generated
+          },
+          routing_decision: 'external_used',
+          confidence_source: 'sightengine'
+        };
+      } catch (sightengineError) {
+        console.warn('⚠️ Sightengine failed, using local result:', sightengineError.message);
+        finalResult.routing_decision = 'external_failed';
+        finalResult.confidence_source = 'local';
+      }
+    } else {
+      finalResult.routing_decision = needsExternalCheck ? 'external_not_configured' : 'local_confident';
+      finalResult.confidence_source = 'local';
+    }
+    
+    // Map to expected format
+    aiDetection = {
+      likely_ai_generated: finalResult.likely_ai_generated,
+      ai_confidence: finalResult.ai_confidence,
+      ai_confidence_raw: finalResult.ai_confidence, // Store for portrait adjustment
+      indicators: finalResult.indicators || [],
+      warnings: [],
+      recommendations: [],
+      
+      // Add ensemble-specific data
+      ensemble_results: finalResult.individual_results || null,
+      ensemble_agreement: finalResult.agreement || null,
+      detector_count: finalResult.detector_count || 1,
+      
+      forensic_analysis: {
+        manipulation_detected: finalResult.ai_confidence >= 50,
+        manipulation_confidence: finalResult.ai_confidence,
+        ela_performed: false, // ELA not part of ensemble yet
+        compression_quality: finalResult.individual_results?.jpeg?.details?.quality || 0,
+        double_compressed: finalResult.individual_results?.jpeg?.details?.doubleCompressed || false,
+        noise_level: finalResult.individual_results?.jpeg?.details?.noise || 'unknown'
+      },
+      
+ verdict: finalResult.likely_ai_generated ? 'AI-GENERATED IMAGE' : 'LIKELY REAL IMAGE',
+      analysis_time_ms: 0,
+      
+      // Smart routing metadata
+      routing_decision: finalResult.routing_decision || 'unknown',
+      confidence_source: finalResult.confidence_source || 'local',
+      external_verification: finalResult.external_verification || null,
+      local_result: finalResult.local_result || null
+    };     
+    
+    
+    console.log(`✅ Ensemble detection: ${aiDetection.verdict} (${aiDetection.ai_confidence}%)`);
+    
+    console.log(`✅ Ensemble detection: ${finalResult.likely_ai_generated ? 'AI-GENERATED IMAGE' : 'VERIFIED IMAGE'} (${finalResult.ai_confidence}%)`);
+    
+  } catch (err) {
+    console.error('⚠️ AI detection error:', err.message);
+    aiDetection = { error: err.message };
+  }
+}
+
+  // Calculate camera authenticity score based on multiple signals
+function calculateCameraAuthenticityScore(data) {
+  let score = 0;
+  const indicators = [];
+  
+  // 1. Valid camera EXIF with recognized manufacturer
+  if (data.cameraVerification?.camera_found || data.cameraVerification?.details?.make) {
+    const make = (data.cameraVerification?.details?.make || '').toUpperCase();
+    const knownManufacturers = ['SONY', 'CANON', 'NIKON', 'FUJIFILM', 'PANASONIC', 'OLYMPUS', 'LEICA', 'APPLE', 'SAMSUNG', 'GOOGLE'];
+    
+    if (knownManufacturers.some(m => make.includes(m))) {
+      score += 25;
+      indicators.push(`Known camera manufacturer: ${make}`);
+    }
+    
+    // Professional camera models get extra trust
+    const model = (data.cameraVerification?.details?.model || '').toUpperCase();
+    const proCameras = ['ILCE-1', 'ILCE-7', 'EOS R', 'EOS 5D', 'EOS 1D', 'D850', 'D6', 'Z9', 'GFX', 'X-T', 'X-H'];
+    if (proCameras.some(p => model.includes(p))) {
+      score += 15;
+      indicators.push(`Professional camera model: ${model}`);
+    }
+  }
+  
+  // 2. Sensor noise analysis shows camera-like patterns
+  if (data.sensorNoiseAnalyzed && data.sensorNoiseConfidence > 0) {
+    // High spatial correlation = real camera sensor
+    if (data.noiseIndicators?.some(i => i.toLowerCase().includes('sensor pattern') || i.toLowerCase().includes('camera'))) {
+      score += 20;
+      indicators.push(`Sensor noise matches camera pattern (${data.sensorNoiseConfidence}%)`);
+    }
+    
+    // Low AI anomalies in noise
+    if (data.aiNoiseAnomalies !== undefined && data.aiNoiseAnomalies < 20) {
+      score += 10;
+      indicators.push(`Low AI noise anomalies: ${data.aiNoiseAnomalies}%`);
+    }
+  }
+  
+  // 3. Compression signature matches known manufacturer
+  if (data.compressionAnalyzed && data.manufacturerSignature) {
+    const sig = data.manufacturerSignature.toLowerCase();
+    const make = (data.cameraVerification?.details?.make || '').toLowerCase();
+    
+    // Signature matches camera make
+    if (make && sig.includes(make.split(' ')[0])) {
+      score += 20;
+      indicators.push(`Compression signature matches camera: ${sig}`);
+    } else if (sig !== 'generic' && sig !== 'unknown') {
+      score += 10;
+      indicators.push(`Known manufacturer compression: ${sig}`);
+    }
+  }
+  
+  // 4. Found on credible news/stock sources (Google Vision)
+  if (data.googleVision?.results?.web_detection?.pages_with_matching_images?.length > 0) {
+    const pages = data.googleVision.results.web_detection.pages_with_matching_images;
+    const credibleDomains = ['reuters.com', 'apnews.com', 'gettyimages.com', 'alamy.com', 
+                            'shutterstock.com', 'nytimes.com', 'bbc.com', 'cnn.com',
+                            'theguardian.com', 'washingtonpost.com', 'euronews.com'];
+    
+    const foundOnCredible = pages.some(p => 
+      credibleDomains.some(d => p.url?.toLowerCase().includes(d))
+    );
+    
+    if (foundOnCredible) {
+      score += 15;
+      indicators.push('Found on credible news/stock photo source');
+    }
+  }
+  
+  // 5. Multiple real faces detected (not deepfake)
+  if (data.deepfakeDetection?.face_analysis?.faces_detected > 0 && 
+      !data.deepfakeDetection?.is_deepfake) {
+    score += 5;
+    indicators.push(`${data.deepfakeDetection.face_analysis.faces_detected} real faces detected`);
+  }
+  
+  return { score, indicators, maxScore: 95 };
+}
+
+// Main hybrid rescue function
+async function applyHybridCameraRescue(aiDetection, verificationData, callExternalAPI) {
+  const originalConfidence = aiDetection.ai_confidence;
+  
+  // Only apply if local detector says AI-generated
+  if (originalConfidence < 50) {
+    return aiDetection; // No rescue needed
+  }
+  
+  // Calculate camera authenticity score
+  const cameraScore = calculateCameraAuthenticityScore({
+    cameraVerification: verificationData.camera_verification,
+    sensorNoiseAnalyzed: aiDetection.sensor_noise_analyzed,
+    sensorNoiseConfidence: aiDetection.sensor_noise_confidence,
+    noiseIndicators: aiDetection.noise_indicators,
+    aiNoiseAnomalies: aiDetection.ai_noise_anomalies,
+    compressionAnalyzed: aiDetection.compression_analyzed,
+    manufacturerSignature: aiDetection.manufacturer_signature,
+    googleVision: verificationData.google_vision,
+    deepfakeDetection: verificationData.deepfake_detection
+  });
+  
+  console.log(`📸 Camera authenticity score: ${cameraScore.score}/${cameraScore.maxScore}`);
+  console.log(`   Indicators: ${cameraScore.indicators.join(', ')}`);
+  
+  // If camera score is high, we have conflicting signals
+  if (cameraScore.score >= 40) {
+    // Apply reduction based on camera score
+    // score 40 = -25%, score 60 = -40%, score 80+ = -60%, score 95+ = -70%
+    let reduction;
+    if (cameraScore.score >= 95) {
+      reduction = 70; // Overwhelming evidence of real camera
+    } else if (cameraScore.score >= 80) {
+      reduction = 60;
+    } else if (cameraScore.score >= 60) {
+      reduction = 45;
+    } else {
+      reduction = Math.floor(cameraScore.score * 0.6);
+    }
+    let adjustedConfidence = Math.max(0, originalConfidence - reduction);
+    
+    console.log(`   🔧 Hybrid rescue: ${originalConfidence}% → ${adjustedConfidence}% (camera score: ${cameraScore.score})`);
+    
+    aiDetection.hybrid_rescue_applied = true;
+    aiDetection.camera_authenticity_score = cameraScore.score;
+    aiDetection.camera_indicators = cameraScore.indicators;
+    aiDetection.pre_rescue_confidence = originalConfidence;
+    
+    // If still above 50% after reduction, call external API as tiebreaker
+    if (adjustedConfidence > 50 && typeof callExternalAPI === 'function') {
+      console.log(`   🌐 Confidence still ${adjustedConfidence}% - calling external API for tiebreaker...`);
+      
+      try {
+        const externalResult = await callExternalAPI();
+        
+        if (externalResult && externalResult.confidence !== undefined) {
+          const externalConfidence = externalResult.confidence * 100; // Normalize to 0-100
+          
+          console.log(`   🌐 External API result: ${externalResult.isAI ? 'AI' : 'Authentic'} (${externalConfidence.toFixed(1)}%)`);
+          
+          aiDetection.external_tiebreaker = {
+            provider: externalResult.provider || 'sightengine',
+            confidence: externalConfidence,
+            result: externalResult.isAI ? 'ai_generated' : 'authentic',
+            used_as_tiebreaker: true
+          };
+          
+          // External API gets significant weight as tiebreaker
+          if (!externalResult.isAI && externalConfidence < 50) {
+            // External says authentic - trust it more
+            adjustedConfidence = Math.min(adjustedConfidence, externalConfidence);
+            console.log(`   ✅ External confirms authentic - final: ${adjustedConfidence}%`);
+          } else if (externalResult.isAI && externalConfidence > 70) {
+            // External also says AI with high confidence - trust local more
+            adjustedConfidence = Math.max(adjustedConfidence, originalConfidence - 10);
+            console.log(`   ⚠️ External confirms AI - final: ${adjustedConfidence}%`);
+          } else {
+            // Ambiguous - average the signals
+            adjustedConfidence = Math.round((adjustedConfidence + externalConfidence) / 2);
+            console.log(`   🔄 Ambiguous - averaged: ${adjustedConfidence}%`);
+          }
+        }
+      } catch (err) {
+        console.error(`   ❌ External API error: ${err.message}`);
+        aiDetection.external_tiebreaker = {
+          error: err.message,
+          used_as_tiebreaker: false
+        };
+      }
+    }
+    
+    // Apply final adjusted confidence
+    aiDetection.ai_confidence = adjustedConfidence;
+    aiDetection.likely_ai_generated = adjustedConfidence >= 50;
+    aiDetection.verdict = adjustedConfidence >= 70 ? 'AI-GENERATED IMAGE' : 
+                          adjustedConfidence >= 50 ? 'LIKELY AI-GENERATED IMAGE' :
+                          adjustedConfidence >= 30 ? 'UNCERTAIN IMAGE' : 'VERIFIED IMAGE';
+    
+    // Update adjustments array
+    if (!aiDetection.adjustments) aiDetection.adjustments = [];
+    aiDetection.adjustments.push(
+      `Hybrid camera rescue: ${originalConfidence}% → ${aiDetection.ai_confidence}% ` +
+      `(camera score: ${cameraScore.score}, indicators: ${cameraScore.indicators.length})`
+    );
+    
+    if (aiDetection.external_tiebreaker?.used_as_tiebreaker) {
+      aiDetection.adjustments.push(
+        `External tiebreaker (${aiDetection.external_tiebreaker.provider}): ${aiDetection.external_tiebreaker.result}`
+      );
+    }
+  }
+  
+  return aiDetection;
+}
+
+module.exports = { applyHybridCameraRescue, calculateCameraAuthenticityScore };
+
+      // Adjust AI detection for portrait mode / computational photography
+      if (aiDetection && !aiDetection.error && exifData) {
+        const portraitDetection = PortraitModeDetection.detectPortraitMode(exifData);
+        
+        if (portraitDetection.isComputationalPhotography) {
+          console.log(`📸 Computational photography detected: ${portraitDetection.confidence}% confidence`);
+          console.log(`   Indicators: ${portraitDetection.indicators.slice(0, 3).join(", ")}`);
+          
+          aiDetection = PortraitModeDetection.adjustAIDetectionResults(aiDetection, portraitDetection);
+          
+          if (aiDetection.portrait_mode_adjustment?.applied) {
+            console.log(`   ✅ AI confidence adjusted: ${aiDetection.ai_confidence_raw}% → ${aiDetection.ai_confidence}%`);
+          }
+        }
+      }
+
+      // Get Google Vision results for confidence scoring
+      let googleVisionResult = null;
+      if (kind === 'image') {
+        try {
+          console.log('👁️ Running Google Vision analysis...');
+          googleVisionResult = await analyzeImage(req.file.path);
+          console.log('✅ Google Vision analysis complete');
+        } catch (err) {
+          console.error('⚠️ Google Vision error:', err.message);
+          googleVisionResult = { error: err.message };
+        }
+      }
+
+      // Enhanced deepfake detection for images
+      
+      if (kind === 'image' && googleVisionResult) {
+        try {
+          console.log('🎭 Running deepfake detection...');
+          deepfakeAnalysis = deepfakeDetection.analyzeImage(googleVisionResult);
+          if (deepfakeAnalysis.is_deepfake) {
+            console.log(`⚠️ Deepfake indicators detected: ${deepfakeAnalysis.confidence}% confidence`);
+          }
+        } catch (err) {
+          console.error('⚠️ Deepfake detection error:', err.message);
+        }
+      }
+
+      // Authority figure detection (deepfake risk for public figures)
+      let authorityResult = null;
+      if (kind === "image" && googleVisionResult) {
+        try {
+          console.log("👤 Checking for authority figures...");
+          const { checkAuthorityInVisionResults, getAuthorityAdjustment } = require("./services/authority-integration");
+          authorityResult = await checkAuthorityInVisionResults(googleVisionResult);
+          if (authorityResult.authorityDetected) {
+            console.log("   ⚠️ Authority detected: " + authorityResult.authorities[0].name + " (" + authorityResult.highestRisk + " risk)");
+          } else {
+            console.log("   No authority figures detected");
+          }
+        } catch (err) {
+          console.error("⚠️ Authority detection error:", err.message);
+        }
+      }
+
+      // Apply authority figure adjustment to AI score
+      if (authorityResult && authorityResult.authorityDetected && aiDetection) {
+        const { getAuthorityAdjustment } = require("./services/authority-integration");
+        const aiSignals = {
+          highFrameAI: aiDetection.ai_confidence > 50,
+          noDeviceMetadata: !exifData || Object.keys(exifData).length < 3,
+          aiEncoder: false,
+          noAudio: false,
+          authenticDevice: exifData && (exifData.Make || exifData.Model),
+          authenticGOP: false,
+          authenticAudio: false
+        };
+        const authAdj = getAuthorityAdjustment(authorityResult, aiSignals);
+        if (authAdj.adjustment > 0) {
+          aiDetection.ai_confidence = Math.min(100, aiDetection.ai_confidence + authAdj.adjustment);
+          aiDetection.adjustments = aiDetection.adjustments || [];
+          aiDetection.adjustments.push(...authAdj.adjustments);
+          aiDetection.authority_alerts = authAdj.alerts;
+          console.log("   ⚠️ " + authAdj.alerts[0]);
+        }
+      }
+      
+      // Extract EXIF data for weather and landmark verification
+
+      // Extract EXIF data for weather and landmark verification
+      if (kind === 'image') {
+        try {
+          console.log('📍 Extracting GPS and date from EXIF...');
+          const ExifParser = require('exif-parser');
+          const exifBuffer = fs.readFileSync(req.file.path);
+          
+          // Validate file is large enough for EXIF
+          if (exifBuffer.length < 12) {
+            console.log('ℹ️ File too small for EXIF data');
+          } 
+          // Check for JPEG magic bytes (0xFF 0xD8)
+          else if (exifBuffer[0] !== 0xFF || exifBuffer[1] !== 0xD8) {
+            console.log('ℹ️ Not a JPEG file - skipping EXIF extraction');
+          } 
+          // Valid JPEG, attempt EXIF parsing
+          else {
+            try {
+              const parser = ExifParser.create(exifBuffer);
+              exifData = parser.parse().tags;
+
+              // Adjust AI detection for portrait mode
+              if (aiDetection && !aiDetection.error) {
+                const portraitDetection = PortraitModeDetection.detectPortraitMode(exifData);
+                if (portraitDetection.isPortraitMode) {
+                  console.log(`📸 Portrait mode detected: ${portraitDetection.confidence}% confidence`);
+                  console.log(`   Indicators: ${portraitDetection.indicators.join(", ")}`);
+                  aiDetection = PortraitModeDetection.adjustForPortraitMode(aiDetection, portraitDetection);
+                  console.log(`   AI confidence adjusted: ${aiDetection.original_ai_confidence}% → ${aiDetection.ai_confidence}%`);
+                }
+              }
+              
+              // Verify camera model (for all images with EXIF)
+
+              // 1. HEIC/HEVC Format Detection
+              try {
+                console.log('📱 Checking for HEIC/HEVC format...');
+                const heicDetection = await HEICDetection.detectHEIC(req.file.path, exifData);
+                if (heicDetection.wasHEIC) {
+                  console.log(`✅ HEIC detected: ${heicDetection.confidence}% confidence`);
+                  console.log(`   Format: ${heicDetection.format_conversion}`);
+                  aiDetection = HEICDetection.adjustForHEIC(aiDetection, heicDetection);
+                  console.log(`   AI confidence adjusted: ${aiDetection.original_ai_confidence}% → ${aiDetection.ai_confidence}%`);
+                }
+              } catch (err) {
+                console.error('⚠️ HEIC detection error:', err.message);
+              }
+
+              // 2. Sensor Noise Analysis (Near-PRNU)
+              try {
+                console.log('🔬 Analyzing sensor noise patterns...');
+                const noiseAnalysis = await SensorNoiseAnalysis.analyzeSensorNoise(req.file.path);
+                if (noiseAnalysis.has_sensor_noise || noiseAnalysis.ai_likelihood > 40) {
+                  console.log(`✅ Noise analysis complete:`);
+                  console.log(`   Camera sensor: ${noiseAnalysis.confidence}% | AI anomalies: ${noiseAnalysis.ai_likelihood}%`);
+                  aiDetection = SensorNoiseAnalysis.adjustForSensorNoise(aiDetection, noiseAnalysis, exifData);  
+                  console.log(`   AI confidence adjusted: ${aiDetection.original_ai_confidence}% → ${aiDetection.ai_confidence}%`);
+                }
+              } catch (err) {
+                console.error('⚠️ Sensor noise analysis error:', err.message);
+              }
+
+              // 3. Live Photo Validation (iPhone only)
+              try {
+                console.log('🎬 Checking for Live Photo pairing...');
+                const livePhotoValidation = await LivePhotoValidator.validateLivePhoto(req.file.path, exifData);
+                if (livePhotoValidation.is_live_photo) {
+                  console.log(`✅ Live Photo detected: ${livePhotoValidation.confidence}% confidence`);
+                  if (livePhotoValidation.pairing_valid) {
+                    console.log(`   ✓ Video pairing validated (${livePhotoValidation.temporal_consistency ? 'temporal consistency confirmed' : 'partial validation'})`);
+                  }
+                  aiDetection = LivePhotoValidator.adjustForLivePhoto(aiDetection, livePhotoValidation);
+                  console.log(`   AI confidence adjusted: ${aiDetection.original_ai_confidence}% → ${aiDetection.ai_confidence}%`);
+                }
+              } catch (err) {
+                console.error('⚠️ Live Photo validation error:', err.message);
+              }
+
+              // 4. Manufacturer Compression Signature
+              try {
+                console.log('🔍 Analyzing JPEG compression signature...');
+                const compressionAnalysis = await CompressionSignature.analyzeCompressionSignature(req.file.path, exifData);
+                if (compressionAnalysis.manufacturer_detected || compressionAnalysis.ai_likelihood > 40) {
+                  console.log(`✅ Compression signature analyzed:`);
+                  console.log(`   Manufacturer: ${compressionAnalysis.manufacturer_detected || 'Generic'} (${compressionAnalysis.confidence}% match)`);
+                  if (compressionAnalysis.ai_likelihood > 40) {
+                    console.log(`   ⚠️ AI-like compression detected: ${compressionAnalysis.ai_likelihood}%`);
+                  }
+                  aiDetection = CompressionSignature.adjustForCompressionSignature(aiDetection, compressionAnalysis);
+                  console.log(`   AI confidence adjusted: ${aiDetection.original_ai_confidence}% → ${aiDetection.ai_confidence}%`);
+                }
+              } catch (err) {
+                console.error('⚠️ Compression signature analysis error:', err.message);
+              }
+
+              console.log(`\n📊 FINAL AI CONFIDENCE: ${aiDetection.ai_confidence}% (started at ${aiDetection.ai_confidence_raw || aiDetection.original_ai_confidence || 'unknown'}%)\n`);
+              // Get image dimensions for resolution validation
+              const imgMeta = await sharp(req.file.path).metadata();
+              cameraVerification = verifyCameraModel(exifData, { width: imgMeta.width, height: imgMeta.height });
+              if (cameraVerification.camera_found) {
+                console.log(`📷 Camera: ${cameraVerification.details.manufacturer} ${cameraVerification.details.recognized_model}`);
+              }
+              if (cameraVerification.warnings.length > 0) {
+                console.log('⚠️ Camera warnings:', cameraVerification.warnings);
+              }
+              
+
+              // Camera EXIF Validation Rescue - reduce AI false positives for validated cameras
+              if (cameraVerification.camera_found && cameraVerification.is_valid && aiDetection) {
+                const camConf = cameraVerification.confidence || 0;
+                
+                if (camConf >= 80) {
+                  const originalAI = aiDetection.ai_confidence;
+                  // Camera confidence 100% = -25%, 80-99% = -15%
+                  const reduction = camConf === 100 ? 25 : 15;
+                  
+                  aiDetection.ai_confidence = Math.max(0, aiDetection.ai_confidence - reduction);
+                  aiDetection.adjustments = aiDetection.adjustments || [];
+                  aiDetection.adjustments.push(`Camera EXIF rescue: ${cameraVerification.details.recognized_model} validated (${camConf}% confidence, -${reduction}%)`);
+                  
+                  console.log(`📷 Camera EXIF rescue: ${cameraVerification.details.recognized_model} @ ${camConf}% confidence, AI ${originalAI}% → ${aiDetection.ai_confidence}%`);
+                  
+                  // Update verdict if confidence dropped below threshold
+                  if (aiDetection.ai_confidence < 50 && aiDetection.verdict === 'AI-GENERATED IMAGE') {
+                    aiDetection.verdict = 'UNCERTAIN IMAGE';
+                    aiDetection.adjustments.push('Verdict changed: AI-GENERATED → UNCERTAIN');
+                  }
+                }
+              }
+              
+              // Historical photo detection - reduce AI false positives for old photos
+              if (exifData && aiDetection) {
+                const historicalCheck = detectHistoricalPhoto(exifData);
+                if (historicalCheck.isHistorical && historicalCheck.aiScoreReduction > 0) {
+                  const originalAI = aiDetection.ai_confidence;
+                  aiDetection.ai_confidence = Math.max(0, aiDetection.ai_confidence - historicalCheck.aiScoreReduction);
+                  aiDetection.adjustments = aiDetection.adjustments || [];
+                  aiDetection.adjustments.push("Historical photo: " + historicalCheck.reasons.join(", ") + " (-" + historicalCheck.aiScoreReduction + "%)");
+                  console.log("📅 Historical photo detected: " + historicalCheck.reasons.join(", ") + ", AI " + originalAI + "% → " + aiDetection.ai_confidence + "%");
+                  
+                  if (aiDetection.ai_confidence < 50 && aiDetection.verdict === "AI-GENERATED IMAGE") {
+                    aiDetection.verdict = "UNCERTAIN";
+                    aiDetection.adjustments.push("Verdict changed: AI-GENERATED → UNCERTAIN (historical photo)");
+                  }
+                }
+              }
+              
+              // Categorize AI content: AI-GENERATED vs AI-ENHANCED
+              if (aiDetection && aiDetection.ai_confidence > 0) {
+                const aiCategory = ConfidenceScoring.categorizeAIContent(
+                  { exif: exifData },
+                  aiDetection.ai_confidence,
+                  cameraVerification
+                );
+                aiDetection.ai_category = aiCategory;
+                
+                if ((aiCategory.verdict === "AI-ENHANCED IMAGE" || aiCategory.verdict === "EDITED IMAGE") && aiDetection.verdict === "AI-GENERATED IMAGE") {
+                  aiDetection.verdict = aiCategory.verdict;
+                  aiDetection.adjustments = aiDetection.adjustments || [];
+                  aiDetection.adjustments.push("Recategorized: " + aiCategory.explanation);
+                  console.log("🎨 AI-ENHANCED detected: " + aiCategory.explanation);
+                }
+              }
+              try {
+                platformDetection = await PlatformDetection.detectPlatform(req.file.path, {
+                  width: imgMeta.width,
+                  height: imgMeta.height,
+                  jpegQuality: null,
+                  hasExif: !!(exifData?.Make || exifData?.Model || exifData?.DateTimeOriginal),
+                  exifData: exifData,
+                  iptcData: imgMeta.iptc
+                });
+                
+                if (platformDetection.detected) {
+                  console.log(`📱 Platform detected: ${platformDetection.platform} (${platformDetection.confidence}%)`);
+                  
+                  // Apply rescue if confidence >= 70
+                  if (platformDetection.confidence >= 70 && aiDetection) {
+                    const originalAI = aiDetection.ai_confidence;
+                    const reduction = platformDetection.confidence >= 85 ? 25 : 20;
+                    
+                    aiDetection.ai_confidence = Math.max(0, aiDetection.ai_confidence - reduction);
+                    aiDetection.adjustments = aiDetection.adjustments || [];
+                    aiDetection.adjustments.push(`Platform rescue: ${PlatformDetection.getPlatformDisplayName(platformDetection.platform)} signature (-${reduction}%)`);
+                    
+                    console.log(`📱 Platform rescue: AI ${originalAI}% → ${aiDetection.ai_confidence}%`);
+                    
+                    if (aiDetection.ai_confidence < 50 && aiDetection.verdict === 'AI-GENERATED IMAGE') {
+                      aiDetection.verdict = 'UNCERTAIN IMAGE';
+                      aiDetection.adjustments.push('Verdict changed: AI-GENERATED → UNCERTAIN');
+                    }
+                  }
+                }
+              } catch (err) {
+                console.error('⚠️ Platform detection error:', err.message);
+              }
+
+      // ========== HYBRID CAMERA RESCUE ==========
+      if (aiDetection && !aiDetection.error && aiDetection.ai_confidence > 40) {
+        try {
+          console.log('📷 Running hybrid camera rescue...');
+          aiDetection = await applyHybridCameraRescue(
+            aiDetection,
+            {
+              camera_verification: cameraVerification,
+              google_vision: googleVisionResult,
+              deepfake_detection: deepfakeAnalysis
+            },
+            async () => {
+              const result = await sightengineDetector.detectAI(req.file.path);
+              return { provider: 'sightengine', isAI: result.isAI, confidence: result.confidence * 100 };
+            }
+          );
+          if (aiDetection.hybrid_rescue_applied) {
+            console.log(`📷 Hybrid rescue applied: Camera score ${aiDetection.camera_authenticity_score}, AI ${aiDetection.pre_rescue_confidence}% → ${aiDetection.ai_confidence}%`);
+          }
+        } catch (err) {
+          console.error('⚠️ Hybrid camera rescue error:', err.message);
+        }
+      }
+      // ========== END HYBRID CAMERA RESCUE ==========
+
+
+              const gpsAndDate = LandmarkVerification.extractGPSAndDate(exifData);
+              
+              if (gpsAndDate.gps || gpsAndDate.date) {
+                console.log(`📍 Found GPS: ${gpsAndDate.gps ? 'Yes' : 'No'}, Date: ${gpsAndDate.date || 'No'}`);
+                
+                // Weather verification
+                if (WeatherVerification.isConfigured()) {
+                  console.log('🌤️ Verifying weather conditions...');
+                  weatherVerification = await WeatherVerification.verifyWeatherConditions(
+                    gpsAndDate,
+                    googleVisionResult?.results?.labels || []
+                  );
+                  console.log(`✅ Weather verification: ${weatherVerification.verified ? 'MATCHED' : 'NOT VERIFIED'}`);
+                }
+                
+                // Landmark verification
+                if (googleVisionResult?.results?.landmarks) {
+                  console.log('🗺️ Verifying landmark locations...');
+                  landmarkVerification = LandmarkVerification.verifyLandmarkLocation(
+                    googleVisionResult.results.landmarks,
+                    gpsAndDate.gps
+                  );
+                  console.log(`✅ Landmark verification: ${landmarkVerification.landmarks_detected} landmarks detected`);
+                }
+                
+                // Shadow physics verification
+                if (gpsAndDate.gps && gpsAndDate.date) {
+                  console.log('☀️ Verifying shadow physics...');
+                  shadowPhysicsResult = shadowPhysics.verifyShadowPhysics(
+                    exifData,
+                    gpsAndDate.gps,
+                    new Date(gpsAndDate.date),
+                    null
+                  );
+            
+                  if (shadowPhysicsResult.violations && shadowPhysicsResult.violations.length > 0) {
+                    console.log(`⚠️ Shadow physics violations: ${shadowPhysicsResult.violations.length}`);
+                  } else {
+                    console.log('✅ Shadow physics: VALID');
+                  }
+                }
+              } else {
+                console.log('ℹ️ No GPS or date in EXIF - skipping weather/landmark verification');
+              }
+              
+            } catch (exifParseError) {
+              console.log('ℹ️ JPEG file has invalid/corrupted EXIF data');
+            }
+          }
+          
+        } catch (err) {
+          console.error('⚠️ EXIF extraction error:', err.message);
+        }
+      }
+      // Landmark verification for images without GPS data
+      if (kind === 'image' && (!exifData || !exifData.GPSLatitude) && googleVisionResult?.results?.landmarks?.length > 0) {
+        try {
+          console.log('🗺️ Verifying landmarks (no GPS available)...');
+          landmarkVerification = LandmarkVerification.verifyLandmarkLocation(
+            googleVisionResult.results.landmarks,
+            null  // No GPS data available
+          );
+          console.log(`✅ Landmark verification: ${landmarkVerification.landmarks_detected} landmarks detected`);
+        } catch (landmarkErr) {
+          console.error('⚠️ Landmark verification error:', landmarkErr.message);
+        }
+      }
+            // ========== ADD REVERSE IMAGE SEARCH HERE ==========
+      let reverseSearchResults = null;
+      if (kind === 'image') {
+        try {
+          console.log('🔍 Running reverse image search...');
+          reverseSearchResults = await reverseImageSearch.search(buf, {
+            services: ['tineye', 'bing'],
+            includeAnalysis: true
+          });
+          
+          if (reverseSearchResults.combined_analysis) {
+            const analysis = reverseSearchResults.combined_analysis;
+            console.log(`✅ Reverse search: Found ${analysis.total_matches_found} matches online`);
+            
+            if (analysis.is_original) {
+              console.log('   Status: LIKELY ORIGINAL (not found online)');
+            } else {
+              console.log(`   Status: Found on ${analysis.total_matches_found} sites`);
+              if (analysis.age_analysis?.is_very_old) {
+                console.log(`   ⚠️ WARNING: Image is ${analysis.age_analysis.age_readable}`);
+              }
+              if (analysis.content_type === 'stock_photo') {
+                console.log('   ⚠️ WARNING: Stock photo detected');
+              }
+            }
+          }
+        } catch (err) {
+          console.error('⚠️ Reverse image search error:', err.message);
+          reverseSearchResults = { 
+            search_performed: false, 
+            error: err.message 
+          };
+        }
+      }
+    
+      // Stock Photo Rescue Logic - reduce AI false positives
+      if (reverseSearchResults?.tineye?.is_stock_photo && aiDetection) {
+        const stockSites = reverseSearchResults.tineye.domain_breakdown?.stock_photo_sites || 0;
+        const totalMatches = reverseSearchResults.tineye.total_matches || 0;
+        
+        if (stockSites >= 3) {
+          const originalAI = aiDetection.ai_confidence;
+          // More stock sites = more confidence it's real
+          // 3 sites = -30%, 5+ sites = -40%, 10+ sites = -50%
+          let reduction = 30;
+          if (stockSites >= 10) reduction = 50;
+          else if (stockSites >= 5) reduction = 40;
+          
+          aiDetection.ai_confidence = Math.max(0, aiDetection.ai_confidence - reduction);
+          aiDetection.adjustments = aiDetection.adjustments || [];
+          aiDetection.adjustments.push(`Stock photo rescue: found on ${stockSites} stock sites (-${reduction}%)`);
+          
+          console.log(`📸 Stock photo rescue: ${stockSites} stock sites, AI confidence ${originalAI}% → ${aiDetection.ai_confidence}%`);
+          
+          // Update verdict if confidence dropped below threshold
+          if (aiDetection.ai_confidence < 50 && aiDetection.verdict === 'AI-GENERATED IMAGE') {
+            aiDetection.verdict = 'UNCERTAIN IMAGE';
+            aiDetection.adjustments.push('Verdict changed: AI-GENERATED → UNCERTAIN');
+          }
+        }
+      }
+      
+      // Analyze video for AI detection
+      videoAnalysis = null;
+      if (kind === 'video') {
+        try {
+          console.log('🎥 Analyzing video frames...');
+          videoAnalysis = await analyzeVideo(req.file.path, {
+            fps: 1,
+            maxFrames: 30
+          });
+          console.log('✅ Video analysis complete:', videoAnalysis.frames_analyzed, 'frames analyzed');
+          
+     // Apply video authenticity rescue for device-recorded videos
+          if (videoAnalysis && videoAnalysis.success) {
+
+              // 0. Apply frame analysis fix FIRST (video compression artifacts cause false positives)
+              const { adjustFrameAnalysisForVideo } = require('./services/video-frame-analysis-fix');
+              videoAnalysis = adjustFrameAnalysisForVideo(videoAnalysis);
+            try {
+              const { getVideoMetadata } = require('./video-analyzer');
+              const { applyVideoAuthenticityRescue } = require('./services/video-authenticity-rescue');
+              const { analyzeEncoderSignature, getEncoderVerdict } = require('./services/encoder-fingerprinting');
+              const { analyzeVideoAudio } = require('./services/video-audio-analysis');
+              const { applyEnhancedVideoScoring } = require('./services/enhanced-video-scoring');
+              
+              const videoMeta = await getVideoMetadata(req.file.path);
+              
+              // 1. Device signature rescue (existing)
+              if (videoMeta && videoMeta.format && videoMeta.format.tags) {
+                videoAnalysis = applyVideoAuthenticityRescue(videoAnalysis, videoMeta.format.tags);
+              }
+              
+              // 2. Encoder fingerprinting
+              let encoderAnalysis = null;
+              if (videoMeta) {
+                console.log('🔍 Analyzing encoder signature...');
+                encoderAnalysis = analyzeEncoderSignature(videoMeta);
+                encoderAnalysis.verdict = getEncoderVerdict(encoderAnalysis);
+                console.log('   Encoder: ' + (encoderAnalysis.encoderDetected || 'unknown') + ' - ' + encoderAnalysis.verdict.verdict);
+                if (encoderAnalysis.isLikelyAI) {
+                  console.log('   ⚠️ AI tool indicators: ' + encoderAnalysis.indicators.join(', '));
+                }
+              }
+              
+              // 3. Audio analysis
+              console.log('🔊 Analyzing audio track...');
+              const audioAnalysis = await analyzeVideoAudio(req.file.path);
+              if (!audioAnalysis.hasAudio) {
+                console.log('   ⚠️ No audio track - suspicious for device recording');
+              } else {
+                console.log('   Audio: ' + audioAnalysis.verdict + ' (AI: ' + audioAnalysis.aiScore + '%, Auth: ' + audioAnalysis.authenticScore + '%)');
+              }
+              
+              // 4. Bitrate anomaly detection
+              console.log('📊 Analyzing bitrate patterns...');
+              const { analyzeBitrate } = require('./services/bitrate-anomaly-detection');
+              const { analyzeGOP, getGOPSummary } = require("./services/gop-structure-analysis");
+              const bitrateAnalysis = await analyzeBitrate(req.file.path);
+              if (bitrateAnalysis.success) {
+                console.log('   Bitrate CV: ' + bitrateAnalysis.stats.cv + '% - ' + bitrateAnalysis.verdict);
+                if (bitrateAnalysis.indicators.length > 0) {
+                  console.log('   ' + bitrateAnalysis.indicators[0]);
+                }
+              }
+              
+              // 5. GOP structure analysis
+              console.log('🎞️ Analyzing GOP structure...');
+              const gopAnalysis = await analyzeGOP(req.file.path);
+              if (gopAnalysis.success) {
+                const summary = getGOPSummary(gopAnalysis);
+                console.log('   GOP: ' + summary);
+                if (gopAnalysis.indicators.length > 0) {
+                  console.log('   ' + gopAnalysis.indicators.slice(0, 2).join(', '));
+                }
+                if (gopAnalysis.deviceMatch && gopAnalysis.deviceMatch.matched) {
+                  console.log('   ✅ Device match: ' + gopAnalysis.deviceMatch.device);
+                }
+              } else {
+                console.log('   GOP analysis: ' + (gopAnalysis.error || 'unavailable'));
+              }
+
+              // 6. Resolution analysis
+              console.log('📐 Analyzing resolution...');
+              const { analyzeResolution } = require('./services/resolution-analysis');
+              const resolutionAnalysis = analyzeResolution(videoMeta);
+              if (resolutionAnalysis.aiToolMatch && resolutionAnalysis.aiToolMatch.matched) {
+                console.log('   ⚠️ AI resolution detected: ' + resolutionAnalysis.aiToolMatch.tool + ' (' + resolutionAnalysis.width + 'x' + resolutionAnalysis.height + ')');
+              } else if (resolutionAnalysis.verdict === 'LIKELY AI-GENERATED IMAGE') {
+                console.log('   ⚠️ Unusual resolution: ' + resolutionAnalysis.width + 'x' + resolutionAnalysis.height);
+              } else {
+                console.log('   Resolution: ' + resolutionAnalysis.width + 'x' + resolutionAnalysis.height + ' (' + resolutionAnalysis.verdict + ')');
+              }
+
+              // 7. Motion analysis + Watermark detection
+              console.log('🎬 Analyzing motion patterns...');
+              const { analyzeMotion } = require('./services/motion-analysis');
+              const { analyzeVideoWatermarks } = require('./services/watermark-detection');
+              let motionAnalysis = null;
+              let watermarkAnalysis = null;
+              try {
+                const motionTempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'motion-'));
+                const ffmpeg = require('fluent-ffmpeg');
+                await new Promise((resolve, reject) => {
+                  ffmpeg(req.file.path)
+                    .on('end', resolve)
+                    .on('error', reject)
+                    .outputOptions(['-vf', 'fps=2', '-q:v', '2', '-frames:v', '30'])
+                    .output(path.join(motionTempDir, 'frame-%04d.jpg'))
+                    .run();
+                });
+                const motionFrames = fs.readdirSync(motionTempDir)
+                  .filter(f => f.endsWith('.jpg'))
+                  .map(f => path.join(motionTempDir, f))
+                  .sort();
+                if (motionFrames.length >= 3) {
+                  motionAnalysis = await analyzeMotion(req.file.path, motionFrames);
+                  if (motionAnalysis.success) {
+                    console.log('   Motion: ' + motionAnalysis.verdict + ' (AI:' + motionAnalysis.aiScore + ' Auth:' + motionAnalysis.authenticScore + ')');
+                    console.log('   Flicker: ' + (motionAnalysis.correlation.flickerRatio * 100).toFixed(0) + '% of expected');
+                  }
+                  
+                  // 8. Watermark detection
+                  watermarkAnalysis = await analyzeVideoWatermarks(req.file.path, motionFrames);
+                  if (watermarkAnalysis.watermarkDetected) {
+                    console.log('   🏷️ AI Watermark: ' + watermarkAnalysis.tool + ' (' + watermarkAnalysis.confidence + '%)');
+                  }
+                }
+                fs.rmSync(motionTempDir, { recursive: true, force: true });
+              } catch (motionErr) {
+                console.log('   Motion analysis error:', motionErr.message);
+              }
+              
+              // 9. Audio content analysis
+              console.log('🔊 Analyzing audio content...');
+              const { analyzeAudioContent } = require('./services/audio-content-analysis');
+              let audioContentAnalysis = null;
+              try {
+                audioContentAnalysis = await analyzeAudioContent(req.file.path);
+                if (audioContentAnalysis.success && audioContentAnalysis.hasAudio) {
+                  console.log('   Audio content: ' + audioContentAnalysis.verdict + ' (AI:' + audioContentAnalysis.aiScore + ' Auth:' + audioContentAnalysis.authenticScore + ')');
+                }
+              } catch (audioContentErr) {
+                console.log('   Audio content analysis error:', audioContentErr.message);
+              }
+
+              // 10. Apply enhanced combined scoring (all 9 signals)
+              console.log('📊 Applying enhanced video scoring...');
+              videoAnalysis = applyEnhancedVideoScoring(videoAnalysis, encoderAnalysis, audioAnalysis, bitrateAnalysis, gopAnalysis, motionAnalysis, watermarkAnalysis, audioContentAnalysis, resolutionAnalysis, null);
+              
+              console.log('   Final: ' + videoAnalysis.ai_confidence_original + '% → ' + videoAnalysis.ai_confidence + '% (' + videoAnalysis.verdict + ')');
+              
+              if (videoAnalysis.ai_adjustments && videoAnalysis.ai_adjustments.length > 0) {
+                console.log('   Adjustments: ' + videoAnalysis.ai_adjustments.join(', '));
+              }
+             // Sightengine second opinion for edge cases (very high or very low confidence)
+              const videoAiConf = videoAnalysis.ai_confidence || 0;
+              if (process.env.SIGHTENGINE_API_USER && (videoAiConf >= 80 || videoAiConf <= 20)) {
+                try {
+                  console.log(`🔍 Sightengine verification (edge case: ${videoAiConf}%)...`);
+                  
+                  // Extract a frame for Sightengine analysis
+                  const frameDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sightengine-frame-'));
+                  const framePath = path.join(frameDir, 'frame.jpg');
+                  
+                  await new Promise((resolve, reject) => {
+                    const ffmpeg = require('fluent-ffmpeg');
+                    ffmpeg(req.file.path)
+                      .on('end', resolve)
+                      .on('error', reject)
+                      .outputOptions(['-vf', 'select=eq(n\\,30)', '-frames:v', '1', '-q:v', '2'])
+                      .output(framePath)
+                      .run();
+                  });
+                  
+                  if (fs.existsSync(framePath)) {
+                    const sightengineResult = await sightengineDetector.detectAI(framePath);
+                    const seConfidence = sightengineResult.confidence * 100;
+                    const seIsAI = sightengineResult.isAI;
+                    
+                    console.log(`   Sightengine: ${seIsAI ? 'AI' : 'Authentic'} (${seConfidence.toFixed(1)}%)`);
+                    
+                    videoAnalysis.sightengine_verification = {
+                      checked: true,
+                      isAI: seIsAI,
+                      confidence: seConfidence,
+                      local_confidence: videoAiConf,
+                      agreement: (seIsAI && videoAiConf >= 50) || (!seIsAI && videoAiConf < 50)
+                    };
+                    
+                    // If major disagreement, log warning but trust combined signals
+                    if (!videoAnalysis.sightengine_verification.agreement) {
+                      console.log(`   ⚠️ Disagreement: Local=${videoAiConf}% vs Sightengine=${seConfidence}% (${seIsAI ? 'AI' : 'Authentic'})`);
+                      
+                      // Blend scores for disagreement cases
+                      const blendedConfidence = Math.round((videoAiConf + seConfidence) / 2);
+                      console.log(`   Blending: ${videoAiConf}% + ${seConfidence}% → ${blendedConfidence}%`);
+                      videoAnalysis.ai_confidence_pre_blend = videoAiConf;
+                      videoAnalysis.ai_confidence = blendedConfidence;
+                    }
+                    
+                    fs.rmSync(frameDir, { recursive: true, force: true });
+                  }
+                } catch (seErr) {
+                  console.log(`   Sightengine error: ${seErr.message}`);
+                  videoAnalysis.sightengine_verification = { checked: false, error: seErr.message };
+                }
+              }  
+
+            } catch (rescueErr) {
+              console.error('⚠️ Video analysis enhancement error:', rescueErr.message);
+            }
+          }
+        } catch (err) {
+          console.error('⚠️ Video analysis error:', err.message);
+          videoAnalysis = { error: err.message };
+        }
+      }
+
+      // AI Generator Detection (Sora, Runway, Pika, Kling, Midjourney, DALL-E, etc.)
+
+     
+      let generatorDetection = null;
+      try {
+        console.log('🔍 Running AI generator detection...');
+        const generatorDetector = new AIGeneratorDetector();
+        
+        if (kind === 'video' && videoAnalysis && videoAnalysis.success) {
+          generatorDetection = await generatorDetector.analyzeVideo(
+            videoAnalysis.frames || [],
+            videoAnalysis.analysis?. temporalAnalysis || null,
+            videoAnalysis.metadata || {}
+          );
+          console.log(`✅ Generator detection: ${generatorDetection.likelyGenerator} (${generatorDetection.confidence}%)`);
+        } else if (kind === 'image' && aiDetection) {
+          generatorDetection = await generatorDetector.analyzeImage(
+            req.file.path,
+            aiDetection,
+            {}
+          );
+          console.log(`✅ Generator detection: ${generatorDetection.likelyGenerator} (${generatorDetection.confidence}%)`);
+        }
+      } catch (err) {
+        console.error('⚠️ Generator detection error:', err.message);
+        generatorDetection = { error: err.message };
+      }
+    // Save this verification to database
+    try {
+      const ipAddress = req.ip || req.connection.remoteAddress;
+      await saveVerification({
+        fingerprint: fingerprint,
+        algorithm: 'sha256',
+        filename: req.file.originalname,
+        file_size: req.file.size,
+        file_type: req.file.mimetype,
+        media_kind: kind,
+        ip_address: ipAddress,
+        polygon_block_number: polygonVerification?.block_number || null,
+        polygon_tx_hash: polygonVerification?.transaction_hash || null,
+        polygon_timestamp: polygonVerification?.timestamp || null,
+        bitcoin_proof_status: blockchainVerification?.status || null,
+        bitcoin_submitted_at: blockchainVerification?.submitted_at || null,
+        phash: phash || null,
+        google_vision_labels: googleVisionResult?.results?.labels || []
+      });
+    } catch (err) {
+      console.error('⚠️ Database save error:', err.message);
+    }
+    // ============================================================================
+    // CROSS-REFERENCE ANALYSIS - Check index for related content
+    // ============================================================================
+    let crossReference = null;
+    try {
+      console.log('🔍 Running cross-reference analysis...');
+      crossReference = analyzeCrossReference(
+        fingerprint,
+        phash,
+        googleVisionResult?.results?.labels || [],
+        req.headers['x-customer-id'] || null
+      );
+      if (crossReference.similar_content_found) {
+        console.log(`   ⚠️ Related content found: ${crossReference.fraud_indicators.risk_level} risk`);
+        if (crossReference.fraud_indicators.flags.length > 0) {
+          crossReference.fraud_indicators.flags.forEach(f => console.log(`   - ${f}`));
+        }
+      } else {
+        console.log('   ✅ No related content in index');
+      }
+    } catch (err) {
+      console.error('⚠️ Cross-reference error:', err.message);
+    }
+    // Add temporal validation to cross-reference
+    if (crossReference) {
+      try {
+        const exifDateRaw = exifData?.DateTimeOriginal || exifData?.CreateDate || exifData?.DateTime;
+        const claimedDate = req.headers['x-claimed-date'] || null;
+        
+        crossReference.temporal_analysis = analyzeTemporalConsistency(
+          exifDateRaw,
+          crossReference.exact_match?.first_seen,
+          claimedDate
+        );
+        
+        if (crossReference.temporal_analysis.flags.length > 0) {
+          console.log('📅 Temporal analysis:');
+          crossReference.temporal_analysis.flags.forEach(f => console.log(`   - ${f}`));
+          
+          // Elevate risk level if temporal issues found
+          if (crossReference.temporal_analysis.risk_level === 'high' && 
+              crossReference.fraud_indicators.risk_level !== 'critical') {
+            crossReference.fraud_indicators.risk_level = 'high';
+            crossReference.fraud_indicators.recommendation = 'Review required - temporal inconsistencies detected';
+          }
+          // Add temporal flags to main fraud indicators
+          crossReference.fraud_indicators.flags.push(...crossReference.temporal_analysis.flags);
+        }
+      } catch (err) {
+        console.error('⚠️ Temporal validation error:', err.message);
+      }
+    }
+    // ============================================================================
+    // CACHE EXTERNAL SEARCH RESULTS
+    // ============================================================================
+    if (reverseSearchResults && crossReference?.index_status?.fingerprint_id) {
+      const fpId = crossReference.index_status.fingerprint_id;
+      try {
+        if (reverseSearchResults.tineye && reverseSearchResults.tineye.status !== 'error') {
+          cacheExternalSearchResults(fpId, 'tineye', reverseSearchResults.tineye);
+          console.log('📦 Cached TinEye results');
+        }
+        if (reverseSearchResults.google && reverseSearchResults.google.status !== 'error') {
+          cacheExternalSearchResults(fpId, 'google', reverseSearchResults.google);
+          console.log('📦 Cached Google results');
+        }
+        if (reverseSearchResults.bing && reverseSearchResults.bing.status !== 'error') {
+          cacheExternalSearchResults(fpId, 'bing', reverseSearchResults.bing);
+          console.log('📦 Cached Bing results');
+        }
+        // Add source analysis to cross-reference
+        crossReference.external_sources = analyzeExternalSources(fpId);
+        if (crossReference.external_sources.total_external_matches > 0) {
+          console.log(`📊 External sources: ${crossReference.external_sources.total_external_matches} matches indexed`);
+        }
+      } catch (err) {
+        console.error('⚠️ External cache error:', err.message);
+      }
+    }
+
+
+
+    // ============================================================================
+    // SCREENSHOT DETECTION - Runs for ALL images (moved outside EXIF block)
+    // ============================================================================
+    if (kind === 'image' && !screenshotDetection) {
+      try {
+        console.log('📱 Checking for screenshot...');
+        const imgMeta = await sharp(req.file.path).metadata();
+        screenshotDetection = detectScreenshot({
+          width: imgMeta.width,
+          height: imgMeta.height,
+          format: imgMeta.format,
+          exif: exifData,
+          colorProfile: imgMeta.icc ? 'sRGB' : null,
+          noiseLevel: null,
+          filename: req.file.originalname
+        });
+
+        if (screenshotDetection.is_screenshot) {
+          console.log(`📱 Screenshot detected: ${screenshotDetection.detected_device || 'Unknown device'} (${screenshotDetection.confidence}%)`);
+          console.log(`   Indicators: ${screenshotDetection.indicators.slice(0, 2).join(', ')}`);
+          
+          // Add screenshot caveat to AI detection
+          if (aiDetection && !aiDetection.error) {
+            const adjustment = getScreenshotVerdictAdjustment(screenshotDetection);
+            
+            aiDetection.screenshot_caveat = true;
+            aiDetection.screenshot_severity = adjustment.severity;
+            aiDetection.adjustments = aiDetection.adjustments || [];
+            aiDetection.adjustments.push(
+              `Screenshot detected (${screenshotDetection.confidence}% confidence, ${adjustment.severity} severity): ` +
+              `AI detection analyzes the screenshot, not original content`
+            );
+            
+            aiDetection.warnings = aiDetection.warnings || [];
+            if (adjustment.add_warning) {
+              aiDetection.warnings.push(adjustment.add_warning);
+            }
+            
+            console.log(`📱 Screenshot caveat added (severity: ${adjustment.severity})`);
+          }
+        } else {
+          console.log('📱 Not a screenshot');
+        }
+      } catch (err) {
+        console.error('⚠️ Screenshot detection error:', err.message);
+      }
+    }
+    // ============================================================================
+
+    // Await blockchain results before sending response
+    if (blockchainPromise) {
+      blockchainVerification = await blockchainPromise;
+    }
+    if (polygonPromise) {
+      polygonVerification = await polygonPromise;
+    }
+
+    res.json({
+      kind: kind,
+      filename: req.file.originalname,
+      size_bytes: req.file.size,
+      fingerprint: {
+        algorithm: 'sha256',
+        hash: fingerprint,
+        version: 'v1'
+      },
+      blockchain_verification: blockchainVerification,  
+      polygon_verification: polygonVerification,
+      ai_detection: aiDetection,
+      ...(screenshotDetection && { screenshot_detection: screenshotDetection }),
+      ...(crossReference && { cross_reference: crossReference }),
+      verification: {
+        status: searchResults.found ? 'PREVIOUSLY_VERIFIED' : 'NEW_UPLOAD',
+        is_first: searchResults.is_first_verification,
+        first_seen: searchResults.found ? searchResults.first_seen : new Date().toISOString(),
+        times_verified: searchResults.found ? searchResults.total_verifications : 1,
+        previous_uploads: searchResults.found ? searchResults.matches : []
+      },
+      ...(kind === 'audio' && chromaprint && {
+          chromaprint: chromaprint,
+          audio_duration: audioDuration,
+          ...(musicIdentification && { music_identification: musicIdentification }),
+          ...(audioAIDetection && { audio_ai_detection: audioAIDetection }),
+          ...(audioSpectralAnalysis && { audio_spectral_analysis: audioSpectralAnalysis })
+      }),  
+      ...(kind === 'image' && phash && {
+        phash: phash,
+        similar_images: similarImages,
+      }),
+      ...(kind === 'video' && videoAnalysis && {
+        video_analysis: videoAnalysis
+      }),
+      ...(generatorDetection && { generator_detection: generatorDetection }),
+      ...(kind === 'image' && googleVisionResult && { google_vision: googleVisionResult }),
+      ...(kind === 'image' && weatherVerification && { weather_verification: weatherVerification }),
+      ...(kind === 'image' && landmarkVerification && { landmark_verification: landmarkVerification }),
+      ...(cameraVerification && { camera_verification: cameraVerification }),
+      ...(exifData && {
+        exif: {
+          date_taken: (() => {
+            const ts = exifData.DateTimeOriginal || exifData.CreateDate || exifData.DateTime;
+            if (!ts) return null;
+            if (typeof ts === 'number') return new Date(ts * 1000).toISOString();
+            return ts;
+          })(),
+          camera_make: exifData.Make || null,
+          camera_model: exifData.Model || null,
+          software: exifData.Software || null,
+          gps: (exifData.GPSLatitude && exifData.GPSLongitude) ? {
+            latitude: exifData.GPSLatitude,
+            longitude: exifData.GPSLongitude
+          } : null
+        }
+      }),
+      ...((() => {
+        const editingSoftware = ConfidenceScoring.checkForEditingSoftwareInExif({ exif: exifData });
+        return editingSoftware ? { editing_software: editingSoftware } : {};
+      })()),
+      ...(shadowPhysicsResult && { shadow_physics: shadowPhysicsResult }),
+      ...(platformDetection && { platform_detection: platformDetection }),
+      ...(deepfakeAnalysis && { deepfake_detection: deepfakeAnalysis }),
+      ...(authorityResult && authorityResult.authorityDetected && { authority_detection: authorityResult }),
+      ...(reverseSearchResults && { reverse_image_search: reverseSearchResults }),
+      //...(stockPhotoResult && { stock_photo_detection: stockPhotoResult }),
+      // C2PA/Blockchain verification (Phase 1 Step 3)
+      c2pa_verification: await (async () => {
+        try {
+          console.log('🔐 Running C2PA verification...');
+          const c2paResult = await c2paVerification.verifyContent(
+            req.file.path,
+            kind  // 'image', 'video', or 'audio'
+          );
+          
+          if (c2paResult.has_c2pa_credentials) {
+            console.log(`✅ C2PA credentials found: ${c2paResult.credentials_valid ? 'VALID' : 'INVALID'} (+${c2paResult.confidence_boost}%)`);
+          } else {
+            console.log('ℹ️ No C2PA credentials found');
+          }
+          
+          return c2paResult;
+        } catch (err) {
+          console.error('⚠️ C2PA verification error:', err.message);
+          return {
+            has_c2pa_credentials: false,
+            credentials_valid: false,
+            confidence_boost: 0,
+            error: err.message,
+            errors: []
+          };
+        }
+      })(),
+      virustotal: await (async () => {
+        try {
+          console.log('🔍 Checking VirusTotal...');
+          const vtResult = await searchVirusTotal(fingerprint);
+          console.log('✅ VirusTotal check complete:', vtResult.found ? 'FOUND' : 'NOT FOUND');
+          return vtResult;
+        } catch (err) {
+          console.error('⚠️ VirusTotal error:', err.message);
+          return { found: false, error: err.message };
+        }
+      })(),
+      confidence: (() => {
+        try {
+          // Build data object for confidence calculation
+          const confidenceData = {
+            kind: kind,
+            size_bytes: req.file.size,
+            fingerprint: { hash: fingerprint },
+            verification: searchResults,
+            ...(chromaprint && { chromaprint }),
+            ...(phash && { phash }),
+            ...(similarImages && { similar_images: similarImages }),
+            ...(aiDetection && { ai_detection: aiDetection }),
+            ...(googleVisionResult && { google_vision: googleVisionResult }),
+            ...(videoAnalysis && { video_analysis: videoAnalysis }),
+            ...(audioAIDetection && { audio_ai_detection: audioAIDetection }),
+            ...(shadowPhysicsResult && { shadow_physics: shadowPhysicsResult }),
+            ...(reverseSearchResults && { reverse_image_search: reverseSearchResults }),
+            ...(cameraVerification && { camera_verification: cameraVerification }),
+            ...(exifData && { metadata: { has_exif: true, exif: exifData } }),
+          };
+          console.log('📊 Calculating confidence score...');
+          const score = ConfidenceScoring.calculateConfidenceScore(confidenceData);
+          console.log(`✅ Confidence: ${score.level} (${score.percentage}%)`);
+          return score;
+        } catch (err) {
+          console.error('⚠️ Confidence calculation error:', err.message);
+          return {
+            level: 'UNKNOWN',
+            percentage: 0,
+            label: 'Unable to calculate',
+            message: 'Confidence scoring temporarily unavailable'
+          };
+        }
+      })()
+    });
+    
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  } finally {
+    try {
+      if (fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
+    } catch(e) {}
+  }
+});
+
+app.get('/admin/migrate-audio', async (req, res) => {
+  try {
+    console.log('🔄 Running audio_fingerprint migration...');
+    
+    await db.query(`
+      ALTER TABLE verifications 
+      ADD COLUMN IF NOT EXISTS audio_fingerprint TEXT
+    `);
+    console.log('✅ Column added');
+    
+    await db.query(`
+      CREATE INDEX IF NOT EXISTS idx_audio_fingerprint 
+      ON verifications(audio_fingerprint) 
+      WHERE audio_fingerprint IS NOT NULL
+    `);
+    console.log('✅ Index created');
+    // Add blockchain columns
+    console.log('🔨 Adding blockchain columns...');
+    await db.query(`
+      ALTER TABLE verifications 
+      ADD COLUMN IF NOT EXISTS polygon_block_number INTEGER,
+      ADD COLUMN IF NOT EXISTS polygon_tx_hash VARCHAR(66),
+      ADD COLUMN IF NOT EXISTS polygon_timestamp TIMESTAMP,
+      ADD COLUMN IF NOT EXISTS bitcoin_proof_status VARCHAR(50),
+      ADD COLUMN IF NOT EXISTS bitcoin_submitted_at TIMESTAMP
+    `);
+    await db.query(`ALTER TABLE verifications ALTER COLUMN bitcoin_proof_status TYPE VARCHAR(50)`);
+    await db.query(`ALTER TABLE verifications ALTER COLUMN phash TYPE VARCHAR(64)`);
+    console.log('✅ Blockchain columns added');
+    
+    res.json({ success: true, message: 'Migration complete!' });
+  } catch (err) {
+    console.error('❌ Migration failed:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+// Force redeploy to pick up new API key
+// ============================================================================
+// FINGERPRINT INDEX API ENDPOINTS
+// ============================================================================
+
+const fingerprintIndex = require('./services/fingerprint-index');
+
+// Get index stats
+app.get('/index/stats', (req, res) => {
+  try {
+    const stats = fingerprintIndex.getIndexStats();
+    res.json({
+      success: true,
+      ...stats
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Search by label
+app.get('/index/search/label/:label', (req, res) => {
+  try {
+    const { label } = req.params;
+    const minConfidence = parseFloat(req.query.confidence) || 0.7;
+    const limit = parseInt(req.query.limit) || 50;
+    
+    const results = fingerprintIndex.findByLabel(label, minConfidence, limit);
+    
+    res.json({
+      success: true,
+      query: { label, minConfidence, limit },
+      total: results.length,
+      results: results.map(r => ({
+        fingerprint_id: r.id,
+        sha256: r.sha256,
+        phash: r.phash,
+        source_type: r.source_type,
+        label: r.label,
+        confidence: r.confidence,
+        first_seen: r.first_seen,
+        occurrence_count: r.occurrence_count
+      }))
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Check if content exists in index (by SHA256)
+app.get('/index/check/:sha256', (req, res) => {
+  try {
+    const { sha256 } = req.params;
+    const result = fingerprintIndex.checkLocalIndex(sha256);
+    
+    res.json({
+      success: true,
+      sha256,
+      found: result.exactMatch !== null,
+      exact_match: result.exactMatch ? {
+        fingerprint_id: result.exactMatch.id,
+        first_seen: result.exactMatch.first_seen,
+        occurrence_count: result.exactMatch.occurrence_count,
+        labels: result.exactMatch.labels
+      } : null,
+      similar_count: result.similarMatches.length
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Get labels for a fingerprint
+app.get('/index/fingerprint/:id/labels', (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const labels = fingerprintIndex.getLabels(id);
+    
+    res.json({
+      success: true,
+      fingerprint_id: id,
+      total: labels.length,
+      labels
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Find related content (same labels as given fingerprint)
+app.get('/index/fingerprint/:id/related', (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const limit = parseInt(req.query.limit) || 20;
+    const related = fingerprintIndex.findRelatedContent(id, limit);
+    
+    res.json({
+      success: true,
+      fingerprint_id: id,
+      total: related.length,
+      related: related.map(r => ({
+        fingerprint_id: r.id,
+        sha256: r.sha256,
+        matching_label: r.matching_label,
+        confidence: r.confidence,
+        first_seen: r.first_seen
+      }))
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// List all unique labels in index
+app.get('/index/labels', (req, res) => {
+  try {
+    const stats = fingerprintIndex.getIndexStats();
+    res.json({
+      success: true,
+      unique_labels: stats.uniqueLabels,
+      top_labels: stats.topLabels
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+
+// Get external matches for a fingerprint
+app.get('/index/fingerprint/:id/external', (req, res) => {
+  try {
+    const { getExternalMatches, analyzeExternalSources } = require('./services/fingerprint-index');
+    const id = parseInt(req.params.id);
+    
+    const matches = getExternalMatches(id);
+    const analysis = analyzeExternalSources(id);
+    
+    res.json({
+      success: true,
+      fingerprint_id: id,
+      ...matches,
+      analysis
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Search external matches by domain
+app.get('/index/search/domain/:domain', (req, res) => {
+  try {
+    const { searchExternalMatchesByDomain } = require('./services/fingerprint-index');
+    const { domain } = req.params;
+    
+    const matches = searchExternalMatchesByDomain(domain);
+    
+    res.json({
+      success: true,
+      query: { domain },
+      total: matches.length,
+      matches
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+

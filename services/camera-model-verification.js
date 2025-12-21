@@ -205,7 +205,34 @@ const KNOWN_CAMERAS = {
       'SM-A536U', 'SM-A536B', 'SM-A536E', // A53
       'SM-A526U', 'SM-A526B', 'SM-A526F', // A52
       'SM-A516U', 'SM-A516B', 'SM-A516F', // A51
-      'SM-A505U', 'SM-A505F', 'SM-A505G'  // A50
+      'SM-A505U', 'SM-A505F', 'SM-A505G',  // A50
+      // Older Galaxy S series
+
+      'Galaxy S6', 'Galaxy S6 Edge', 'Galaxy S6 Edge+',
+      'Galaxy S5', 'Galaxy S5 Active', 'Galaxy S5 Mini',
+      'Galaxy S4', 'Galaxy S4 Active', 'Galaxy S4 Mini',
+      'Galaxy S3', 'Galaxy S3 Mini',
+      'Galaxy S2', 'Galaxy S',
+      // Older Galaxy Note series
+      'Galaxy Note 5', 'Galaxy Note 4', 'Galaxy Note 3', 'Galaxy Note 2', 'Galaxy Note',
+      // Older SM- codes (Galaxy S6)
+      'SM-G920F', 'SM-G920I', 'SM-G920S', 'SM-G920K', 'SM-G920L', 'SM-G920T', 'SM-G920A', 'SM-G920V', 'SM-G920W8',
+      'SM-G925F', 'SM-G925I', 'SM-G925S', 'SM-G925K', 'SM-G925L', 'SM-G925T', 'SM-G925A', 'SM-G925V', 'SM-G925W8',
+      'SM-G928F', 'SM-G928G', 'SM-G928S', 'SM-G928K', 'SM-G928L', 'SM-G928T', 'SM-G928A', 'SM-G928V', 'SM-G928W8',
+      // Older SM- codes (Galaxy S5)
+      'SM-G900F', 'SM-G900I', 'SM-G900H', 'SM-G900S', 'SM-G900K', 'SM-G900L', 'SM-G900T', 'SM-G900A', 'SM-G900V', 'SM-G900W8',
+      // Older SM- codes (Galaxy Note 5/4/3)
+      'SM-N920F', 'SM-N920G', 'SM-N920S', 'SM-N920K', 'SM-N920L', 'SM-N920T', 'SM-N920A', 'SM-N920V', 'SM-N920W8',
+      'SM-N910F', 'SM-N910G', 'SM-N910H', 'SM-N910S', 'SM-N910K', 'SM-N910L', 'SM-N910T', 'SM-N910A', 'SM-N910V', 'SM-N910W8',
+      'SM-N900', 'SM-N9005', 'SM-N9000Q', 'SM-N900S', 'SM-N900K', 'SM-N900L', 'SM-N900T', 'SM-N900A', 'SM-N900V', 'SM-N900W8',
+      // GT- codes (Galaxy S4 and older)
+      'GT-I9500', 'GT-I9505', 'GT-I9506', 'GT-I9507', 'GT-I9508',
+      'GT-I9300', 'GT-I9305', 'GT-I9308',
+      'GT-I9100', 'GT-I9105',
+      'GT-I9000', 'GT-I9001',
+      // GT- codes (older Galaxy Note)
+      'GT-N7100', 'GT-N7105',
+      'GT-N7000'
     ],
     releaseYears: {
       // Marketing names
@@ -277,7 +304,40 @@ const KNOWN_CAMERAS = {
       'SM-A536U': 2022, 'SM-A536B': 2022, 'SM-A536E': 2022,
       'SM-A526U': 2021, 'SM-A526B': 2021, 'SM-A526F': 2021,
       'SM-A516U': 2020, 'SM-A516B': 2020, 'SM-A516F': 2020,
-      'SM-A505U': 2019, 'SM-A505F': 2019, 'SM-A505G': 2019
+      'SM-A505U': 2019, 'SM-A505F': 2019, 'SM-A505G': 2019,
+
+      // Older Galaxy S series
+      'Galaxy S6': 2015, 'Galaxy S6 Edge': 2015, 'Galaxy S6 Edge+': 2015,
+      'Galaxy S5': 2014, 'Galaxy S5 Active': 2014, 'Galaxy S5 Mini': 2014,
+      'Galaxy S4': 2013, 'Galaxy S4 Active': 2013, 'Galaxy S4 Mini': 2013,
+      'Galaxy S3': 2012, 'Galaxy S3 Mini': 2012,
+      'Galaxy S2': 2011, 'Galaxy S': 2010,
+      // Older Galaxy Note series
+      'Galaxy Note 5': 2015, 'Galaxy Note 4': 2014, 'Galaxy Note 3': 2013, 'Galaxy Note 2': 2012, 'Galaxy Note': 2011,
+      // SM- codes (Galaxy S6)
+      'SM-G920F': 2015, 'SM-G920I': 2015, 'SM-G920S': 2015, 'SM-G920K': 2015, 'SM-G920L': 2015, 'SM-G920T': 2015, 'SM-G920A': 2015, 'SM-G920V': 2015, 'SM-G920W8': 2015,
+      'SM-G925F': 2015, 'SM-G925I': 2015, 'SM-G925S': 2015, 'SM-G925K': 2015, 'SM-G925L': 2015, 'SM-G925T': 2015, 'SM-G925A': 2015, 'SM-G925V': 2015, 'SM-G925W8': 2015,
+      'SM-G928F': 2015, 'SM-G928G': 2015, 'SM-G928S': 2015, 'SM-G928K': 2015, 'SM-G928L': 2015, 'SM-G928T': 2015, 'SM-G928A': 2015, 'SM-G928V': 2015, 'SM-G928W8': 2015,
+      // SM- codes (Galaxy S5)
+      'SM-G900F': 2014, 'SM-G900I': 2014, 'SM-G900H': 2014, 'SM-G900S': 2014, 'SM-G900K': 2014, 'SM-G900L': 2014, 'SM-G900T': 2014, 'SM-G900A': 2014, 'SM-G900V': 2014, 'SM-G900W8': 2014,
+      // SM- codes (Galaxy Note 5)
+      'SM-N920F': 2015, 'SM-N920G': 2015, 'SM-N920S': 2015, 'SM-N920K': 2015, 'SM-N920L': 2015, 'SM-N920T': 2015, 'SM-N920A': 2015, 'SM-N920V': 2015, 'SM-N920W8': 2015,
+      // SM- codes (Galaxy Note 4)
+      'SM-N910F': 2014, 'SM-N910G': 2014, 'SM-N910H': 2014, 'SM-N910S': 2014, 'SM-N910K': 2014, 'SM-N910L': 2014, 'SM-N910T': 2014, 'SM-N910A': 2014, 'SM-N910V': 2014, 'SM-N910W8': 2014,
+      // SM- codes (Galaxy Note 3)
+      'SM-N900': 2013, 'SM-N9005': 2013, 'SM-N9000Q': 2013, 'SM-N900S': 2013, 'SM-N900K': 2013, 'SM-N900L': 2013, 'SM-N900T': 2013, 'SM-N900A': 2013, 'SM-N900V': 2013, 'SM-N900W8': 2013,
+      // GT- codes (Galaxy S4)
+      'GT-I9500': 2013, 'GT-I9505': 2013, 'GT-I9506': 2013, 'GT-I9507': 2013, 'GT-I9508': 2013,
+      // GT- codes (Galaxy S3)
+      'GT-I9300': 2012, 'GT-I9305': 2012, 'GT-I9308': 2012,
+      // GT- codes (Galaxy S2)
+      'GT-I9100': 2011, 'GT-I9105': 2011,
+      // GT- codes (Galaxy S)
+      'GT-I9000': 2010, 'GT-I9001': 2010,
+      // GT- codes (Galaxy Note 2)
+      'GT-N7100': 2012, 'GT-N7105': 2012,
+      // GT- codes (Galaxy Note)
+      'GT-N7000': 2011
     }
   },
 

@@ -860,7 +860,13 @@ app.post('/verify-remote', async (req, res) => {
         if (phashResult.success) {
           phash = phashResult.phash;
           console.log('✅ pHash generated:', phash);
-          
+    // Generate multi-region pHashes for crop-resistant matching
+    let phashRegions = null;
+    try {
+    phashRegions = await ProvenanceService.generateAllRegionHashes(tempFilePath);
+    } catch (regionErr) {
+    console.log(`⚠️ Region pHash generation failed: ${regionErr.message}`);
+    }
           // Search for similar images
           if (db) {
             const similar = await searchSimilarImages(phash, db);
@@ -1723,6 +1729,7 @@ app.post('/verify-remote', async (req, res) => {
       provenanceResult = await ProvenanceService.checkAndRecordProvenance(
         fingerprint,
         phash,
+        phashRegions,
         isScreenshot
       );
       
@@ -3769,6 +3776,33 @@ app.get('/admin/migrate-provenance', async (req, res) => {
     res.status(500).json({ success: false, error: err.message });
   }
 }); 
+// ============================================================================
+// MULTI-REGION PHASH MIGRATION
+// ============================================================================
+app.get('/admin/migrate-region-phash', async (req, res) => {
+  try {
+    console.log('🔄 Running multi-region pHash migration...');
+    
+    // Add phash_regions column to verifications table
+    await db.query(`
+      ALTER TABLE verifications 
+      ADD COLUMN IF NOT EXISTS phash_regions JSONB
+    `);
+    console.log('✅ phash_regions column added');
+    
+    // Create index for JSONB queries
+    await db.query(`
+      CREATE INDEX IF NOT EXISTS idx_phash_regions 
+      ON verifications USING GIN (phash_regions)
+    `);
+    console.log('✅ JSONB index created');
+    
+    res.json({ success: true, message: 'Multi-region pHash migration complete!' });
+  } catch (err) {
+    console.error('❌ Migration failed:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
 // Force redeploy to pick up new API key
 // ============================================================================
 // FINGERPRINT INDEX API ENDPOINTS
