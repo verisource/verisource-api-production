@@ -4,7 +4,7 @@
  * Now with multi-region pHash for crop-resistant matching
  */
 
-const db = require('./db-minimal');
+const db = require('../db-minimal');
 const sharp = require('sharp');
 
 class ProvenanceService {
