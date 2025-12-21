@@ -663,6 +663,8 @@ app.post('/verify-remote', async (req, res) => {
   let jpegForensics = null;
   let softwareAnalysis = null;
   let imgMeta = null;
+  let phash = null;
+  let phashRegions = null;
   
   try {
     // ============================================
@@ -861,7 +863,6 @@ app.post('/verify-remote', async (req, res) => {
           phash = phashResult.phash;
           console.log('✅ pHash generated:', phash);
     // Generate multi-region pHashes for crop-resistant matching
-    let phashRegions = null;
     try {
     phashRegions = await ProvenanceService.generateAllRegionHashes(tempFilePath);
     } catch (regionErr) {
