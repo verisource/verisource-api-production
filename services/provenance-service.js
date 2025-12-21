@@ -3,7 +3,7 @@
  * Tracks content lineage, derivatives, and timeline
  */
 
-const db = require('./db-minimal');
+const db = require('../db-minimal');
 
 class ProvenanceService {
   
