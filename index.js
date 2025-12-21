@@ -26,6 +26,7 @@ const PolygonService = require('./services/polygon-timestamp');
 const sightengineDetector = require('./services/sightengine-ai-detection');
 const PlatformDetection = require('./services/platform-signature-detection');
 const FeatureLogger = require('./services/feature-logger');
+const ProvenanceService = require('./services/provenance-service');
 // Import canonicalization only (workers not needed for minimal endpoint)
 let canonicalizeImage;
 try { 
@@ -260,7 +261,64 @@ app.get("/ml-features/export", async (req, res) => {
   }
 });
 
-app.get("/debug-env", (req, res) => res.json({
+// ============================================================================
+// PROVENANCE ENDPOINTS
+// ============================================================================
+app.get("/provenance/stats", async (req, res) => {
+  try {
+    const stats = await ProvenanceService.getStats();
+    res.json(stats);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get("/provenance/:hash", async (req, res) => {
+  try {
+    const { hash } = req.params;
+    if (!hash || hash.length < 16) {
+      return res.status(400).json({ error: 'Invalid hash' });
+    }
+    const timeline = await ProvenanceService.getTimeline(hash);
+    res.json(timeline);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get("/provenance/:hash/similar", async (req, res) => {
+  try {
+    const { hash } = req.params;
+    const threshold = parseInt(req.query.threshold) || 85;
+    
+    // Get the pHash for this fingerprint
+    const result = await db.query(
+      'SELECT phash FROM verifications WHERE fingerprint = $1 LIMIT 1',
+      [hash]
+    );
+    
+    if (result.rows.length === 0 || !result.rows[0].phash) {
+      return res.status(404).json({ error: 'Fingerprint not found or no pHash available' });
+    }
+    
+    const similar = await ProvenanceService.findSimilarContent(
+      result.rows[0].phash,
+      hash,
+      threshold
+    );
+    
+    res.json({
+      fingerprint: hash,
+      threshold,
+      matches: similar.length,
+      similar_content: similar
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get("/debug-env", (req, res) => res.json({ 
   has_database_url: !!process.env.DATABASE_URL,
   database_url_format: process.env.DATABASE_URL ? process.env.DATABASE_URL.substring(0, 20) + '...' : 'NOT SET',
   node_env: process.env.NODE_ENV,
@@ -1651,8 +1709,33 @@ app.post('/verify-remote', async (req, res) => {
         phash,
         cameraVerification
       });
-    } catch (err) {
+     } catch (err) {
       console.error('⚠️ Feature logging error:', err.message);
+    }
+
+    // ============================================
+    // STEP 17C: Provenance Check
+    // ============================================
+    let provenanceResult = null;
+    try {
+      console.log('🔗 Checking content provenance...');
+      const isScreenshot = screenshotDetection?.is_screenshot || false;
+      provenanceResult = await ProvenanceService.checkAndRecordProvenance(
+        fingerprint,
+        phash,
+        isScreenshot
+      );
+      
+      if (provenanceResult.is_original) {
+        console.log('   ✅ Original content (no similar content found)');
+      } else {
+        console.log(`   🔀 Similar content found: ${provenanceResult.similar_content.length} matches`);
+        if (provenanceResult.most_similar) {
+          console.log(`   📎 Most similar: ${provenanceResult.most_similar.similarity}% match`);
+        }
+      }
+    } catch (err) {
+      console.error('⚠️ Provenance check error:', err.message);
     }
 
     // ============================================
@@ -3454,10 +3537,11 @@ module.exports = { applyHybridCameraRescue, calculateCameraAuthenticityScore };
         hash: fingerprint,
         version: 'v1'
       },
-      blockchain_verification: blockchainVerification,  
+      blockchain_verification: blockchainVerification,
       polygon_verification: polygonVerification,
       ai_detection: aiDetection,
       ...(screenshotDetection && { screenshot_detection: screenshotDetection }),
+      ...(provenanceResult && { provenance: provenanceResult }),
       ...(crossReference && { cross_reference: crossReference }),
       verification: {
         status: searchResults.found ? 'PREVIOUSLY_VERIFIED' : 'NEW_UPLOAD',
@@ -3621,8 +3705,7 @@ app.get('/admin/migrate-audio', async (req, res) => {
       ADD COLUMN IF NOT EXISTS bitcoin_proof_status VARCHAR(50),
       ADD COLUMN IF NOT EXISTS bitcoin_submitted_at TIMESTAMP
     `);
-    await db.query(`ALTER TABLE verifications ALTER COLUMN bitcoin_proof_status TYPE VARCHAR(50)`);
-    await db.query(`ALTER TABLE verifications ALTER COLUMN phash TYPE VARCHAR(64)`);
+   await db.query('ALTER TABLE verifications ALTER COLUMN phash TYPE VARCHAR(64)');
     console.log('✅ Blockchain columns added');
     
     res.json({ success: true, message: 'Migration complete!' });
@@ -3631,6 +3714,60 @@ app.get('/admin/migrate-audio', async (req, res) => {
     res.status(500).json({ success: false, error: err.message });
   }
 });
+
+// ============================================================================
+// PROVENANCE MIGRATION
+// ============================================================================
+app.get('/admin/migrate-provenance', async (req, res) => {
+  try {
+    console.log('🔄 Running provenance migration...');
+    
+    // Create content_relationships table
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS content_relationships (
+        id SERIAL PRIMARY KEY,
+        parent_fingerprint VARCHAR(64) NOT NULL,
+        child_fingerprint VARCHAR(64) NOT NULL,
+        relationship_type VARCHAR(30),
+        similarity_score INTEGER,
+        detected_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(parent_fingerprint, child_fingerprint)
+      )
+    `);
+    console.log('✅ content_relationships table created');
+    
+    // Create indexes
+    await db.query('CREATE INDEX IF NOT EXISTS idx_rel_parent ON content_relationships(parent_fingerprint)');
+    await db.query('CREATE INDEX IF NOT EXISTS idx_rel_child ON content_relationships(child_fingerprint)');
+    console.log('✅ Indexes created');
+    
+    // Add provenance columns to verifications
+    await db.query(`
+      ALTER TABLE verifications 
+      ADD COLUMN IF NOT EXISTS is_derivative BOOLEAN DEFAULT FALSE,
+      ADD COLUMN IF NOT EXISTS parent_fingerprint VARCHAR(64),
+      ADD COLUMN IF NOT EXISTS first_seen_at TIMESTAMP
+    `);
+    console.log('✅ Provenance columns added to verifications');
+    
+    // Backfill first_seen_at for existing records
+    await db.query(`
+      UPDATE verifications v
+      SET first_seen_at = (
+        SELECT MIN(upload_date) 
+        FROM verifications 
+        WHERE fingerprint = v.fingerprint
+      )
+      WHERE first_seen_at IS NULL
+    `);
+    console.log('✅ Backfilled first_seen_at');
+    
+    res.json({ success: true, message: 'Provenance migration complete!' });
+  } catch (err) {
+    console.error('❌ Provenance migration failed:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+}); 
 // Force redeploy to pick up new API key
 // ============================================================================
 // FINGERPRINT INDEX API ENDPOINTS
