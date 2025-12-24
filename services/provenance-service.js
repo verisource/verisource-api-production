@@ -209,7 +209,7 @@ class ProvenanceService {
    * @param {string} excludeFingerprint - Fingerprint to exclude from results
    * @param {number} threshold - Minimum similarity threshold (default 70 for crops)
    */
-  async findSimilarContent(phash, regionHashes = null, excludeFingerprint = null, threshold = 70) {
+  async findSimilarContent(phash, regionHashes = null, excludeFingerprint = null, threshold = 85) {
     if (!phash && !regionHashes) return [];
     
     try {
