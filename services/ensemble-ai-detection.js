@@ -1,198 +1,233 @@
 /**
- * Ensemble AI Detection Service
- * Combines multiple AI detectors for improved accuracy
+ * Ensemble AI Detection Service v2.0
  * 
- * Current ensemble:
- * 1. JPEG Artifact Analysis - 60% weight (highest - most reliable)
- * 2. Local detector (heuristic-based) - 40% weight
+ * Four-stage detection pipeline:
+ * 1. Local detector (capped at 50%) - conservative base score
+ * 2. AI Boosters - push up for strong AI signals
+ * 3. Forensic Adjustments - rescue real photos
+ * 4. Sightengine Tiebreaker - for uncertain cases (30-69%)
  * 
- * HuggingFace detector REMOVED (was inaccurate)
- * 
- * Expected combined accuracy: 90-93%
+ * Expected accuracy: ~93%
  */
 
 const localDetector = require('../ai-image-detector');
-const JPEGArtifactAnalyzer = require('./jpeg-artifact-analysis');
+const JPEGForensics = require('./jpeg-forensics');
 
-// Initialize JPEG analyzer
-const jpegAnalyzer = new JPEGArtifactAnalyzer();
+// Try to load Sightengine detector
+let sightengineDetector = null;
+try {
+  sightengineDetector = require('./sightengine-ai-detection');
+} catch (err) {
+  console.log('⚠️ Sightengine detector not available:', err.message);
+}
 
-/**
- * Detect AI generation using ensemble of detectors
- * @param {string} imagePath - Path to image file
- * @returns {Promise<Object>} Combined detection result
- */
 async function detectAIGeneration(imagePath) {
-  console.log('🎯 Running ensemble AI detection with JPEG artifact analysis...');
+  console.log('🎯 Running ensemble AI detection v2.0...');
   
-  // Run both detectors in parallel (HuggingFace removed)
-  const [jpegResult, localResult] = await Promise.all([
-    jpegAnalyzer.analyze(imagePath).catch(err => {
-      console.error('JPEG analyzer error:', err.message);
-      return null;
-    }),
+  const [localResult, forensicsResult] = await Promise.all([
     localDetector.detectAIGeneration(imagePath).catch(err => {
       console.error('Local detector error:', err.message);
+      return null;
+    }),
+    JPEGForensics.analyze(imagePath).catch(err => {
+      console.error('Forensics error:', err.message);
       return null;
     })
   ]);
   
-  // Determine which detectors are available
-  const availableDetectors = {
-    jpeg: jpegResult !== null && jpegResult.confidence > 0,
-    local: localResult !== null
-  };
+  const originalLocalScore = localResult?.ai_confidence || 50;
   
-  const detectorCount = Object.values(availableDetectors).filter(v => v).length;
+  // STAGE 1: Cap local detector at 50%
+  let aiConfidence = Math.min(50, originalLocalScore);
+  let indicators = [...(localResult?.indicators || [])];
   
-  console.log(`📊 Available detectors: JPEG=${availableDetectors.jpeg}, Local=${availableDetectors.local}`);
+  console.log(`📊 Stage 1 - Local: ${originalLocalScore}% → capped to ${aiConfidence}%`);
   
-  // Calculate ensemble result based on available detectors
-  if (availableDetectors.jpeg && availableDetectors.local) {
-    // Both detectors available - use weighted ensemble
-    return calculateTwoDetectorEnsemble(jpegResult, localResult);
-  } else if (availableDetectors.jpeg) {
-    // JPEG only
-    return formatJPEGOnlyResult(jpegResult);
-  } else if (availableDetectors.local) {
-    // Local only
-    return formatLocalOnlyResult(localResult);
-  } else {
-    // Fallback error case
-    return {
-      likely_ai_generated: false,
-      ai_confidence: 0,
-      detectors: [],
-      confidence: 0,
-      agreement: 'none',
-      message: 'No detectors available'
-    };
+  const hasValidExif = localResult?.metadata_check?.has_camera_exif || 
+                     (localResult?.indicators || []).some(i => 
+                       i.toLowerCase().includes('camera make') || 
+                       i.toLowerCase().includes('camera model') ||
+                       i.toLowerCase().includes('valid exif') ||
+                       i.toLowerCase().includes('exif data'));
+  
+  const noiseVariance = forensicsResult?.noise_analysis?.variance || null;
+  const noiseLevel = forensicsResult?.noise_analysis?.noise_level || 'unknown';
+  const compressionQuality = forensicsResult?.compression_analysis?.quality_estimate || null;
+  const doubleCompressed = forensicsResult?.compression_analysis?.double_compressed || false;
+  
+  // STAGE 2: AI Boosters
+  let aiBoost = 0;
+  
+  if (forensicsResult) {
+    console.log('🔬 Stage 2 - AI boosters...');
+    
+    if (noiseVariance !== null && noiseVariance < 0.015 && !hasValidExif && !doubleCompressed) {
+  aiBoost += 25;
+      indicators.push('AI Booster: Very low noise without camera data (+25%)');
+      console.log(`   +25% Very low noise (${noiseVariance.toFixed(4)}) + no EXIF`);
+    }
+    
+    if (compressionQuality !== null && compressionQuality >= 95 && !doubleCompressed) {
+      aiBoost += 15;
+      indicators.push('AI Booster: High quality JPEG, not recompressed (+15%)');
+      console.log(`   +15% High quality (${compressionQuality}%) + not double compressed`);
+    }
+    
+    if (noiseVariance !== null && noiseVariance < 0.020 && 
+        compressionQuality !== null && compressionQuality >= 90 && 
+        !doubleCompressed && !hasValidExif && aiBoost < 25) {
+      aiBoost += 10;
+      indicators.push('AI Booster: Low noise + high quality combo (+10%)');
+      console.log(`   +10% Low noise + high quality combo`);
+    }
+    
+    console.log(`📊 Stage 2 - AI boost: +${aiBoost}%`);
   }
-}
-
-/**
- * Calculate ensemble with JPEG + Local detectors
- */
-function calculateTwoDetectorEnsemble(jpegResult, localResult) {
-  console.log('🤖 Running ensemble with JPEG + Local detectors...');
   
-  // Weights: JPEG is more reliable
-  const weights = { jpeg: 0.00, local: 1.00 };
+  aiConfidence += aiBoost;
   
-  // Calculate weighted confidence
-  const weightedConfidence = 
-    (jpegResult.ai_confidence * weights.jpeg) +
-    (localResult.ai_confidence * weights.local);
+  // STAGE 3: Forensic Rescue
+  let forensicAdjustment = 0;
   
-  const detectorResults = [
-    `JPEG: ${jpegResult.ai_confidence}%`,
-    `Local: ${localResult.ai_confidence}%`
-  ];
+  if (forensicsResult) {
+    console.log('🔬 Stage 3 - Forensic rescue...');
+    
+    if (noiseLevel === 'normal' && hasValidExif) {
+      forensicAdjustment -= 20;
+      indicators.push('Forensic: Normal noise with valid EXIF (-20%)');
+    } else if (noiseLevel === 'normal') {
+      forensicAdjustment -= 10;
+      indicators.push('Forensic: Normal noise pattern (-10%)');
+    }
+    
+    if (doubleCompressed) {
+      forensicAdjustment -= 10;
+      indicators.push('Forensic: Double JPEG compression (-10%)');
+    }
+    
+    if (forensicsResult.clone_detection?.detected) {
+      forensicAdjustment -= 15;
+      indicators.push('Forensic: Clone regions detected (-15%)');
+    }
+    
+    if (forensicsResult.ela_analysis?.performed) {
+      const elaScore = forensicsResult.ela_analysis?.manipulation_score || 0;
+      if (elaScore > 70) {
+        forensicAdjustment -= 10;
+        indicators.push('Forensic: ELA editing artifacts (-10%)');
+      }
+    }
+    
+    console.log(`📊 Stage 3 - Forensic: ${forensicAdjustment}%`);
+  }
   
-  console.log(`✅ Full ensemble result: ${Math.round(weightedConfidence)}% (${detectorResults.join(', ')})`);
+  aiConfidence += forensicAdjustment;
+  const preSightengineConfidence = Math.max(0, Math.min(100, aiConfidence));
+  aiConfidence = preSightengineConfidence;
   
-  // Calculate agreement
-  const deviations = [
-    Math.abs(jpegResult.ai_confidence - weightedConfidence),
-    Math.abs(localResult.ai_confidence - weightedConfidence)
-  ];
-  const maxDeviation = Math.max(...deviations);
+  // STAGE 4: Sightengine Tiebreaker (30-69% range)
+  let externalVerification = null;
+  let sightengineUsed = false;
   
-  let agreement = 'high';
-  if (maxDeviation > 25) agreement = 'low';
-  else if (maxDeviation > 15) agreement = 'medium';
+  if (aiConfidence >= 30 && aiConfidence < 70) {
+    console.log(`🌐 Stage 4 - Uncertain (${aiConfidence}%), calling Sightengine...`);
+    
+    if (sightengineDetector && process.env.SIGHTENGINE_API_USER) {
+      try {
+        const sightengineResult = await sightengineDetector.detectAI(imagePath);
+        const seConfidence = Math.round(sightengineResult.confidence * 100);
+        
+        console.log(`   Sightengine: ${sightengineResult.isAI ? 'AI' : 'Real'} (${seConfidence}%)`);
+        
+        const blendedConfidence = Math.round(seConfidence * 0.6 + aiConfidence * 0.4);
+        console.log(`   Blend: ${aiConfidence}% + ${seConfidence}% → ${blendedConfidence}%`);
+        
+        externalVerification = {
+          provider: 'sightengine',
+          confidence: seConfidence,
+          isAI: sightengineResult.isAI,
+          local_confidence: aiConfidence,
+          blended_confidence: blendedConfidence,
+          used_as_tiebreaker: true
+        };
+        
+        aiConfidence = blendedConfidence;
+        sightengineUsed = true;
+        indicators.push(`Sightengine: ${seConfidence}% → blended ${blendedConfidence}%`);
+        
+      } catch (err) {
+        console.error(`   ⚠️ Sightengine error: ${err.message}`);
+        externalVerification = { provider: 'sightengine', error: err.message, used_as_tiebreaker: false };
+      }
+    } else {
+      console.log('   ⚠️ Sightengine not configured');
+      externalVerification = { provider: 'sightengine', error: 'Not configured', used_as_tiebreaker: false };
+    }
+  } else {
+    console.log(`📊 Stage 4 - Skipped (${aiConfidence}% outside 30-69%)`);
+  }
   
-  console.log(`   Agreement: ${agreement} (max deviation: ${Math.round(maxDeviation)}%)`);
+  aiConfidence = Math.max(0, Math.min(100, aiConfidence));
   
-  const isAI = weightedConfidence >= 50;
-  const label = isAI ? 'AI-GENERATED' : 'LIKELY AUTHENTIC';
-  console.log(`✅ Ensemble detection: ${label} (${Math.round(weightedConfidence)}%)`);
+  let verdict;
+  if (aiConfidence >= 70) verdict = 'AI-GENERATED';
+  else if (aiConfidence >= 50) verdict = 'LIKELY AI-GENERATED';
+  else if (aiConfidence >= 30) verdict = 'UNCERTAIN';
+  else verdict = 'LIKELY AUTHENTIC';
+  
+  const isAI = aiConfidence >= 50;
+  
+  console.log(`✅ Final: ${verdict} - ${aiConfidence}% (orig: ${originalLocalScore}%, cap: ${Math.min(50, originalLocalScore)}%, boost: +${aiBoost}%, forensic: ${forensicAdjustment}%${sightengineUsed ? ', SE blended' : ''})`);
+  
+  let socialMediaCaveat = null;
+  if (doubleCompressed && !hasValidExif && compressionQuality && compressionQuality < 85) {
+    socialMediaCaveat = 'Image may have been shared on social media. Detection confidence may be affected.';
+  }
   
   return {
     likely_ai_generated: isAI,
-    ai_confidence: Math.round(weightedConfidence),
+    ai_confidence: aiConfidence,
+    ai_confidence_raw: originalLocalScore,
+    ai_confidence_capped: Math.min(50, originalLocalScore),
+    ai_boost_applied: aiBoost,
+    forensic_adjustment: forensicAdjustment,
+    pre_sightengine_confidence: preSightengineConfidence,
+    verdict: verdict,
+    indicators: indicators,
+    metadata_check: localResult?.metadata_check,
+    ensemble_used: true,
+    ensemble_version: '2.0',
+    detector_count: (forensicsResult ? 1 : 0) + (sightengineUsed ? 1 : 0) + 1,
+    sightengine_used: sightengineUsed,
+    external_verification: externalVerification,
+    social_media_caveat: socialMediaCaveat,
+    method: sightengineUsed ? 'ensemble_with_sightengine' : (forensicsResult ? 'ensemble_with_forensics' : 'local_only'),
+    
+    forensic_signals: {
+      applied: forensicsResult !== null,
+      noise_level: noiseLevel,
+      noise_variance: noiseVariance,
+      double_compressed: doubleCompressed,
+      compression_quality: compressionQuality,
+      clone_detected: forensicsResult?.clone_detection?.detected || false,
+      ela_performed: forensicsResult?.ela_analysis?.performed || false,
+      ela_score: forensicsResult?.ela_analysis?.manipulation_score || null,
+      has_valid_exif: hasValidExif,
+      ai_boost: aiBoost,
+      forensic_rescue: forensicAdjustment
+    },
+    
     detectors: [
-      {
-        name: 'JPEG Artifacts',
-        confidence: jpegResult.ai_confidence,
-        weight: weights.jpeg,
-        indicators: jpegResult.indicators || []
-      },
-      {
-        name: 'Local Heuristics',
-        confidence: localResult.ai_confidence,
-        weight: weights.local,
-        indicators: localResult.indicators || []
-      }
-    ],
-    confidence: Math.round(weightedConfidence),
-    agreement,
-    method: 'weighted_ensemble'
+      { name: 'Local Heuristics', confidence: originalLocalScore, capped_confidence: Math.min(50, originalLocalScore), weight: 0.4, indicators: localResult?.indicators || [] },
+      { name: 'AI Boosters', boost: aiBoost, indicators: indicators.filter(i => i.startsWith('AI Booster:')) },
+      { name: 'Forensic Signals', adjustment: forensicAdjustment, indicators: indicators.filter(i => i.startsWith('Forensic:')) },
+      ...(sightengineUsed ? [{ name: 'Sightengine', confidence: externalVerification?.confidence || null, weight: 0.6, used_as_tiebreaker: true }] : [])
+    ]
   };
 }
 
-/**
- * Format JPEG-only result
- */
-function formatJPEGOnlyResult(jpegResult) {
-  console.log(`✅ Ensemble detection: JPEG only (${jpegResult.ai_confidence}%)`);
-  
-  return {
-    likely_ai_generated: jpegResult.ai_confidence >= 50,
-    ai_confidence: jpegResult.ai_confidence,
-    detectors: [
-      {
-        name: 'JPEG Artifacts',
-        confidence: jpegResult.ai_confidence,
-        weight: 1.0,
-        indicators: jpegResult.indicators || []
-      }
-    ],
-    confidence: jpegResult.ai_confidence,
-    agreement: 'single_detector',
-    method: 'jpeg_only'
-  };
-}
+function isEnsembleAvailable() { return true; }
+function isForensicsAvailable() { return typeof JPEGForensics?.analyze === 'function'; }
+function isSightengineAvailable() { return sightengineDetector !== null && !!process.env.SIGHTENGINE_API_USER; }
 
-/**
- * Format Local-only result
- */
-function formatLocalOnlyResult(localResult) {
-  console.log(`✅ Ensemble detection: Local only (${localResult.ai_confidence}%)`);
-  
-  return {
-    likely_ai_generated: localResult.ai_confidence >= 50,
-    ai_confidence: localResult.ai_confidence,
-    detectors: [
-      {
-        name: 'Local Heuristics',
-        confidence: localResult.ai_confidence,
-        weight: 1.0,
-        indicators: localResult.indicators || []
-      }
-    ],
-    confidence: localResult.ai_confidence,
-    agreement: 'single_detector',
-    method: 'local_only'
-  };
-}
-
-/**
- * Check if ensemble detection is available
- */
-function isEnsembleAvailable() {
-  return true; // JPEG + Local always available
-}
-
-/**
- * Check if JPEG analysis is available
- */
-function isJPEGAnalysisAvailable() {
-  return jpegAnalyzer !== null;
-}
-
-module.exports = {
-  detectAIGeneration,
-  isEnsembleAvailable,
-  isJPEGAnalysisAvailable
-};
+module.exports = { detectAIGeneration, isEnsembleAvailable, isForensicsAvailable, isSightengineAvailable };

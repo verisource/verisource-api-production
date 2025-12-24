@@ -945,7 +945,7 @@ app.post('/verify-remote', async (req, res) => {
         aiDetection = {
           likely_ai_generated: finalResult.likely_ai_generated,
           ai_confidence: finalResult.ai_confidence,
-          ai_confidence_raw: finalResult.ai_confidence,
+          ai_confidence_raw: finalResult.ai_confidence_raw || finalResult.ai_confidence,
           indicators: finalResult.indicators || [],
           warnings: [],
           recommendations: [],
@@ -955,11 +955,12 @@ app.post('/verify-remote', async (req, res) => {
           forensic_analysis: {
             manipulation_detected: finalResult.ai_confidence >= 50,
             manipulation_confidence: finalResult.ai_confidence,
-            ela_performed: false,
-            compression_quality: finalResult.individual_results?.jpeg?.details?.quality || 0,
-            double_compressed: finalResult.individual_results?.jpeg?.details?.doubleCompressed || false,
-            noise_level: finalResult.individual_results?.jpeg?.details?.noise || 'unknown'
+            ela_performed: finalResult.forensic_signals?.ela_performed || false,
+            compression_quality: finalResult.forensic_signals?.compression_quality || finalResult.individual_results?.jpeg?.details?.quality || 0,
+            double_compressed: finalResult.forensic_signals?.double_compressed || finalResult.individual_results?.jpeg?.details?.doubleCompressed || false,
+            noise_level: finalResult.forensic_signals?.noise_level || finalResult.individual_results?.jpeg?.details?.noise || 'unknown'
           },
+          forensic_signals: finalResult.forensic_signals || null,
           verdict: finalResult.likely_ai_generated ? 'AI-GENERATED IMAGE' : 'LIKELY REAL IMAGE',
           analysis_time_ms: 0,
           routing_decision: finalResult.routing_decision || 'unknown',
@@ -967,7 +968,6 @@ app.post('/verify-remote', async (req, res) => {
           external_verification: finalResult.external_verification || null,
           local_result: finalResult.local_result || null
         };
-        
         console.log(`✅ Ensemble detection: ${aiDetection.verdict} (${aiDetection.ai_confidence}%)`);
         
       } catch (err) {
@@ -977,26 +977,20 @@ app.post('/verify-remote', async (req, res) => {
     }
 // ============================================
     // STEP 7B: JPEG Forensics Analysis
+    // DISABLED: Now runs inside ensemble-ai-detection.js
     // ============================================
-    jpegForensics = null;
-    if (kind === 'image') {
-      try {
-        console.log('🔬 Running JPEG forensics analysis...');
-        jpegForensics = await JPEGForensics.analyze(tempFilePath);
-        
-        if (jpegForensics) {
-          console.log(`✅ Forensics: ${jpegForensics.verdict}`);
-          console.log(`   ELA: ${jpegForensics.ela_analysis?.performed ? 'Performed' : 'Skipped'}, Double Compressed: ${jpegForensics.compression_analysis?.double_compressed ? 'Yes' : 'No'}`);
-          
-          // Attach to aiDetection
-          if (aiDetection && !aiDetection.error) {
-            aiDetection.jpeg_forensics = jpegForensics;
-          }
-        }
-      } catch (err) {
-        console.error('⚠️ JPEG forensics error:', err.message);
-        jpegForensics = { error: err.message };
-      }
+    // Forensics data comes from aiDetection.forensic_signals
+    if (aiDetection && aiDetection.forensic_signals) {
+      jpegForensics = {
+        ela_analysis: { performed: aiDetection.forensic_signals.ela_performed },
+        compression_analysis: { 
+          double_compressed: aiDetection.forensic_signals.double_compressed,
+          quality_estimate: aiDetection.forensic_signals.compression_quality
+        },
+        noise_analysis: { noise_level: aiDetection.forensic_signals.noise_level },
+        clone_detection: { detected: aiDetection.forensic_signals.clone_detected },
+        verdict: aiDetection.likely_ai_generated ? 'AI-GENERATED' : 'LIKELY AUTHENTIC'
+      };
     }
     // ============================================
     // STEP 8: Google Vision Analysis
@@ -2474,10 +2468,10 @@ if (kind === 'image') {
       forensic_analysis: {
             manipulation_detected: finalResult.ai_confidence >= 50,
             manipulation_confidence: finalResult.ai_confidence,
-            ela_performed: jpegForensics?.ela_analysis?.performed || false,
-            compression_quality: jpegForensics?.compression_analysis?.quality_estimate || finalResult.individual_results?.jpeg?.details?.quality || 0,
-            double_compressed: jpegForensics?.compression_analysis?.double_compressed || finalResult.individual_results?.jpeg?.details?.doubleCompressed || false,
-            noise_level: jpegForensics?.noise_analysis?.noise_level || finalResult.individual_results?.jpeg?.details?.noise || 'unknown'
+            ela_performed: finalResult.forensic_signals?.ela_performed || false,
+            compression_quality: finalResult.forensic_signals?.compression_quality || finalResult.individual_results?.jpeg?.details?.quality || 0,
+            double_compressed: finalResult.forensic_signals?.double_compressed || finalResult.individual_results?.jpeg?.details?.doubleCompressed || false,
+            noise_level: finalResult.forensic_signals?.noise_level || finalResult.individual_results?.jpeg?.details?.noise || 'unknown'
           },
       
  verdict: finalResult.likely_ai_generated ? 'AI-GENERATED IMAGE' : 'LIKELY REAL IMAGE',
