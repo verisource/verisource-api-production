@@ -173,26 +173,25 @@ class ProvenanceService {
    * @param {Object} hashes2 - Region hashes from second image
    * @returns {Object} Best match info with similarity, regions matched
    */
-  compareRegionHashes(hashes1, hashes2) {
+ compareRegionHashes(hashes1, hashes2) {
     let bestMatch = {
       similarity: 0,
       region1: null,
       region2: null
     };
     
-    const regions1 = Object.keys(hashes1);
-    const regions2 = Object.keys(hashes2);
+    // Only compare same regions (full↔full, center50↔center50, etc.)
+    // This prevents false positives from generic patterns matching across different regions
+    const regions = Object.keys(hashes1).filter(r => hashes2[r]);
     
-    for (const r1 of regions1) {
-      for (const r2 of regions2) {
-        const sim = this.similarityScore(hashes1[r1], hashes2[r2]);
-        if (sim > bestMatch.similarity) {
-          bestMatch = {
-            similarity: sim,
-            region1: r1,
-            region2: r2
-          };
-        }
+    for (const region of regions) {
+      const sim = this.similarityScore(hashes1[region], hashes2[region]);
+      if (sim > bestMatch.similarity) {
+        bestMatch = {
+          similarity: sim,
+          region1: region,
+          region2: region
+        };
       }
     }
     
