@@ -464,7 +464,7 @@ class ProvenanceService {
       console.log('🔗 Checking content provenance...');
       
       // Find similar content using multi-region comparison
-      const similar = await this.findSimilarContent(phash, regionHashes, fingerprint, 70);
+      const similar = await this.findSimilarContent(phash, regionHashes, fingerprint, 85);
       
       if (similar.length === 0) {
         console.log('   ✅ Original content (no similar content found)');
