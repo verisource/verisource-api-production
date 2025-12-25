@@ -461,8 +461,6 @@ class ProvenanceService {
    */
   async checkAndRecordProvenance(fingerprint, phash, regionHashes = null, isScreenshot = false) {
     try {
-      console.log('🔗 Checking content provenance...');
-      
       // Find similar content using multi-region comparison
       const similar = await this.findSimilarContent(phash, regionHashes, fingerprint, 85);
       
