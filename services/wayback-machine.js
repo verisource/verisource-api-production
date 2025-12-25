@@ -153,7 +153,7 @@ class WaybackMachineService {
     }
 
     // Check up to 5 URLs in parallel (reduced from 10 to be respectful to API)
-    const urlsToCheck = urls.slice(0, 5);
+    const urlsToCheck = urls.slice(0, 10);
     
     // Run all checks in parallel
     const results = await Promise.all(
