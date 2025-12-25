@@ -142,7 +142,7 @@ class ReverseImageSearchService {
           // Hard timeout wrapper: fail fast if Wayback is slow
           const waybackPromise = this.services.wayback.checkMultipleUrls(urlsToCheck);
           const timeoutPromise = new Promise((_, reject) => 
-            setTimeout(() => reject(new Error('Wayback timeout')), 5000)
+            setTimeout(() => reject(new Error('Wayback timeout')), 15000)
           );
           
           results.wayback = await Promise.race([waybackPromise, timeoutPromise]);
