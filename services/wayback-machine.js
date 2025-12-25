@@ -98,7 +98,7 @@ class WaybackMachineService {
           filter: 'statuscode:200',
           collapse: 'digest' // Remove duplicates
         },
-        timeout: 3000
+        timeout: 10000
       });
 
       // First row is headers, rest is data
@@ -130,7 +130,7 @@ class WaybackMachineService {
     try {
       const response = await axios.get(this.availabilityEndpoint, {
         params: { url },
-        timeout: 3000
+        timeout: 10000
       });
       return response.data;
     } catch (error) {
