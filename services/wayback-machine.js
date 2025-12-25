@@ -152,39 +152,31 @@ class WaybackMachineService {
       };
     }
 
-    const results = [];
-    let earliestOverall = null;
-
-    // Check up to 10 URLs to avoid rate limiting
-    const urlsToCheck = urls.slice(0, 10);
-
-    for (const url of urlsToCheck) {
-      try {
-        const result = await this.checkUrl(url);
-        results.push({
-          url,
-          ...result
-        });
-
-        // Track earliest snapshot across all URLs
-        if (result.first_snapshot) {
-          if (!earliestOverall || result.first_snapshot.timestamp < earliestOverall.timestamp) {
-            earliestOverall = {
-              ...result.first_snapshot,
-              source_url: url
-            };
-          }
+    // Check up to 5 URLs in parallel (reduced from 10 to be respectful to API)
+    const urlsToCheck = urls.slice(0, 5);
+    
+    // Run all checks in parallel
+    const results = await Promise.all(
+      urlsToCheck.map(async (url) => {
+        try {
+          const result = await this.checkUrl(url);
+          return { url, ...result };
+        } catch (error) {
+          return { url, status: 'error', error: error.message };
         }
+      })
+    );
 
-        // Small delay to be respectful to the API
-        await this.delay(500);
-
-      } catch (error) {
-        results.push({
-          url,
-          status: 'error',
-          error: error.message
-        });
+    // Find earliest snapshot across all results
+    let earliestOverall = null;
+    for (const result of results) {
+      if (result.first_snapshot) {
+        if (!earliestOverall || result.first_snapshot.timestamp < earliestOverall.timestamp) {
+          earliestOverall = {
+            ...result.first_snapshot,
+            source_url: result.url
+          };
+        }
       }
     }
 
