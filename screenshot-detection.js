@@ -131,6 +131,21 @@ function detectScreenshot(imageData, mode = 'balanced') {
   const scoreBreakdown = {};
   let detectedDevice = null;
   
+  // Ambiguous dimensions - common for both screenshots AND web images
+  // These require additional signals to be flagged as screenshots
+  const AMBIGUOUS_DIMENSIONS = [
+    { w: 1920, h: 1080 },  // HD 16:9 - very common web size
+    { w: 1080, h: 1920 },  // HD 16:9 vertical
+    { w: 1280, h: 720 },   // 720p
+    { w: 720, h: 1280 },   // 720p vertical
+    { w: 1080, h: 1080 },  // Square - common social media
+  ];
+  
+  const isAmbiguousDimension = AMBIGUOUS_DIMENSIONS.some(d => 
+    (roughlyEquals(d.w, width) && roughlyEquals(d.h, height)) ||
+    (roughlyEquals(d.h, width) && roughlyEquals(d.w, height))
+  );
+
   // 1. Check device dimensions (with tolerance)
   let dimensionMatchType = null;
   
@@ -161,8 +176,15 @@ function detectScreenshot(imageData, mode = 'balanced') {
   }
   
   if (dimensionMatchType === 'exact') {
-    screenshotScore += SCREENSHOT_WEIGHTS.dimensionExactMatch;
-    scoreBreakdown.dimensionMatch = SCREENSHOT_WEIGHTS.dimensionExactMatch;
+    // Reduce score for ambiguous dimensions (common web sizes)
+    const dimScore = isAmbiguousDimension 
+      ? Math.floor(SCREENSHOT_WEIGHTS.dimensionExactMatch * 0.5)  // 50% weight
+      : SCREENSHOT_WEIGHTS.dimensionExactMatch;
+    screenshotScore += dimScore;
+    scoreBreakdown.dimensionMatch = dimScore;
+    if (isAmbiguousDimension) {
+      scoreBreakdown.ambiguousDimension = true;
+    }
     indicators.push(`Dimensions exactly match ${detectedDevice} screen (${width}x${height})`);
   } else if (dimensionMatchType === 'near') {
     screenshotScore += SCREENSHOT_WEIGHTS.dimensionNearMatch;
