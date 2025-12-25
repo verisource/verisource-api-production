@@ -806,11 +806,24 @@ app.post('/verify-remote', async (req, res) => {
       reverseSearchPromise = reverseImageSearch.search(buf, {
         services: ['tineye', 'bing'],
         includeAnalysis: true
-      }).catch(err => {
+     }).catch(err => {
         console.error('⚠️ Reverse image search error:', err.message);
         return { search_performed: false, error: err.message };
       });
     }
+
+    // ============================================
+    // Start Google Vision Analysis (async - runs in parallel)
+    // ============================================
+    let googleVisionPromise = null;
+    if (kind === 'image') {
+      console.log('👁️ Starting Google Vision analysis (async)...');
+      googleVisionPromise = analyzeImage(tempFilePath).catch(err => {
+        console.error('⚠️ Google Vision error:', err.message);
+        return { error: err.message };
+      });
+    }
+
     // ============================================
     // STEP 5: Audio processing (if audio file)
     // ============================================
@@ -1006,19 +1019,14 @@ app.post('/verify-remote', async (req, res) => {
         verdict: aiDetection.likely_ai_generated ? 'AI-GENERATED' : 'LIKELY AUTHENTIC'
       };
     }
-    // ============================================
-    // STEP 8: Google Vision Analysis
+   // ============================================
+    // STEP 8: Google Vision Analysis (await async result)
     // ============================================
     let googleVisionResult = null;
-    if (kind === 'image') {
-      try {
-        console.log('👁️ Running Google Vision analysis...');
-        googleVisionResult = await analyzeImage(tempFilePath);
-        console.log('✅ Google Vision analysis complete');
-      } catch (err) {
-        console.error('⚠️ Google Vision error:', err.message);
-        googleVisionResult = { error: err.message };
-      }
+    if (kind === 'image' && googleVisionPromise) {
+      console.log('👁️ Awaiting Google Vision results...');
+      googleVisionResult = await googleVisionPromise;
+      console.log('✅ Google Vision analysis complete');
     }
 
     // ============================================
@@ -2350,7 +2358,7 @@ app.post('/verify', upload.single('file'), async (req, res) => {
     const isVid = /^video\//i.test(dm) || /\.(mp4|mov|avi|mkv)$/i.test(req.file.originalname);
     const isAud = /^audio\//i.test(dm) || /\.(mp3|wav|m4a|flac)$/i.test(req.file.originalname);
     const kind = isImg ? 'image' : (isVid ? 'video' : (isAud ? 'audio' : 'unknown'));
-    
+
     // Generate Chromaprint for audio files
     let chromaprint = null;
     let audioDuration = null;
