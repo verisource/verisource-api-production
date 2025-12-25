@@ -731,7 +731,7 @@ app.post('/verify-remote', async (req, res) => {
     } catch (err) {
       console.error('⚠️ Database search error:', err.message);
     }
-    
+
     // ============================================
     // STEP 3: Blockchain timestamping (if new)
     // ============================================
@@ -797,6 +797,20 @@ app.post('/verify-remote', async (req, res) => {
     const isAud = /^audio\//i.test(dm) || /\.(mp3|wav|m4a|flac)$/i.test(mockFile.originalname);
     const kind = isImg ? 'image' : (isVid ? 'video' : (isAud ? 'audio' : 'unknown'));
 
+    // ============================================
+    // STEP 2B: Start Reverse Image Search (async - runs in parallel)
+    // ============================================
+    let reverseSearchPromise = null;
+    if (kind === 'image') {
+      console.log('🔍 Starting reverse image search (async)...');
+      reverseSearchPromise = reverseImageSearch.search(buf, {
+        services: ['tineye', 'bing'],
+        includeAnalysis: true
+      }).catch(err => {
+        console.error('⚠️ Reverse image search error:', err.message);
+        return { search_performed: false, error: err.message };
+      });
+    }
     // ============================================
     // STEP 5: Audio processing (if audio file)
     // ============================================
@@ -1388,16 +1402,13 @@ app.post('/verify-remote', async (req, res) => {
     }
 
     // ============================================
-    // STEP 12: Reverse Image Search
+    // STEP 12: Reverse Image Search (await async result)
     // ============================================
     let reverseSearchResults = null;
-    if (kind === 'image') {
+    if (kind === 'image' && reverseSearchPromise) {
       try {
-        console.log('🔍 Running reverse image search...');
-        reverseSearchResults = await reverseImageSearch.search(buf, {
-          services: ['tineye', 'bing'],
-          includeAnalysis: true
-        });
+        console.log('🔍 Awaiting reverse image search results...');
+        reverseSearchResults = await reverseSearchPromise;
         
         if (reverseSearchResults.combined_analysis) {
           const analysis = reverseSearchResults.combined_analysis;
@@ -2339,6 +2350,7 @@ app.post('/verify', upload.single('file'), async (req, res) => {
     const isVid = /^video\//i.test(dm) || /\.(mp4|mov|avi|mkv)$/i.test(req.file.originalname);
     const isAud = /^audio\//i.test(dm) || /\.(mp3|wav|m4a|flac)$/i.test(req.file.originalname);
     const kind = isImg ? 'image' : (isVid ? 'video' : (isAud ? 'audio' : 'unknown'));
+    
     // Generate Chromaprint for audio files
     let chromaprint = null;
     let audioDuration = null;
