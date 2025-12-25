@@ -1692,6 +1692,36 @@ app.post('/verify-remote', async (req, res) => {
     }
 
     // ============================================
+    // STEP 17A: Screenshot Text Analysis (OCR)
+    // ============================================
+    let screenshotTextAnalysis = null;
+    if (kind === 'image') {
+      try {
+        const { analyzeScreenshotText, serpApiWebSearch } = require('./services/screenshot-text-analysis');
+        console.log('📝 Running screenshot text analysis...');
+        
+        // Pass the web search function for online verification
+        screenshotTextAnalysis = await analyzeScreenshotText(tempFilePath, serpApiWebSearch);
+        
+        if (screenshotTextAnalysis.success && screenshotTextAnalysis.extracted_text) {
+          const wordCount = screenshotTextAnalysis.extracted_text.word_count;
+          console.log('✅ OCR extracted ' + wordCount + ' words');
+          if (screenshotTextAnalysis.extracted_text.key_phrases?.length > 0) {
+            console.log('   Key phrases: ' + screenshotTextAnalysis.extracted_text.key_phrases.slice(0, 2).join(', '));
+          }
+          if (screenshotTextAnalysis.web_verification) {
+            const wv = screenshotTextAnalysis.web_verification;
+            console.log('🔍 Web verification: ' + (wv.exact_matches?.length || 0) + ' matches, ' + (wv.fact_checks?.length || 0) + ' fact-checks');
+          }
+        } else {
+          console.log('ℹ️ No text found in image');
+        }
+      } catch (err) {
+        console.error('⚠️ Screenshot text analysis error:', err.message);
+      }
+    }
+
+    // ============================================
     // STEP 17B: Log Features for ML Training
     // ============================================
     try {
@@ -1820,6 +1850,7 @@ app.post('/verify-remote', async (req, res) => {
         ...(cameraVerification && { camera_verification: cameraVerification }),
         ...(exifData && { metadata: { has_exif: true, exif: exifData } }),
         ...(softwareAnalysis && { software_analysis: softwareAnalysis }),
+        ...(screenshotTextAnalysis && { screenshot_text_analysis: screenshotTextAnalysis }),
       };
       console.log('📊 Calculating confidence score...');
       confidence = ConfidenceScoring.calculateConfidenceScore(confidenceData);
@@ -1852,6 +1883,7 @@ app.post('/verify-remote', async (req, res) => {
       polygon_verification: polygonVerification,
       ai_detection: aiDetection,
       ...(screenshotDetection && { screenshot_detection: screenshotDetection }),
+      ...(screenshotTextAnalysis && { screenshot_text_analysis: screenshotTextAnalysis }),
       ...(provenanceResult && { provenance: provenanceResult }),
       ...(crossReference && { cross_reference: crossReference }),
       verification: {
