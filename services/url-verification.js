@@ -120,10 +120,10 @@ async function downloadMedia(url, outputDir = '/tmp') {
       '--max-filesize', '100M',
     ];
 
-    // For videos, get best quality up to 1080p, prefer MP4 for compatibility
+    // For videos, get best quality up to 1080p, ensure we get video not just audio
 if (result.media_type === 'video' || result.platform === 'YouTube Shorts') {
   downloadArgs.push(
-    '-f', 'bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[height<=1080][ext=mp4]/best[ext=mp4]/best',
+    '-f', 'bv*[height<=1080]+ba/b[height<=1080]/bv*+ba/b',
     '--merge-output-format', 'mp4'
   );
 }
