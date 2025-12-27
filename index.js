@@ -2200,6 +2200,7 @@ if (download.platform && download.platform !== 'Direct URL') {
       console.log('   ⚠️ Platform override: Sightengine says authentic, reducing local score');
       videoAnalysis.ai_confidence = Math.min(40, sightengineResult.confidence * 100);
       videoAnalysis.analysis.sightengine_override = true;
+      videoAnalysis.analysis.verdict = 'LIKELY_AUTHENTIC';
     }
   } catch (sightengineErr) {
     console.warn('   Sightengine error:', sightengineErr.message);
