@@ -27,6 +27,7 @@ const sightengineDetector = require('./services/sightengine-ai-detection');
 const PlatformDetection = require('./services/platform-signature-detection');
 const FeatureLogger = require('./services/feature-logger');
 const ProvenanceService = require('./services/provenance-service');
+const tvCorroboration = require('./services/tv-corroboration');
 // Import canonicalization only (workers not needed for minimal endpoint)
 let canonicalizeImage;
 try { 
@@ -927,6 +928,46 @@ app.post('/verify-remote', async (req, res) => {
         }
       } catch (err) {
         console.error('⚠️ pHash error:', err.message);
+      }
+    }
+
+ // ============================================
+    // STEP 7: TV Corroboration (NEW)
+    // ============================================
+    let tvCorroborationResult = null;
+    const { location, date, description, eventType } = req.body;
+    
+    const hasContext = location || description || eventType || 
+                       (videoAnalysis && videoAnalysis.labels) ||
+                       (googleVisionResult && googleVisionResult.labels);
+    
+    if (hasContext) {
+      try {
+        console.log(`📺 [${requestId}] Running TV corroboration...`);
+        tvCorroborationResult = await tvCorroboration.search({
+          claimedLocation: location || landmarkVerification?.location || null,
+          claimedDate: date || exifData?.DateTimeOriginal || null,
+          description: description || null,
+          eventType: eventType || null,
+          visualLabels: videoAnalysis?.labels || 
+                        googleVisionResult?.labels || 
+                        [],
+          ocrText: googleVisionResult?.text || null,
+          metadata: { exif: exifData }
+        });
+        
+        if (tvCorroborationResult.found) {
+          console.log(`📺 [${requestId}] Found ${tvCorroborationResult.resultCount} broadcast sources`);
+        } else {
+          console.log(`📺 [${requestId}] No broadcast coverage found`);
+        }
+      } catch (tvErr) {
+        console.error(`⚠️ [${requestId}] TV corroboration error:`, tvErr.message);
+        tvCorroborationResult = { 
+          searched: false, 
+          error: tvErr.message,
+          note: 'Broadcast archive search failed'
+        };
       }
     }
 
@@ -1972,6 +2013,7 @@ app.post('/verify-remote', async (req, res) => {
       ...(reverseSearchResults && { reverse_image_search: reverseSearchResults }),
       c2pa_verification: c2paResult,
       virustotal: virusTotalResult,
+      ...(tvCorroborationResult && { tv_corroboration: tvCorroborationResult }),
       confidence: confidence,
       verified_at: new Date().toISOString()
     };
