@@ -22,7 +22,7 @@ class TVCorroboration {
   }
 
   /**
-   * Main entry point - search for broadcast corroboration
+   * Main entry point - search for news corroboration
    * @param {Object} submission - Verification submission data
    * @returns {Object} Corroboration results
    */
@@ -40,7 +40,7 @@ class TVCorroboration {
       query: null,
       searchTime: 0,
       error: null,
-      disclaimer: 'Broadcast coverage confirms media reported on a similar event. This does not independently verify the submitted content originated from this event.'
+      disclaimer: 'News coverage confirms media reported on a similar event. This does not independently verify the submitted content originated from this event.'
     };
 
     try {
@@ -49,7 +49,7 @@ class TVCorroboration {
       
       // Skip search if not applicable
       if (result.eventClass === 'NOT_APPLICABLE') {
-        result.note = 'Content type not suitable for broadcast corroboration';
+        result.note = 'Content type not suitable for news corroboration';
         return result;
       }
 
@@ -86,7 +86,7 @@ class TVCorroboration {
 
     } catch (error) {
       result.error = error.message;
-      result.note = 'Broadcast archive search temporarily unavailable';
+      result.note = 'News archive search temporarily unavailable';
       console.error('TV Corroboration error:', error.message);
     }
 
@@ -285,7 +285,7 @@ class TVCorroboration {
     url.searchParams.set('timespan', '14d');
     // Date range handled by timespan
     
-    console.log(`📺 TV Corroboration search: ${query}`);
+    console.log(`📰 News Corroboration search: ${query}`);
     console.log(`   Date range: ${dateRange.start} to ${dateRange.end}`);
     
     try {
@@ -317,7 +317,7 @@ class TVCorroboration {
         clips = data.articles;
       }
       
-      console.log(`   Found ${clips.length} broadcast clips`);
+      console.log(`   Found ${clips.length} news articles`);
       
       return { clips };
       
@@ -343,12 +343,12 @@ class TVCorroboration {
     return clips.slice(0, 10).map(clip => {
       // GDELT clip structure varies - normalize it
       const processed = {
-        station: clip.station || clip.source || 'Unknown',
-        show: clip.show || clip.title || 'Unknown',
-        date: clip.date || clip.airdate || clip.published,
+        source: clip.domain || clip.station || clip.source || 'Unknown',
+        title: clip.title || clip.show || 'Unknown',
+        date: clip.seendate || clip.date || clip.airdate || clip.published,
         snippet: clip.snippet || clip.text || clip.description || '',
         url: clip.url || clip.show_url || clip.ia_show_url || null,
-        thumbnail: clip.preview_thumb || clip.thumbnail || null
+        thumbnail: clip.socialimage || clip.preview_thumb || clip.thumbnail || null
       };
       
       // Calculate relevance score for this clip
@@ -447,13 +447,13 @@ class TVCorroboration {
   getNoResultsNote(eventClass) {
     switch (eventClass) {
       case 'CERTAIN_COVERAGE':
-        return 'No broadcast coverage found. For this event type, absence of coverage may warrant further investigation.';
+        return 'No news coverage found. For this event type, absence of coverage may warrant further investigation.';
       case 'PROBABLE_COVERAGE':
-        return 'No broadcast coverage found. This may indicate a local event not picked up by monitored stations.';
+        return 'No news coverage found. This may indicate a local event not picked up by monitored stations.';
       case 'UNLIKELY_COVERAGE':
-        return 'No broadcast coverage found. This is expected for this type of content.';
+        return 'No news coverage found. This is expected for this type of content.';
       default:
-        return 'No broadcast coverage found.';
+        return 'No news coverage found.';
     }
   }
 
