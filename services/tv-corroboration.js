@@ -16,7 +16,7 @@ const fetch = require('node-fetch');
 
 class TVCorroboration {
   constructor() {
-    this.baseUrl = 'https://api.gdeltproject.org/api/v2/tv/tv';
+    this.baseUrl = 'https://api.gdeltproject.org/api/v2/doc/doc';
     this.timeout = 15000; // 15 second timeout
     this.maxRetries = 2;
   }
@@ -278,12 +278,12 @@ class TVCorroboration {
    */
   async executeSearch(query, dateRange, retryCount = 0) {
     const url = new URL(this.baseUrl);
-    url.searchParams.set('query', `${query} market:"National"`);
-    url.searchParams.set('mode', 'clipgallery');
+    url.searchParams.set('query', `${query}`);
+    url.searchParams.set('mode', 'artlist');
     url.searchParams.set('format', 'json');
     url.searchParams.set('maxrecords', '25');
-    url.searchParams.set('STARTDATETIME', dateRange.start);
-    url.searchParams.set('ENDDATETIME', dateRange.end);
+    url.searchParams.set('timespan', '14d');
+    // Date range handled by timespan
     
     console.log(`📺 TV Corroboration search: ${query}`);
     console.log(`   Date range: ${dateRange.start} to ${dateRange.end}`);
