@@ -731,7 +731,24 @@ app.post('/verify-remote', async (req, res) => {
     } catch (err) {
       console.error('⚠️ Database search error:', err.message);
     }
-
+// ============================================
+    // STEP 2.5: Provenance check
+    // ============================================
+    let provenanceResult = null;
+    try {
+      provenanceResult = await ProvenanceService.checkAndRecordProvenance(
+        fingerprint,
+        'url_submission',
+        file_url || url
+      );
+      if (provenanceResult.is_original) {
+        console.log('   ✅ Original content (first submission)');
+      } else {
+        console.log(`   🔀 Similar content found: ${provenanceResult.similar_content.length} matches`);
+      }
+    } catch (err) {
+      console.error('⚠️ Provenance check error:', err.message);
+    }
     // ============================================
     // STEP 3: Blockchain timestamping (if new)
     // ============================================
@@ -1767,7 +1784,7 @@ app.post('/verify-remote', async (req, res) => {
     // ============================================
     // STEP 17C: Provenance Check
     // ============================================
-    let provenanceResult = null;
+    
     try {
       console.log('🔗 Checking content provenance...');
       const isScreenshot = screenshotDetection?.is_screenshot || false;
