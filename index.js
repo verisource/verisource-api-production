@@ -2180,7 +2180,32 @@ app.post('/verify-url', async (req, res) => {
         } catch (enhancedErr) {
           console.log('Enhanced analysis error:', enhancedErr.message);
         }
-        
+        // Sightengine verification for platform content
+let sightengineVerification = null;
+if (download.platform && download.platform !== 'Direct URL') {
+  try {
+    console.log('🔍 Running Sightengine verification...');
+    const sightengineResult = await sightengineDetector.detectAI(filePath);
+    sightengineVerification = {
+      checked: true,
+      isAI: sightengineResult.isAI,
+      confidence: sightengineResult.confidence * 100,
+      local_confidence: videoAnalysis.ai_confidence || 0,
+      agreement: sightengineResult.isAI === ((videoAnalysis.ai_confidence || 0) >= 50)
+    };
+    console.log(`   Sightengine: ${sightengineResult.isAI ? 'AI' : 'Authentic'} (${(sightengineResult.confidence * 100).toFixed(1)}%)`);
+    
+    // If Sightengine says authentic but local says AI, trust Sightengine for platform content
+    if (!sightengineResult.isAI && sightengineVerification.local_confidence >= 50) {
+      console.log('   ⚠️ Platform override: Sightengine says authentic, reducing local score');
+      videoAnalysis.ai_confidence = Math.min(40, sightengineResult.confidence * 100);
+      videoAnalysis.analysis.sightengine_override = true;
+    }
+  } catch (sightengineErr) {
+    console.warn('   Sightengine error:', sightengineErr.message);
+    sightengineVerification = { checked: false, error: sightengineErr.message };
+  }
+}
         aiDetection = {
           ai_confidence: videoAnalysis.ai_confidence || videoAnalysis.analysis?.aiPercentage || 0,
           likely_ai_generated: (videoAnalysis.ai_confidence || 0) >= 50 || videoAnalysis.analysis?.verdict === 'LIKELY_AI_GENERATED',
