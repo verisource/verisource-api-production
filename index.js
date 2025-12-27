@@ -2312,7 +2312,17 @@ app.post('/verify', upload.single('file'), async (req, res) => {
     } catch (err) {
       console.error('⚠️ Database search error:', err.message);
     }
-
+// Provenance check
+    let provenanceResult = null;
+    try {
+      provenanceResult = await ProvenanceService.checkAndRecordProvenance(
+        fingerprint,
+        'file_upload',
+        req.file.originalname
+      );
+    } catch (err) {
+      console.error('⚠️ Provenance check error:', err.message);
+    }
     // Only timestamp if NEW (not previously verified)
     let blockchainVerification = null;
     let polygonVerification = null;
