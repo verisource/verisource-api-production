@@ -278,7 +278,7 @@ class TVCorroboration {
    */
   async executeSearch(query, dateRange, retryCount = 0) {
     const url = new URL(this.baseUrl);
-    url.searchParams.set('query', query);
+    url.searchParams.set('query', `${query} market:"National"`);
     url.searchParams.set('mode', 'clipgallery');
     url.searchParams.set('format', 'json');
     url.searchParams.set('maxrecords', '25');
