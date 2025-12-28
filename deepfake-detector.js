@@ -296,6 +296,15 @@ async function analyzeForDeepfakes(framePaths, tempDir) {
       // Phase 1: Analyze face region with AI detector
       const aiResult = await detectAIGeneration(faceImagePath);
       
+      let sightengineResult = null;
+      if (process.env.SIGHTENGINE_API_USER) {
+        try {
+          const sightengineDetector = require('./services/sightengine-ai-detection');
+          sightengineResult = await sightengineDetector.detectAI(faceImagePath);
+        } catch (err) {
+          // Sightengine failed, continue with local only
+        }
+      }
       if (aiResult.likely_ai_generated || aiResult.ai_confidence > 65) {
         aiFaces++;
         deepfakeIndicators.push(`Face ${totalFaces}: AI-generated (${aiResult.ai_confidence}% confidence)`);
