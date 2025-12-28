@@ -2270,7 +2270,7 @@ if (download.platform && download.platform !== 'Direct URL') {
     // If Sightengine says authentic but local says AI, trust Sightengine for platform content
     if (!sightengineResult.isAI && sightengineVerification.local_confidence >= 50) {
       console.log('   ⚠️ Platform override: Sightengine says authentic, reducing local score');
-      videoAnalysis.ai_confidence = Math.min(40, sightengineResult.confidence * 100);
+      videoAnalysis.ai_confidence = sightengineResult.confidence * 100;
       videoAnalysis.analysis.sightengine_override = true;
       videoAnalysis.analysis.verdict = 'LIKELY_AUTHENTIC';
     }
