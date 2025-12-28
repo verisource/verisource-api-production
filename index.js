@@ -28,6 +28,7 @@ const PlatformDetection = require('./services/platform-signature-detection');
 const FeatureLogger = require('./services/feature-logger');
 const ProvenanceService = require('./services/provenance-service');
 const tvCorroboration = require('./services/tv-corroboration');
+const { buildProvenanceTimeline } = require('./services/provenance-timeline');
 // Import canonicalization only (workers not needed for minimal endpoint)
 let canonicalizeImage;
 try { 
@@ -1943,6 +1944,35 @@ app.post('/verify-remote', async (req, res) => {
 
     // ============================================
     // STEP 22: Build and Send Response
+    // Build provenance timeline
+    const provenanceTimeline = buildProvenanceTimeline({
+      exif: exifData ? {
+        date_taken: (() => {
+          const ts = exifData.DateTimeOriginal || exifData.CreateDate || exifData.DateTime;
+          if (!ts) return null;
+          if (typeof ts === "number") return new Date(ts * 1000).toISOString();
+          return ts;
+        })(),
+        camera_make: exifData.Make || null,
+        camera_model: exifData.Model || null,
+        gps: (exifData.GPSLatitude && exifData.GPSLongitude) ? {
+          latitude: exifData.GPSLatitude,
+          longitude: exifData.GPSLongitude
+        } : null
+      } : null,
+      platform_detection: platformDetection,
+      tv_corroboration: tvCorroborationResult,
+      verification: {
+        status: searchResults.found ? "PREVIOUSLY_VERIFIED" : "NEW_UPLOAD",
+        first_seen: searchResults.found ? searchResults.first_seen : null,
+        times_verified: searchResults.found ? searchResults.total_verifications : 1
+      },
+      blockchain_verification: blockchainVerification,
+      polygon_verification: polygonVerification,
+      reverse_image_search: reverseSearchResults,
+      verified_at: new Date().toISOString()
+    });
+
     // ============================================
     const response = {
       kind: kind,
@@ -2014,6 +2044,7 @@ app.post('/verify-remote', async (req, res) => {
       virustotal: virusTotalResult,
       ...(tvCorroborationResult && { tv_corroboration: tvCorroborationResult }),
       confidence: confidence,
+      provenance_timeline: provenanceTimeline,
       verified_at: new Date().toISOString()
     };
 
