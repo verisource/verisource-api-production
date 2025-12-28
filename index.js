@@ -15,6 +15,7 @@ const { searchByFingerprint, saveVerification } = require('./search');
 const c2paVerification = require('./services/c2pa-verification');
 const shadowPhysics = require('./services/shadow-physics-verification');
 const reverseImageSearch = require('./services/reverse-image-search');
+const videoReverseSearch = require('./services/video-reverse-search');
 const deepfakeDetection = require('./services/deepfake-detection');
 const stockPhotoDetection = require('./services/stock-photo-detection');
 const CameraValidation = require('./services/camera-validation');
@@ -2320,7 +2321,27 @@ if (download.platform && download.platform !== 'Direct URL') {
         console.error('Video analysis error:', err.message);
       }
     }
-    
+    // Video reverse search (find if content exists online)
+        let videoReverseSearchResults = null;
+        if (kind === 'video') {
+          try {
+            console.log('🔎 Running video reverse search...');
+            videoReverseSearchResults = await videoReverseSearch.searchVideo(filePath, {
+              maxFrames: 5,
+              duration: download.metadata?.duration,
+              platform: download.platform
+            });
+            if (videoReverseSearchResults.success) {
+              console.log(`   Found ${videoReverseSearchResults.matches_found} matches across ${videoReverseSearchResults.frames_analyzed} frames`);
+              if (videoReverseSearchResults.earliest_appearance) {
+                console.log(`   Earliest appearance: ${videoReverseSearchResults.earliest_appearance}`);
+              }
+            }
+          } catch (reverseErr) {
+            console.warn('   Video reverse search error:', reverseErr.message);
+            videoReverseSearchResults = { success: false, error: reverseErr.message };
+          }
+        }
     // 4. Blockchain timestamping
     let blockchainVerification = null;
     let polygonVerification = null;
@@ -2387,6 +2408,7 @@ if (download.platform && download.platform !== 'Direct URL') {
       ai_detection: aiDetection,
       blockchain_verification: blockchainVerification,
       polygon_verification: polygonVerification,
+      reverse_search: videoReverseSearchResults,
       confidence
     });
     
