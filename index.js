@@ -2257,7 +2257,37 @@ let sightengineVerification = null;
 if (download.platform && download.platform !== 'Direct URL') {
   try {
     console.log('🔍 Running Sightengine verification...');
-    const sightengineResult = await sightengineDetector.detectAI(filePath);
+    
+    // Extract and resize a frame for Sightengine (it only accepts images, not video)
+    const sightengineFramePath = `/tmp/sightengine-frame-${Date.now()}.jpg`;
+    const ffmpeg = require('fluent-ffmpeg');
+    const sharp = require('sharp');
+    
+    // Extract middle frame
+    const middleTime = (download.duration || 10) / 2;
+    await new Promise((resolve, reject) => {
+      ffmpeg(filePath)
+        .on('end', resolve)
+        .on('error', reject)
+        .screenshots({
+          timestamps: [middleTime],
+          filename: 'temp-frame.jpg',
+          folder: '/tmp'
+        });
+    });
+    
+    // Resize to max 1024px to avoid 413 error
+    await sharp('/tmp/temp-frame.jpg')
+      .resize(1024, 1024, { fit: 'inside', withoutEnlargement: true })
+      .jpeg({ quality: 85 })
+      .toFile(sightengineFramePath);
+    
+    const sightengineResult = await sightengineDetector.detectAI(sightengineFramePath);
+    
+    // Cleanup
+    try { fs.unlinkSync('/tmp/temp-frame.jpg'); } catch(e) {}
+    try { fs.unlinkSync(sightengineFramePath); } catch(e) {}
+    
     sightengineVerification = {
       checked: true,
       isAI: sightengineResult.isAI,
