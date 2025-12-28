@@ -177,56 +177,66 @@ class VideoReverseSearchService {
     
     console.log(`   Extracted ${extraction.frames.length} key frames`);
     
-    // Step 2: Run reverse search on each frame
+    // Step 2: Run reverse search on ALL frames in PARALLEL
+    console.log(`   Searching ${extraction.frames.length} frames in parallel...`);
+    
+    const searchPromises = extraction.frames.map((frame, i) => {
+      return reverseImageSearch.search(frame.buffer, {
+        tineye: includeServices.includes('tineye') ? {} : null,
+        bing: includeServices.includes('bing') ? {} : null,
+        google: includeServices.includes('google') ? {} : null
+      }).then(searchResult => {
+        return { index: i, frame, searchResult, error: null };
+      }).catch(err => {
+        return { index: i, frame, searchResult: null, error: err.message };
+      });
+    });
+    
+    const searchResults = await Promise.all(searchPromises);
+    
+    // Process results
     const frameResults = [];
     let totalMatches = 0;
     let earliestDate = null;
     const allSources = [];
     
-    for (let i = 0; i < extraction.frames.length; i++) {
-      const frame = extraction.frames[i];
-      console.log(`   Searching frame ${i + 1}/${extraction.frames.length}...`);
+    for (const result of searchResults) {
+      const { index, frame, searchResult, error } = result;
       
-      try {
-        const searchResult = await reverseImageSearch.search(frame.buffer, {
-          tineye: includeServices.includes('tineye') ? {} : null,
-          bing: includeServices.includes('bing') ? {} : null,
-          google: includeServices.includes('google') ? {} : null
-        });
-        
-        const frameMatches = this.extractMatches(searchResult);
-        
+      if (error) {
+        console.log(`   Frame ${index + 1} search error: ${error}`);
         frameResults.push({
-          frame: i + 1,
-          timestamp: frame.timestamp,
-          matches: frameMatches.length,
-          sources: frameMatches.slice(0, 5) // Top 5 per frame
-        });
-        
-        totalMatches += frameMatches.length;
-        
-        // Track earliest date
-        for (const match of frameMatches) {
-          if (match.date) {
-            const matchDate = new Date(match.date);
-            if (!earliestDate || matchDate < earliestDate) {
-              earliestDate = matchDate;
-            }
-          }
-          allSources.push(match);
-        }
-        
-      } catch (err) {
-        console.log(`   Frame ${i + 1} search error: ${err.message}`);
-        frameResults.push({
-          frame: i + 1,
+          frame: index + 1,
           timestamp: frame.timestamp,
           matches: 0,
-          error: err.message
+          error
         });
+        continue;
+      }
+      
+      const frameMatches = this.extractMatches(searchResult);
+      
+      frameResults.push({
+        frame: index + 1,
+        timestamp: frame.timestamp,
+        matches: frameMatches.length,
+        sources: frameMatches.slice(0, 5)
+      });
+      
+      totalMatches += frameMatches.length;
+      
+      for (const match of frameMatches) {
+        if (match.date) {
+          const matchDate = new Date(match.date);
+          if (!earliestDate || matchDate < earliestDate) {
+            earliestDate = matchDate;
+          }
+        }
+        allSources.push(match);
       }
     }
     
+    console.log(`   Parallel search complete: ${totalMatches} matches found`); 
     // Cleanup temp files
     if (extraction.tempDir) {
       try { fs.rmSync(extraction.tempDir, { recursive: true, force: true }); } catch(e) {}
