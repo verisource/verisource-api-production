@@ -27,30 +27,26 @@ class GoogleReverseSearchService {
    */
   async search(imageBuffer, options = {}) {
     if (this.sandboxMode) {
-      return this.getMockResults(imageBuffer);
+     return this.getMockResults(imageBuffer);
     }
-
     try {
       const fetch = (await import('node-fetch')).default;
-      const FormData = (await import('form-data')).default;
       
-      // Create form data with image file
-      const formData = new FormData();
-      formData.append('engine', 'google_reverse_image');
-      formData.append('api_key', this.apiKey);
-      formData.append('hl', options.language || 'en');
-      formData.append('gl', options.country || 'us');
+      // SerpAPI requires base64 image in URL params, not POST upload
+      const base64Image = imageBuffer.toString('base64');
+      const imageDataUrl = `data:image/jpeg;base64,${base64Image}`;
       
-      // Append image as file (not base64 in URL)
-      formData.append('image', imageBuffer, {
-        filename: 'image.jpg',
-        contentType: 'image/jpeg'
+      // Build URL with parameters
+      const params = new URLSearchParams({
+        engine: 'google_reverse_image',
+        api_key: this.apiKey,
+        image_url: imageDataUrl,
+        hl: options.language || 'en',
+        gl: options.country || 'us'
       });
-
-      const response = await fetch(this.endpoint, {
-        method: 'POST',
-        body: formData,
-        headers: formData.getHeaders(),
+      
+      const response = await fetch(`${this.endpoint}?${params.toString()}`, {
+        method: 'GET',
         timeout: 45000
       });
 
