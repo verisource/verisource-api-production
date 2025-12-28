@@ -259,18 +259,18 @@ class VideoReverseSearchService {
   extractMatches(searchResult) {
     const matches = [];
     
-    // TinEye matches
-    if (searchResult.tineye?.matches) {
-      for (const match of searchResult.tineye.matches) {
+   // TinEye matches
+    if (searchResult.tineye?.top_matches) {
+      for (const match of searchResult.tineye.top_matches) {
         matches.push({
           source: 'tineye',
-          url: match.backlinks?.[0]?.url || match.image_url,
-          domain: match.domain || this.extractDomain(match.backlinks?.[0]?.url),
-          date: match.backlinks?.[0]?.crawl_date || match.first_found,
-          title: match.backlinks?.[0]?.title
+          url: match.url,
+          domain: match.domain,
+          date: match.crawl_date,
+          title: null
         });
       }
-    }
+    } 
     
     // Bing matches
     if (searchResult.bing?.similar_images) {
