@@ -263,16 +263,19 @@ class TinEyeSearchService {
         source_domain: mostRecent.domain || this.extractDomain(mostRecent.page_url)
       } : null,
 
-      top_matches: sortedMatches.slice(0, 10).map(match => ({
-        url: match.page_url,
-        domain: match.domain || this.extractDomain(match.page_url),
-        crawl_date: match.crawl_date,
-        image_url: match.image_url,
-        match_percentage: match.score ? Math.round(match.score) : 100,
-        backlinks: match.backlinks || 0,
-        width: match.width,
-        height: match.height
-      })),
+      top_matches: sortedMatches.slice(0, 10).map(match => {
+        const firstBacklink = Array.isArray(match.backlinks) && match.backlinks[0];
+        return {
+          url: match.page_url || (firstBacklink && firstBacklink.backlink) || null,
+          domain: match.domain || this.extractDomain(match.page_url || (firstBacklink && firstBacklink.backlink)),
+          crawl_date: match.crawl_date || (firstBacklink && firstBacklink.crawl_date) || null,
+          image_url: match.image_url,
+          match_percentage: match.score ? Math.round(match.score) : 100,
+          backlinks: Array.isArray(match.backlinks) ? match.backlinks.length : 0,
+          width: match.width,
+          height: match.height
+        };
+      }),
 
       domain_breakdown: domainTypes,
       top_domains: Object.entries(domainCounts)
