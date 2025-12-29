@@ -114,7 +114,7 @@ class ReverseImageSearchService {
     results.performance.total_time_ms = Date.now() - startTime;
 
     // Check Wayback Machine for historical archives of found URLs
-    if (results.tineye?.status === "found" && results.tineye?.top_matches?.length > 0) {
+    if (false && results.tineye?.status === "found" && results.tineye?.top_matches?.length > 0) { // DISABLED: Wayback unreliable
       const waybackStart = Date.now();
       try {
         // Collect URLs from TinEye results
