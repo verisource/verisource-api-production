@@ -181,10 +181,8 @@ class VideoReverseSearchService {
     console.log(`   Searching ${extraction.frames.length} frames in parallel...`);
     
     const searchPromises = extraction.frames.map((frame, i) => {
-      return reverseImageSearch.search(frame.buffer, {
-        tineye: includeServices.includes('tineye') ? {} : null,
-        bing: includeServices.includes('bing') ? {} : null,
-        google: includeServices.includes('google') ? {} : null
+     return reverseImageSearch.search(frame.buffer, {
+        services: includeServices
       }).then(searchResult => {
         return { index: i, frame, searchResult, error: null };
       }).catch(err => {
