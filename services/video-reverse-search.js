@@ -149,7 +149,7 @@ class VideoReverseSearchService {
       maxFrames = 5,
       duration = null,
       platform = null,
-      includeServices = ['tineye', 'bing', 'google']
+      includeServices = ['tineye']
     } = options;
     
     const startTime = Date.now();
