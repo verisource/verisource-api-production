@@ -272,13 +272,13 @@ class VideoReverseSearchService {
       for (const match of searchResult.tineye.top_matches) {
         matches.push({
           source: 'tineye',
-          url: match.url,
-          domain: match.domain,
-          date: match.crawl_date,
+          url: match.url || null,
+          domain: match.domain || null,
+          date: match.crawl_date || null,
           title: null
         });
       }
-    } 
+    }
     
     // Bing matches
     if (searchResult.bing?.similar_images) {
