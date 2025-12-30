@@ -1,0 +1,1 @@
+require('./bluesky-worker.js');
