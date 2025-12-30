@@ -182,15 +182,10 @@ class VideoReverseSearchService {
         services: includeServices
       });
       
-    const visionPromise = (async () => {
-  console.log(`   🔍 Calling Vision API for frame ${i + 1}...`);
-  const result = await analyzeImage(frame.buffer);
-  console.log(`   ✅ Vision API returned for frame ${i + 1}: ${result?.results?.landmarks?.length || 0} landmarks`);
-  return result;
-})().catch(err => {
-  console.log(`   ❌ Frame ${i + 1} vision error: ${err.message}`);
-  return null;
-});  
+   const visionPromise = analyzeImage(frame.buffer).catch(err => {
+        console.log(`   Frame ${i + 1} vision error: ${err.message}`);
+        return null;
+      });
       
       return Promise.all([reversePromise, visionPromise])
         .then(([searchResult, visionResult]) => {

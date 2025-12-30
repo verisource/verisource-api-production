@@ -92,6 +92,36 @@ function buildProvenanceTimeline(data) {
     timeline.push(...searchResults);
   }
   
+  // 4.5. Landmark detections from video frames
+  if (data.reverse_search?.landmarks?.length > 0) {
+    const landmarkEvents = data.reverse_search.landmarks
+      .map(landmark => ({
+        type: 'LANDMARK_DETECTED',
+        timestamp: data.verified_at || new Date().toISOString(),
+        icon: '📍',
+        label: 'Landmark Detected',
+        source: landmark.name,
+        details: landmark.location?.lat && landmark.location?.lng
+          ? `${landmark.location.lat.toFixed(3)}, ${landmark.location.lng.toFixed(3)} • ${Math.round(landmark.confidence * 100)}% match`
+          : `Frame ${landmark.frame} • ${Math.round(landmark.confidence * 100)}% match`,
+        url: null,
+        relevance: landmark.confidence
+      }));
+    
+    // Deduplicate by landmark name (keep highest confidence)
+    const uniqueLandmarks = [];
+    const seenNames = new Set();
+    landmarkEvents
+      .sort((a, b) => (b.relevance || 0) - (a.relevance || 0))
+      .forEach(event => {
+        if (!seenNames.has(event.source)) {
+          seenNames.add(event.source);
+          uniqueLandmarks.push(event);
+        }
+      });
+    
+    timeline.push(...uniqueLandmarks.slice(0, 5)); // Top 5 unique landmarks
+  }
   // 5. First verification (if previously seen)
   if (data.verification?.status === 'PREVIOUSLY_VERIFIED' && data.verification?.first_seen) {
     timeline.push({
