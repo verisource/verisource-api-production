@@ -2342,6 +2342,24 @@ if (download.platform && download.platform !== 'Direct URL') {
             videoReverseSearchResults = { success: false, error: reverseErr.message };
           }
         }
+       // 3.5 TV/News Corroboration
+    let tvCorroborationResult = null;
+    if (kind === 'video' && download.metadata?.title) {
+      try {
+        console.log('📺 Running news corroboration...');
+        tvCorroborationResult = await tvCorroboration.search({
+          query: download.metadata.title,
+          timeframe: '7d',
+          maxResults: 10
+        });
+        if (tvCorroborationResult.found) {
+          console.log(`   Found ${tvCorroborationResult.resultCount} news sources`);
+        }
+      } catch (tvErr) {
+        console.warn('   TV corroboration error:', tvErr.message);
+        tvCorroborationResult = { found: false, error: tvErr.message };
+      }
+    } 
     // 4. Blockchain timestamping
     let blockchainVerification = null;
     let polygonVerification = null;
@@ -2390,6 +2408,7 @@ if (download.platform && download.platform !== 'Direct URL') {
         times_verified: searchResults.found ? searchResults.total_verifications : 1
       },
       reverse_search: videoReverseSearchResults,
+      tv_corroboration: tvCorroborationResult,
       blockchain_verification: blockchainVerification,
       polygon_verification: polygonVerification,
       verified_at: new Date().toISOString()
@@ -2422,6 +2441,7 @@ if (download.platform && download.platform !== 'Direct URL') {
       blockchain_verification: blockchainVerification,
       polygon_verification: polygonVerification,
       reverse_search: videoReverseSearchResults,
+      tv_corroboration: tvCorroborationResult,
       provenance_timeline: provenanceTimeline,
       confidence
     });
