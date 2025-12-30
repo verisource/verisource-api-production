@@ -10,6 +10,7 @@ const os = require('os');
 const ffmpeg = require('fluent-ffmpeg');
 const sharp = require('sharp');
 const reverseImageSearch = require('./reverse-image-search');
+const { analyzeImage } = require('./google-vision-search');
 
 class VideoReverseSearchService {
   
@@ -180,15 +181,25 @@ class VideoReverseSearchService {
     // Step 2: Run reverse search on ALL frames in PARALLEL
     console.log(`   Searching ${extraction.frames.length} frames in parallel...`);
     
-    const searchPromises = extraction.frames.map((frame, i) => {
-     return reverseImageSearch.search(frame.buffer, {
+   const searchPromises = extraction.frames.map((frame, i) => {
+      // Run reverse search AND Google Vision in parallel
+      const reversePromise = reverseImageSearch.search(frame.buffer, {
         services: includeServices
-      }).then(searchResult => {
-        return { index: i, frame, searchResult, error: null };
-      }).catch(err => {
-        return { index: i, frame, searchResult: null, error: err.message };
       });
-    });
+      
+      const visionPromise = analyzeImage(frame.buffer).catch(err => {
+        console.log(`   Frame ${i + 1} vision error: ${err.message}`);
+        return null;
+      });
+      
+      return Promise.all([reversePromise, visionPromise])
+        .then(([searchResult, visionResult]) => {
+          return { index: i, frame, searchResult, visionResult, error: null };
+        })
+        .catch(err => {
+          return { index: i, frame, searchResult: null, visionResult: null, error: err.message };
+        });
+    }); 
     
     const searchResults = await Promise.all(searchPromises);
     
@@ -197,9 +208,23 @@ class VideoReverseSearchService {
     let totalMatches = 0;
     let earliestDate = null;
     const allSources = [];
+    const allLandmarks = [];
     
     for (const result of searchResults) {
-      const { index, frame, searchResult, error } = result;
+      const { index, frame, searchResult, visionResult, error } = result;
+
+// Extract landmarks from this frame
+if (visionResult?.results?.landmarks?.length > 0) {
+  for (const landmark of visionResult.results.landmarks) {
+    allLandmarks.push({
+      frame: index + 1,
+      timestamp: frame.timestamp,
+      name: landmark.description,
+      confidence: landmark.score,
+      location: landmark.locations?.[0]?.latLng || null
+    });
+  }
+}
       
       if (error) {
         console.log(`   Frame ${index + 1} search error: ${error}`);
@@ -257,6 +282,7 @@ class VideoReverseSearchService {
       frame_results: frameResults,
       top_sources: analysis.uniqueSources.slice(0, 10),
       platforms_found: analysis.platforms,
+      landmarks: allLandmarks,
       search_time_ms: elapsed
     };
   }
