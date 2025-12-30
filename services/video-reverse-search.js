@@ -10,7 +10,7 @@ const os = require('os');
 const ffmpeg = require('fluent-ffmpeg');
 const sharp = require('sharp');
 const reverseImageSearch = require('./reverse-image-search');
-const { analyzeImage } = require('./google-vision-search');
+const { analyzeImage } = require('../google-vision-search');
 
 class VideoReverseSearchService {
   
