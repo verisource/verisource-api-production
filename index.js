@@ -2382,6 +2382,19 @@ if (download.platform && download.platform !== 'Direct URL') {
     console.log('DEBUG confidenceData:', JSON.stringify({ kind: confidenceData.kind, mediaType: confidenceData.mediaType }));
     console.log(`✅ Confidence: ${confidence.level} (${confidence.percentage}%)`);
     
+    // 8. Build provenance timeline
+    const provenanceTimeline = buildProvenanceTimeline({
+      verification: {
+        status: searchResults.found ? 'PREVIOUSLY_VERIFIED' : 'NEW_UPLOAD',
+        first_seen: searchResults.found ? searchResults.first_seen : null,
+        times_verified: searchResults.found ? searchResults.total_verifications : 1
+      },
+      reverse_search: videoReverseSearchResults,
+      blockchain_verification: blockchainVerification,
+      polygon_verification: polygonVerification,
+      verified_at: new Date().toISOString()
+    });
+
     // 7. Return response
     res.json({
       kind,
@@ -2409,6 +2422,7 @@ if (download.platform && download.platform !== 'Direct URL') {
       blockchain_verification: blockchainVerification,
       polygon_verification: polygonVerification,
       reverse_search: videoReverseSearchResults,
+      provenance_timeline: provenanceTimeline,
       confidence
     });
     
