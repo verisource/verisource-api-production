@@ -33,13 +33,8 @@ class VideoReverseSearchService {
       const videoDuration = duration || await this.getVideoDuration(videoPath);
       const isShortVideo = isShort || videoDuration <= 60;
       
-      if (isShortVideo) {
-        // For shorts: use scene detection to catch different clips
-        await this.extractSceneFrames(videoPath, tempDir, maxFrames);
-      } else {
-        // For longer videos: fixed intervals
-        await this.extractIntervalFrames(videoPath, tempDir, videoDuration, maxFrames);
-      }
+     // Always use interval extraction (scene detection unreliable for some videos)
+     await this.extractIntervalFrames(videoPath, tempDir, videoDuration, maxFrames); 
       
       // Read extracted frames
       const frameFiles = fs.readdirSync(tempDir)
