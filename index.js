@@ -2347,11 +2347,11 @@ if (download.platform && download.platform !== 'Direct URL') {
     if (kind === 'video' && download.metadata?.title) {
       try {
         console.log('📺 Running news corroboration...');
-        tvCorroborationResult = await tvCorroboration.search({
-          query: download.metadata.title,
-          timeframe: '7d',
-          maxResults: 10
-        });
+       tvCorroborationResult = await tvCorroboration.search({
+  description: download.metadata.title,
+  timeframe: '7d',
+  maxResults: 10
+});
         if (tvCorroborationResult.found) {
           console.log(`   Found ${tvCorroborationResult.resultCount} news sources`);
         }
