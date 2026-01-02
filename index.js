@@ -49,6 +49,7 @@ const { generatePHash, searchSimilarImages } = require('./phash-module');
 const { analyzeCrossReference, analyzeTemporalConsistency, cacheExternalSearchResults, analyzeExternalSources } = require('./services/fingerprint-index');
 const ConfidenceScoring = require('./services/confidence-scoring');
 const ChromaprintService = require('./services/chromaprint');
+const VideoAudioFingerprint = require('./services/video-audio-fingerprint');
 const acoustid = require('./acoustid-integration');
 const WeatherVerification = require('./services/weather-verification');
 const LandmarkVerification = require('./services/landmark-verification');
@@ -1624,6 +1625,50 @@ app.post('/verify-remote', async (req, res) => {
               console.log('   Audio content error:', audioContentErr.message);
             }
             
+            // ============================================
+            // VIDEO AUDIO FINGERPRINTING
+            // ============================================
+            let videoAudioFingerprint = null;
+            let videoAudioMatches = null;
+            
+            if (audioAnalysis && audioAnalysis.hasAudio) {
+              try {
+                console.log('🎵 Running video audio fingerprint analysis...');
+                
+                const audioFpResult = await VideoAudioFingerprint.analyzeVideoAudio(
+                  tempFilePath,
+                  db,
+                  { 
+                    requestId: requestId,
+                    excludeFingerprint: fingerprint,
+                    threshold: 85
+                  }
+                );
+                
+                if (audioFpResult.success && audioFpResult.fingerprint) {
+                  videoAudioFingerprint = {
+                    fingerprint: audioFpResult.fingerprint,
+                    duration: audioFpResult.duration,
+                    extracted_from: audioFpResult.extracted_from,
+                    fingerprint_length: audioFpResult.fingerprint_length
+                  };
+                  
+                  videoAudioMatches = audioFpResult.matches;
+                  
+                  if (videoAudioMatches && videoAudioMatches.found) {
+                    console.log('   ⚠️ Audio match found: ' + videoAudioMatches.count + ' previous submissions');
+                  } else {
+                    console.log('   ✅ Audio is unique (not found in database)');
+                  }
+                } else if (!audioFpResult.has_audio) {
+                  console.log('   ℹ️ Video has no audio track to fingerprint');
+                }
+                
+              } catch (audioFpErr) {
+                console.error('⚠️ Video audio fingerprint error:', audioFpErr.message);
+              }
+            }
+ 
             console.log('📊 Applying enhanced video scoring...');
             videoAnalysis = applyEnhancedVideoScoring(
               videoAnalysis, encoderAnalysis, audioAnalysis, bitrateAnalysis,
@@ -1691,7 +1736,8 @@ app.post('/verify-remote', async (req, res) => {
         bitcoin_submitted_at: blockchainVerification?.submitted_at || null,
         phash: phash || null,
         phash_regions: phashRegions || null,
-        google_vision_labels: googleVisionResult?.results?.labels || []
+        google_vision_labels: googleVisionResult?.results?.labels || [],
+        audio_fingerprint: videoAudioFingerprint?.fingerprint || null
       });
       console.log('💾 Verification saved to database');
     } catch (err) {
@@ -2014,6 +2060,9 @@ app.post('/verify-remote', async (req, res) => {
       ...(kind === 'video' && videoAnalysis && {
         video_analysis: videoAnalysis
       }),
+
+      video_audio_fingerprint: videoAudioFingerprint || null,
+      video_audio_matches: videoAudioMatches || null,
       ...(generatorDetection && { generator_detection: generatorDetection }),
       ...(kind === 'image' && googleVisionResult && { google_vision: googleVisionResult }),
       ...(kind === 'image' && weatherVerification && { weather_verification: weatherVerification }),
@@ -2233,6 +2282,50 @@ app.post('/verify-url', async (req, res) => {
             console.log('   Audio content error:', audioContentErr.message);
           }
           
+          // ============================================
+              // VIDEO AUDIO FINGERPRINTING
+              // ============================================
+              let videoAudioFingerprint = null;
+              let videoAudioMatches = null;
+              
+              if (audioAnalysis && audioAnalysis.hasAudio) {
+                try {
+                  console.log('🎵 Running video audio fingerprint analysis...');
+                  
+                  const audioFpResult = await VideoAudioFingerprint.analyzeVideoAudio(
+                    req.file.path,
+                    db,
+                    { 
+                      requestId: requestId,
+                      excludeFingerprint: fingerprint,
+                      threshold: 85
+                    }
+                  );
+                  
+                  if (audioFpResult.success && audioFpResult.fingerprint) {
+                    videoAudioFingerprint = {
+                      fingerprint: audioFpResult.fingerprint,
+                      duration: audioFpResult.duration,
+                      extracted_from: audioFpResult.extracted_from,
+                      fingerprint_length: audioFpResult.fingerprint_length
+                    };
+                    
+                    videoAudioMatches = audioFpResult.matches;
+                    
+                    if (videoAudioMatches && videoAudioMatches.found) {
+                      console.log('   ⚠️ Audio match found: ' + videoAudioMatches.count + ' previous submissions');
+                    } else {
+                      console.log('   ✅ Audio is unique (not found in database)');
+                    }
+                  } else if (!audioFpResult.has_audio) {
+                    console.log('   ℹ️ Video has no audio track to fingerprint');
+                  }
+                  
+                } catch (audioFpErr) {
+                  console.error('⚠️ Video audio fingerprint error:', audioFpErr.message);
+                }
+              }
+
           // 9. Apply enhanced combined scoring (all signals)
           console.log('📊 Applying enhanced video scoring...');
           videoAnalysis = applyEnhancedVideoScoring(
@@ -2387,7 +2480,8 @@ if (download.platform && download.platform !== 'Direct URL') {
       size_bytes: stats.size,
       kind,
       source_url: url,
-      platform: download.platform
+      platform: download.platform,
+      audio_fingerprint: videoAudioFingerprint?.fingerprint || chromaprint || null,
     });
     
     // 6. Calculate confidence score
@@ -3833,6 +3927,9 @@ module.exports = { applyHybridCameraRescue, calculateCameraAuthenticityScore };
       ...(kind === 'video' && videoAnalysis && {
         video_analysis: videoAnalysis
       }),
+
+      video_audio_fingerprint: videoAudioFingerprint || null,
+      video_audio_matches: videoAudioMatches || null,
       ...(generatorDetection && { generator_detection: generatorDetection }),
       ...(kind === 'image' && googleVisionResult && { google_vision: googleVisionResult }),
       ...(kind === 'image' && weatherVerification && { weather_verification: weatherVerification }),

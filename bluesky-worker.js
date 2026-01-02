@@ -4,10 +4,6 @@
  * Connects to Bluesky's Jetstream firehose, filters for posts with images,
  * downloads blobs, generates perceptual hashes, and stores to database.
  */
-console.log('ENV CHECK:', {
-  hasDbUrl: !!process.env.DATABASE_URL,
-  preview: process.env.DATABASE_URL?.substring(0, 25) + '...'
-});
 
 const WebSocket = require('ws');
 const sharp = require('sharp');
