@@ -669,6 +669,8 @@ app.post('/verify-remote', async (req, res) => {
   let imgMeta = null;
   let phash = null;
   let phashRegions = null;
+  let videoAudioFingerprint = null;
+  let videoAudioMatches = null;
   
   try {
     // ============================================
@@ -1628,8 +1630,6 @@ app.post('/verify-remote', async (req, res) => {
             // ============================================
             // VIDEO AUDIO FINGERPRINTING
             // ============================================
-            let videoAudioFingerprint = null;
-            let videoAudioMatches = null;
             
             if (audioAnalysis && audioAnalysis.hasAudio) {
               try {
@@ -2285,9 +2285,7 @@ app.post('/verify-url', async (req, res) => {
           // ============================================
               // VIDEO AUDIO FINGERPRINTING
               // ============================================
-              let videoAudioFingerprint = null;
-              let videoAudioMatches = null;
-              
+          
               if (audioAnalysis && audioAnalysis.hasAudio) {
                 try {
                   console.log('🎵 Running video audio fingerprint analysis...');
