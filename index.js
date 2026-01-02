@@ -672,6 +672,8 @@ app.post('/verify-remote', async (req, res) => {
   let phashRegions = null;
   let videoAudioFingerprint = null;
   let videoAudioMatches = null;
+  let voiceEmbedding = null;
+  let voiceMatches = null;
   
   try {
     // ============================================
@@ -1707,9 +1709,7 @@ app.post('/verify-remote', async (req, res) => {
             // VOICE EMBEDDING EXTRACTION
             // ============================================
             // ============================================
-            let voiceEmbedding = null;
-            let voiceMatches = null;
-            
+             
             if (audioAnalysis && audioAnalysis.hasAudio) {
               try {
                 console.log('🎤 Extracting voice embedding...');
