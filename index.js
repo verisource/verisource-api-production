@@ -1660,6 +1660,37 @@ app.post('/verify-remote', async (req, res) => {
                   } else {
                     console.log('   ✅ Audio is unique (not found in database)');
                   }
+
+                    // AcoustID music identification for video audio
+              if (acoustid.isConfigured()) {
+                try {
+                  console.log('🎵 Checking for known music in video audio...');
+                  const musicResult = await acoustid.identifyAudio(tempFilePath);
+                  
+                  if (musicResult.identified) {
+                    videoAudioFingerprint.music_identified = true;
+                    videoAudioFingerprint.music = {
+                      title: musicResult.recording.title,
+                      artist: musicResult.recording.artist,
+                      album: musicResult.recording.album || null,
+                      confidence: musicResult.confidence
+                    };
+                    console.log('   🎵 Music identified: ' + musicResult.recording.title + ' - ' + musicResult.recording.artist);
+                    
+                    // Flag as potential stock/known audio
+                    if (!videoAudioMatches) {
+                      videoAudioMatches = { found: false, flags: [] };
+                    }
+                    videoAudioMatches.music_detected = true;
+                    videoAudioMatches.music_info = videoAudioFingerprint.music;
+                  } else {
+                    console.log('   ✅ No known music detected (likely original audio)');
+                    videoAudioFingerprint.music_identified = false;
+                  }
+                } catch (musicErr) {
+                  console.log('   ⚠️ Music identification skipped: ' + musicErr.message);
+                }
+              }
                 } else if (!audioFpResult.has_audio) {
                   console.log('   ℹ️ Video has no audio track to fingerprint');
                 }
@@ -2315,6 +2346,37 @@ app.post('/verify-url', async (req, res) => {
                     } else {
                       console.log('   ✅ Audio is unique (not found in database)');
                     }
+
+                      // AcoustID music identification for video audio
+              if (acoustid.isConfigured()) {
+                try {
+                  console.log('🎵 Checking for known music in video audio...');
+                  const musicResult = await acoustid.identifyAudio(tempFilePath);
+                  
+                  if (musicResult.identified) {
+                    videoAudioFingerprint.music_identified = true;
+                    videoAudioFingerprint.music = {
+                      title: musicResult.recording.title,
+                      artist: musicResult.recording.artist,
+                      album: musicResult.recording.album || null,
+                      confidence: musicResult.confidence
+                    };
+                    console.log('   🎵 Music identified: ' + musicResult.recording.title + ' - ' + musicResult.recording.artist);
+                    
+                    // Flag as potential stock/known audio
+                    if (!videoAudioMatches) {
+                      videoAudioMatches = { found: false, flags: [] };
+                    }
+                    videoAudioMatches.music_detected = true;
+                    videoAudioMatches.music_info = videoAudioFingerprint.music;
+                  } else {
+                    console.log('   ✅ No known music detected (likely original audio)');
+                    videoAudioFingerprint.music_identified = false;
+                  }
+                } catch (musicErr) {
+                  console.log('   ⚠️ Music identification skipped: ' + musicErr.message);
+                }
+              }
                   } else if (!audioFpResult.has_audio) {
                     console.log('   ℹ️ Video has no audio track to fingerprint');
                   }
