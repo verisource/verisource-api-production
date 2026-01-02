@@ -28,6 +28,7 @@ const sightengineDetector = require('./services/sightengine-ai-detection');
 const PlatformDetection = require('./services/platform-signature-detection');
 const FeatureLogger = require('./services/feature-logger');
 const ProvenanceService = require('./services/provenance-service');
+const VoiceEmbeddingService = require('./services/voice-embedding-service');
 const tvCorroboration = require('./services/tv-corroboration');
 const { buildProvenanceTimeline } = require('./services/provenance-timeline');
 // Import canonicalization only (workers not needed for minimal endpoint)
@@ -1687,19 +1688,127 @@ app.post('/verify-remote', async (req, res) => {
                     console.log('   ✅ No known music detected (likely original audio)');
                     videoAudioFingerprint.music_identified = false;
                   }
-                } catch (musicErr) {
+                  
+               } catch (musicErr) {
                   console.log('   ⚠️ Music identification skipped: ' + musicErr.message);
                 }
               }
-                } else if (!audioFpResult.has_audio) {
-                  console.log('   ℹ️ Video has no audio track to fingerprint');
+              
+            } else if (!audioFpResult.has_audio) {
+              console.log('   ℹ️ Video has no audio track to fingerprint');
+            }
+            
+          } catch (audioFpErr) {
+            console.error('⚠️ Video audio fingerprint error:', audioFpErr.message);
+          }
+        }
+
+            // ============================================
+            // VOICE EMBEDDING EXTRACTION
+            // ============================================
+            // ============================================
+            let voiceEmbedding = null;
+            let voiceMatches = null;
+            
+            if (audioAnalysis && audioAnalysis.hasAudio) {
+              try {
+                console.log('🎤 Extracting voice embedding...');
+                
+                const embeddingResult = await VoiceEmbeddingService.extractEmbedding(
+                  tempFilePath,
+                  { requestId: requestId }
+                );
+                
+                if (embeddingResult.success) {
+                  voiceEmbedding = {
+                    embedding: embeddingResult.embedding,
+                    embedding_size: embeddingResult.embedding_size,
+                    method: embeddingResult.method,
+                    duration: embeddingResult.duration
+                  };
+                  console.log('   ✅ Voice embedding extracted (' + embeddingResult.method + ')');
+                  
+                  // Search for matching voices in database
+                  if (db) {
+                    console.log('🔍 Searching for voice matches...');
+                    voiceMatches = await VoiceEmbeddingService.searchVoiceMatches(
+                      embeddingResult.embedding,
+                      db,
+                      { threshold: 0.75, limit: 5 }
+                    );
+                    
+                    if (voiceMatches.found) {
+                      console.log('   ⚠️ Voice match found: ' + voiceMatches.count + ' similar voices');
+                      
+                      // Add to fraud indicators
+                      if (!crossReference) crossReference = {};
+                      if (!crossReference.fraud_indicators) {
+                        crossReference.fraud_indicators = { flags: [], risk_level: 'low' };
+                      }
+                      
+                      const topMatch = voiceMatches.matches[0];
+                      if (topMatch.interpretation === 'STRONG_MATCH') {
+                        crossReference.fraud_indicators.flags.push(
+                          'VOICE_MATCH: Strong voice match (' + topMatch.similarity_percent + '%) with claim ' + (topMatch.claim_id || topMatch.id)
+                        );
+                        crossReference.fraud_indicators.risk_level = 'high';
+                      } else if (topMatch.interpretation === 'LIKELY_MATCH') {
+                        crossReference.fraud_indicators.flags.push(
+                          'VOICE_SIMILAR: Likely voice match (' + topMatch.similarity_percent + '%) with prior submission'
+                        );
+                        if (crossReference.fraud_indicators.risk_level === 'low') {
+                          crossReference.fraud_indicators.risk_level = 'medium';
+                        }
+                      }
+                    } else {
+                      console.log('   ✅ No matching voices found (unique speaker)');
+                    }
+                  }
+                  
+                  // Store voice embedding in database
+                  if (db && voiceEmbedding) {
+                    try {
+                      // Sanitize filename using hash (no PII stored)
+                      const ext = path.extname(tempFileName).toLowerCase() || '.bin';
+                      const sanitizedFilename = 'audio_' + fingerprint.substring(0, 8) + ext;
+                      
+                      await db.query(`
+                        INSERT INTO voice_prints (
+                          verification_id,
+                          source_type,
+                          source_file_hash,
+                          original_filename,
+                          voice_embedding,
+                          embedding_method,
+                          embedding_size,
+                          segment_duration_seconds,
+                          created_at
+                        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
+                      `, [
+                        null, // Will be updated after verification is saved
+                        kind === 'video' ? 'video_extracted' : 'audio_file',
+                        fingerprint,
+                        sanitizedFilename,  // Hash-based filename, no PII
+                        JSON.stringify(voiceEmbedding.embedding),
+                        voiceEmbedding.method,
+                        voiceEmbedding.embedding_size,
+                        voiceEmbedding.duration
+                      ]);
+                      console.log('   💾 Voice embedding saved to database');
+                    } catch (dbErr) {
+                      console.log('   ⚠️ Voice embedding save error:', dbErr.message);
+                    }
+                  }
+                  
+                } else {
+                  console.log('   ⚠️ Voice embedding failed:', embeddingResult.error);
                 }
                 
-              } catch (audioFpErr) {
-                console.error('⚠️ Video audio fingerprint error:', audioFpErr.message);
+              } catch (voiceErr) {
+                console.error('⚠️ Voice embedding error:', voiceErr.message);
               }
             }
- 
+
             console.log('📊 Applying enhanced video scoring...');
             videoAnalysis = applyEnhancedVideoScoring(
               videoAnalysis, encoderAnalysis, audioAnalysis, bitrateAnalysis,
@@ -2094,6 +2203,13 @@ app.post('/verify-remote', async (req, res) => {
 
       video_audio_fingerprint: videoAudioFingerprint || null,
       video_audio_matches: videoAudioMatches || null,
+      voice_embedding: voiceEmbedding ? {
+        method: voiceEmbedding.method,
+        embedding_size: voiceEmbedding.embedding_size,
+        duration: voiceEmbedding.duration
+      } : null,
+      voice_matches: voiceMatches || null,
+
       ...(generatorDetection && { generator_detection: generatorDetection }),
       ...(kind === 'image' && googleVisionResult && { google_vision: googleVisionResult }),
       ...(kind === 'image' && weatherVerification && { weather_verification: weatherVerification }),
@@ -2346,7 +2462,7 @@ app.post('/verify-url', async (req, res) => {
                     } else {
                       console.log('   ✅ Audio is unique (not found in database)');
                     }
-
+                    
                       // AcoustID music identification for video audio
               if (acoustid.isConfigured()) {
                 try {
@@ -3931,7 +4047,7 @@ module.exports = { applyHybridCameraRescue, calculateCameraAuthenticityScore };
           screenshotDetection.verdict = 'SCREENSHOT_DETECTED';
           screenshotDetection.verdict_message = `This appears to be a screenshot${screenshotDetection.detected_device ? ` from ${screenshotDetection.detected_device}` : ''}. AI detection analyzes the visible content, not the original source.`;
           screenshotDetection.interpretation_note = 'Screenshot detection provides capture context. AI detection results reflect analysis of the screenshot content, which may differ from the original media.';
-        } else {
+      } else {
           console.log('📱 Not a screenshot');
           screenshotDetection.verdict = 'NOT_SCREENSHOT';
           screenshotDetection.verdict_message = null;
@@ -3940,7 +4056,8 @@ module.exports = { applyHybridCameraRescue, calculateCameraAuthenticityScore };
       } catch (err) {
         console.error('⚠️ Screenshot detection error:', err.message);
       }
-    } 
+    }
+
     // ============================================================================
 
     // Await blockchain results before sending response
@@ -3990,6 +4107,12 @@ module.exports = { applyHybridCameraRescue, calculateCameraAuthenticityScore };
 
       video_audio_fingerprint: videoAudioFingerprint || null,
       video_audio_matches: videoAudioMatches || null,
+      voice_embedding: voiceEmbedding ? {
+        method: voiceEmbedding.method,
+        embedding_size: voiceEmbedding.embedding_size,
+        duration: voiceEmbedding.duration
+      } : null,
+      voice_matches: voiceMatches || null,
       ...(generatorDetection && { generator_detection: generatorDetection }),
       ...(kind === 'image' && googleVisionResult && { google_vision: googleVisionResult }),
       ...(kind === 'image' && weatherVerification && { weather_verification: weatherVerification }),
