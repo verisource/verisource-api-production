@@ -9,7 +9,7 @@ const execAsync = promisify(exec);
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
-const ChromaprintService = require('./services/chromaprint');
+const ChromaprintService = require('./chromaprint');
 
 class VideoAudioFingerprint {
   
