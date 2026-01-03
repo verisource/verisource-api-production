@@ -162,7 +162,7 @@ async function runOCR(regionBuffer, regionName) {
       
       // Run tesseract
       exec(`tesseract "${tempPath}" stdout -l eng 2>/dev/null`, { timeout: 5000 }, (error, stdout, stderr) => {
-        fs.unlinkSync(tempPath);
+        try { fs.unlinkSync(tempPath); } catch (e) { /* ignore */ }
         
         if (error) {
           resolve({ success: false, text: '' });
