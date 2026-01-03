@@ -484,7 +484,7 @@ print(json.dumps(embedding))
    * @param {object} options - Search options
    */
   static async searchVoiceMatches(embedding, db, options = {}) {
-    const { threshold = 0.95, limit = 10, excludeIds = [] } = options;
+    const { threshold = 0.98, limit = 10, excludeIds = [] } = options;
     
     if (!embedding || !db) {
       return { found: false, matches: [] };
