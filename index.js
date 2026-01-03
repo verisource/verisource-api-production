@@ -1739,27 +1739,10 @@ app.post('/verify-remote', async (req, res) => {
                     
                     if (voiceMatches.found) {
                       console.log('   ⚠️ Voice match found: ' + voiceMatches.count + ' similar voices');
+                      // Note: Fraud indicators will be added in cross-reference step
                       
-                      // Add to fraud indicators
-                      if (!crossReference) crossReference = {};
-                      if (!crossReference.fraud_indicators) {
-                        crossReference.fraud_indicators = { flags: [], risk_level: 'low' };
-                      }
                       
-                      const topMatch = voiceMatches.matches[0];
-                      if (topMatch.interpretation === 'STRONG_MATCH') {
-                        crossReference.fraud_indicators.flags.push(
-                          'VOICE_MATCH: Strong voice match (' + topMatch.similarity_percent + '%) with claim ' + (topMatch.claim_id || topMatch.id)
-                        );
-                        crossReference.fraud_indicators.risk_level = 'high';
-                      } else if (topMatch.interpretation === 'LIKELY_MATCH') {
-                        crossReference.fraud_indicators.flags.push(
-                          'VOICE_SIMILAR: Likely voice match (' + topMatch.similarity_percent + '%) with prior submission'
-                        );
-                        if (crossReference.fraud_indicators.risk_level === 'low') {
-                          crossReference.fraud_indicators.risk_level = 'medium';
-                        }
-                      }
+                      
                     } else {
                       console.log('   ✅ No matching voices found (unique speaker)');
                     }
