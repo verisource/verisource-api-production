@@ -1734,7 +1734,7 @@ app.post('/verify-remote', async (req, res) => {
                     voiceMatches = await VoiceEmbeddingService.searchVoiceMatches(
                       embeddingResult.embedding,
                       db,
-                      { threshold: 0.75, limit: 5 }
+                      { threshold: 0.88, limit: 5 }
                     );
                     
                     if (voiceMatches.found) {
