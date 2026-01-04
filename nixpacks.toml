@@ -1,8 +1,8 @@
 [phases.setup]
-nixPkgs = ["nodejs", "ffmpeg", "chromaprint"]
+nixPkgs = ["python311", "python311Packages.pip", "ffmpeg"]
 
 [phases.install]
-cmds = ["npm ci"]
+cmds = ["npm install", "pip install pyannote.audio torch torchaudio --quiet"]
 
 [start]
 cmd = "node index.js"
