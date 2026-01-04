@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-import sys, json, os
+import sys, json, os, warnings
+warnings.filterwarnings("ignore")
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
 def extract_embedding(audio_path):
     try:
@@ -7,7 +9,7 @@ def extract_embedding(audio_path):
         hf_token = os.environ.get("HUGGINGFACE_TOKEN")
         if not hf_token:
             return {"success": False, "error": "HUGGINGFACE_TOKEN not set"}
-        model = Model.from_pretrained("pyannote/embedding", token=hf_token)
+        model = Model.from_pretrained("pyannote/embedding", use_auth_token=hf_token)
         inference = Inference(model, window="whole")
         embedding = inference(audio_path)
         embedding_list = embedding.tolist() if hasattr(embedding, "tolist") else list(embedding)
