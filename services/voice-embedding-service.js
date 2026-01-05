@@ -78,7 +78,6 @@ class VoiceEmbeddingService {
         console.log('   ⚠️ Pyannote stderr:', stderr.substring(0, 200));
       }
       
-      console.log('   Raw stdout:', stdout.substring(0, 100));
       const result = JSON.parse(stdout.trim());
       
       if (!result.success) {
