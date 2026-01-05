@@ -1843,8 +1843,9 @@ app.post('/verify-remote', async (req, res) => {
     // ============================================
     // STEP 15: Save to Database
     // ============================================
+    let savedVerification = null;
     try {
-      await saveVerification({
+      savedVerification = await saveVerification({  
         fingerprint: fingerprint,
         algorithm: 'sha256',
         filename: tempFileName,
@@ -2145,6 +2146,7 @@ app.post('/verify-remote', async (req, res) => {
 
     // ============================================
     const response = {
+      verification_id: savedVerification?.verification_id || null,
       kind: kind,
       source: 'remote_url',
       file_url: file_url,
