@@ -1,7 +1,16 @@
 #!/usr/bin/env python3
-import sys, json, os, warnings
+import sys, json, os, warnings, logging
+
+# Suppress all warnings and logging
 warnings.filterwarnings("ignore")
+logging.disable(logging.CRITICAL)
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
+os.environ["TRANSFORMERS_VERBOSITY"] = "error"
+
+# Redirect stderr during imports
+import io
+old_stderr = sys.stderr
+sys.stderr = io.StringIO()
 
 def extract_embedding(audio_path):
     try:
@@ -18,9 +27,13 @@ def extract_embedding(audio_path):
         return {"success": True, "embedding": embedding_list, "embedding_size": len(embedding_list), "method": "pyannote"}
     except Exception as e:
         return {"success": False, "error": str(e)}
+    finally:
+        sys.stderr = old_stderr
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
         print(json.dumps({"success": False, "error": "No audio path"}))
         sys.exit(1)
-    print(json.dumps(extract_embedding(sys.argv[1])))
+    result = extract_embedding(sys.argv[1])
+    sys.stderr = old_stderr
+    print(json.dumps(result))
