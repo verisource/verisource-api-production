@@ -1524,7 +1524,58 @@ if (kind === 'video') {
         reverseSearchResults = { search_performed: false, error: err.message };
       }
     }
-
+    // ============================================
+    // STEP 12B: Persist Earliest Online Date
+    // ============================================
+    if (reverseSearchResults?.tineye?.oldest_result?.crawl_date) {
+      try {
+        const tineyeOldest = reverseSearchResults.tineye.oldest_result;
+        const newDate = new Date(tineyeOldest.crawl_date);
+        
+        // Check if we have existing metadata for this fingerprint
+        const existingMeta = await db.query(`
+          SELECT earliest_online_date, earliest_online_url, earliest_online_domain
+          FROM fingerprint_metadata WHERE fingerprint = $1
+        `, [fingerprint]);
+        
+        if (existingMeta.rows.length === 0) {
+          // First time seeing this fingerprint - insert new record
+          await db.query(`
+            INSERT INTO fingerprint_metadata (fingerprint, earliest_online_date, earliest_online_url, earliest_online_domain, first_verified_at, times_verified)
+            VALUES ($1, $2, $3, $4, NOW(), 1)
+          `, [fingerprint, tineyeOldest.crawl_date, tineyeOldest.url || null, tineyeOldest.domain || null]);
+          console.log(`📅 Stored earliest online date: ${tineyeOldest.crawl_date}`);
+        } else {
+          const stored = existingMeta.rows[0];
+          const storedDate = stored.earliest_online_date ? new Date(stored.earliest_online_date) : null;
+          
+          // Update if this TinEye result is earlier than stored
+          if (!storedDate || newDate < storedDate) {
+            await db.query(`
+              UPDATE fingerprint_metadata 
+              SET earliest_online_date = $1, earliest_online_url = $2, earliest_online_domain = $3, updated_at = NOW(), times_verified = times_verified + 1
+              WHERE fingerprint = $4
+            `, [tineyeOldest.crawl_date, tineyeOldest.url || null, tineyeOldest.domain || null, fingerprint]);
+            console.log(`📅 Updated earliest online date: ${tineyeOldest.crawl_date} (earlier than stored)`);
+          } else {
+            // Just increment times_verified
+            await db.query(`
+              UPDATE fingerprint_metadata SET times_verified = times_verified + 1, updated_at = NOW() WHERE fingerprint = $1
+            `, [fingerprint]);
+          }
+          
+          // Attach the persisted earliest date to results for timeline
+          reverseSearchResults.earliest_known_online = {
+            date: storedDate && storedDate < newDate ? stored.earliest_online_date : tineyeOldest.crawl_date,
+            url: storedDate && storedDate < newDate ? stored.earliest_online_url : tineyeOldest.url,
+            domain: storedDate && storedDate < newDate ? stored.earliest_online_domain : tineyeOldest.domain,
+            source: 'persisted'
+          };
+        }
+      } catch (err) {
+        console.error('⚠️ Fingerprint metadata update error:', err.message);
+      }
+    }
     // Stock Photo Rescue
     if (reverseSearchResults?.tineye?.is_stock_photo && aiDetection) {
       const stockSites = reverseSearchResults.tineye.domain_breakdown?.stock_photo_sites || 0;

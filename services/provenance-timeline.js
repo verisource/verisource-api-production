@@ -70,22 +70,33 @@ function buildProvenanceTimeline(data) {
     timeline.push(...newsClips);
   }
   
-  // 4. Reverse image search - TinEye oldest match (FIRST SEEN ONLINE)
-  if (data.reverse_image_search?.tineye?.oldest_result) {
+ // 4. Reverse image search - Persisted earliest online date (prioritize stored)
+  if (data.reverse_image_search?.earliest_known_online?.date) {
+    const earliest = data.reverse_image_search.earliest_known_online;
+    timeline.push({
+      type: 'ONLINE_FIRST_SEEN',
+      timestamp: normalizeTimestamp(earliest.date),
+      icon: '🔍',
+      label: 'First Seen Online',
+      source: earliest.domain || 'TinEye',
+      details: earliest.source === 'persisted' ? 'Earliest known appearance (verified)' : 'Earliest indexed appearance',
+      url: earliest.url || null,
+      relevance: 1.0
+    });
+  } else if (data.reverse_image_search?.tineye?.oldest_result?.crawl_date) {
+    // Fallback to current TinEye result if no persisted data
     const oldest = data.reverse_image_search.tineye.oldest_result;
-    if (oldest.crawl_date) {
-      timeline.push({
-        type: 'ONLINE_FIRST_SEEN',
-        timestamp: normalizeTimestamp(oldest.crawl_date),
-        icon: '🔍',
-        label: 'First Seen Online',
-        source: oldest.domain || 'TinEye',
-        details: `Earliest indexed appearance`,
-        url: oldest.url || null,
-        relevance: 1.0
-      });
-    }
-  }
+    timeline.push({
+      type: 'ONLINE_FIRST_SEEN',
+      timestamp: normalizeTimestamp(oldest.crawl_date),
+      icon: '🔍',
+      label: 'First Seen Online',
+      source: oldest.domain || 'TinEye',
+      details: 'Earliest indexed appearance',
+      url: oldest.url || null,
+      relevance: 1.0
+    });
+  } 
   
   // 4a. Combined analysis age (if no TinEye oldest)
   if (data.reverse_image_search?.combined_analysis?.age_analysis?.earliest_date) {
