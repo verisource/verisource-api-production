@@ -1527,7 +1527,6 @@ if (kind === 'video') {
     // ============================================
     // STEP 12B: Persist Earliest Online Date
     // ============================================
-    console.log('🔍 TinEye first_appearance:', JSON.stringify(reverseSearchResults?.tineye?.first_appearance || 'none'));
     if (reverseSearchResults?.tineye?.first_appearance?.date) {
       try {
        const tineyeOldest = reverseSearchResults.tineye.first_appearance;
