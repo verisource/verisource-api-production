@@ -65,13 +65,71 @@ function buildProvenanceTimeline(data) {
         url: clip.url || null,
         relevance: clip.relevance || null
       }))
-      .filter(event => event.timestamp); // Only include if we have a valid date
+      .filter(event => event.timestamp);
     
     timeline.push(...newsClips);
   }
   
-  // 4. Reverse image search results (earliest matches)
-  if (data.reverse_image_search?.results?.length > 0) {
+  // 4. Reverse image search - TinEye oldest match (FIRST SEEN ONLINE)
+  if (data.reverse_image_search?.tineye?.oldest_result) {
+    const oldest = data.reverse_image_search.tineye.oldest_result;
+    if (oldest.crawl_date) {
+      timeline.push({
+        type: 'ONLINE_FIRST_SEEN',
+        timestamp: normalizeTimestamp(oldest.crawl_date),
+        icon: '🔍',
+        label: 'First Seen Online',
+        source: oldest.domain || 'TinEye',
+        details: `Earliest indexed appearance`,
+        url: oldest.url || null,
+        relevance: 1.0
+      });
+    }
+  }
+  
+  // 4a. Combined analysis age (if no TinEye oldest)
+  if (data.reverse_image_search?.combined_analysis?.age_analysis?.earliest_date) {
+    const earliestDate = data.reverse_image_search.combined_analysis.age_analysis.earliest_date;
+    const alreadyHasOldest = timeline.some(e => e.type === 'ONLINE_FIRST_SEEN');
+    
+    if (!alreadyHasOldest) {
+      timeline.push({
+        type: 'ONLINE_FIRST_SEEN',
+        timestamp: normalizeTimestamp(earliestDate),
+        icon: '🔍',
+        label: 'First Seen Online',
+        source: 'Reverse Image Search',
+        details: data.reverse_image_search.combined_analysis.age_analysis.age_readable || null,
+        url: null,
+        relevance: 0.9
+      });
+    }
+  }
+
+  // 4b. Additional online matches (top 3)
+  if (data.reverse_image_search?.tineye?.results?.length > 0) {
+    const oldestUrl = data.reverse_image_search.tineye.oldest_result?.url;
+    
+    const additionalMatches = data.reverse_image_search.tineye.results
+      .filter(r => r.crawl_date && r.backlinks?.[0]?.url !== oldestUrl)
+      .slice(0, 3)
+      .map(result => ({
+        type: 'ONLINE_MATCH',
+        timestamp: normalizeTimestamp(result.crawl_date),
+        icon: '🌐',
+        label: 'Found Online',
+        source: result.domain || extractDomain(result.backlinks?.[0]?.url) || 'Web',
+        details: null,
+        url: result.backlinks?.[0]?.url || null,
+        relevance: null
+      }))
+      .filter(event => event.timestamp);
+    
+    timeline.push(...additionalMatches);
+  }
+  
+  // 4c. Fallback: generic reverse search results
+  if (data.reverse_image_search?.results?.length > 0 && !timeline.some(e => e.type === 'ONLINE_FIRST_SEEN')) {
     const searchResults = data.reverse_image_search.results
       .filter(r => r.crawl_date || r.date || r.backlinks?.[0]?.crawl_date)
       .slice(0, 3)
@@ -91,8 +149,24 @@ function buildProvenanceTimeline(data) {
     
     timeline.push(...searchResults);
   }
-  
-  // 4.5. Landmark detections from video frames
+
+  // 4d. Stock photo detection
+  if (data.reverse_image_search?.tineye?.is_stock_photo || 
+      data.reverse_image_search?.combined_analysis?.content_type === 'stock_photo') {
+    const stockSites = data.reverse_image_search.tineye?.domain_breakdown?.stock_photo_sites || 0;
+    timeline.push({
+      type: 'STOCK_PHOTO',
+      timestamp: data.verified_at || new Date().toISOString(),
+      icon: '📸',
+      label: 'Stock Photo Detected',
+      source: 'TinEye Analysis',
+      details: stockSites > 0 ? `Found on ${stockSites} stock photo sites` : 'Matches stock photo databases',
+      url: null,
+      relevance: null
+    });
+  }
+
+  // 4e. Landmark detections from video frames
   if (data.reverse_search?.landmarks?.length > 0) {
     const landmarkEvents = data.reverse_search.landmarks
       .map(landmark => ({
@@ -120,8 +194,9 @@ function buildProvenanceTimeline(data) {
         }
       });
     
-    timeline.push(...uniqueLandmarks.slice(0, 5)); // Top 5 unique landmarks
+    timeline.push(...uniqueLandmarks.slice(0, 5));
   }
+  
   // 5. First verification (if previously seen)
   if (data.verification?.status === 'PREVIOUSLY_VERIFIED' && data.verification?.first_seen) {
     timeline.push({
@@ -289,6 +364,8 @@ function detectTimelineAnomalies(timeline, data) {
   const newsEvents = timeline.filter(e => e.type === 'NEWS_COVERAGE');
   const submissionEvent = timeline.find(e => e.type === 'SUBMISSION');
   const firstVerified = timeline.find(e => e.type === 'FIRST_VERIFIED');
+  const onlineFirstSeen = timeline.find(e => e.type === 'ONLINE_FIRST_SEEN');
+  const onlineMatches = timeline.filter(e => e.type === 'ONLINE_MATCH' || e.type === 'ONLINE_FIRST_SEEN');
   
   // 1. Recycled content: news coverage significantly before claimed EXIF date
   if (exifEvent && newsEvents.length > 0) {
@@ -305,7 +382,7 @@ function detectTimelineAnomalies(timeline, data) {
           message: `News reported similar event ${daysDiff} days before camera date — possible recycled content`,
           events: [news.timestamp, exifEvent.timestamp]
         });
-        break; // Only report once
+        break;
       }
     }
   }
@@ -326,10 +403,25 @@ function detectTimelineAnomalies(timeline, data) {
     }
   }
   
-  // 3. Content existed before EXIF date (online match predates camera)
-  if (exifEvent) {
+  // 3. Content existed online before EXIF date (metadata may be manipulated)
+  if (exifEvent && onlineFirstSeen) {
     const exifDate = new Date(exifEvent.timestamp);
-    const onlineMatches = timeline.filter(e => e.type === 'ONLINE_MATCH');
+    const onlineDate = new Date(onlineFirstSeen.timestamp);
+    const daysDiff = Math.floor((exifDate - onlineDate) / (1000 * 60 * 60 * 24));
+    
+    if (daysDiff > 7) {
+      anomalies.push({
+        type: 'PREDATES_EXIF',
+        severity: 'high',
+        message: `Image found online ${daysDiff} days before camera date — metadata may be manipulated`,
+        events: [onlineFirstSeen.timestamp, exifEvent.timestamp]
+      });
+    }
+  }
+  
+  // 3b. Fallback: check any online match predates EXIF
+  if (exifEvent && !onlineFirstSeen && onlineMatches.length > 0) {
+    const exifDate = new Date(exifEvent.timestamp);
     
     for (const match of onlineMatches) {
       const matchDate = new Date(match.timestamp);
@@ -379,6 +471,22 @@ function detectTimelineAnomalies(timeline, data) {
         severity: 'info',
         message: `Content is ${Math.floor(daysDiff / 30)} months old based on camera date`,
         events: [exifEvent.timestamp, referenceEvent.timestamp]
+      });
+    }
+  }
+  
+  // 6. Online appearance predates first VeriSource verification
+  if (onlineFirstSeen && firstVerified) {
+    const onlineDate = new Date(onlineFirstSeen.timestamp);
+    const verifiedDate = new Date(firstVerified.timestamp);
+    const daysDiff = Math.floor((verifiedDate - onlineDate) / (1000 * 60 * 60 * 24));
+    
+    if (daysDiff > 30) {
+      anomalies.push({
+        type: 'LATE_VERIFICATION',
+        severity: 'info',
+        message: `Content was online ${daysDiff} days before first VeriSource verification`,
+        events: [onlineFirstSeen.timestamp, firstVerified.timestamp]
       });
     }
   }
@@ -439,8 +547,10 @@ function generateTimelineSummary(timeline, anomalies, data) {
   const hasExif = timeline.some(e => e.type === 'EXIF_CREATED');
   const hasBlockchain = timeline.some(e => e.type.startsWith('BLOCKCHAIN_'));
   const newsCount = timeline.filter(e => e.type === 'NEWS_COVERAGE').length;
-  const onlineCount = timeline.filter(e => e.type === 'ONLINE_MATCH').length;
+  const onlineFirstSeen = timeline.find(e => e.type === 'ONLINE_FIRST_SEEN');
+  const onlineCount = timeline.filter(e => e.type === 'ONLINE_MATCH' || e.type === 'ONLINE_FIRST_SEEN').length;
   const isPreviouslyVerified = timeline.some(e => e.type === 'FIRST_VERIFIED');
+  const isStockPhoto = timeline.some(e => e.type === 'STOCK_PHOTO');
   
   if (hasExif) {
     parts.push('Camera metadata verified');
@@ -451,12 +561,27 @@ function generateTimelineSummary(timeline, anomalies, data) {
     parts.push(`Previously verified ${times}x`);
   }
   
+  if (onlineFirstSeen) {
+    const firstSeenDate = new Date(onlineFirstSeen.timestamp);
+    const now = new Date();
+    const daysDiff = Math.floor((now - firstSeenDate) / (1000 * 60 * 60 * 24));
+    if (daysDiff > 30) {
+      parts.push(`First online ${Math.floor(daysDiff / 30)} months ago`);
+    } else if (daysDiff > 0) {
+      parts.push(`First online ${daysDiff} days ago`);
+    }
+  }
+  
   if (newsCount > 0) {
     parts.push(`${newsCount} news source${newsCount > 1 ? 's' : ''} corroborate`);
   }
   
-  if (onlineCount > 0) {
+  if (onlineCount > 0 && !onlineFirstSeen) {
     parts.push(`${onlineCount} online match${onlineCount > 1 ? 'es' : ''}`);
+  }
+  
+  if (isStockPhoto) {
+    parts.push('Stock photo detected');
   }
   
   if (hasBlockchain) {
