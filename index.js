@@ -1566,9 +1566,9 @@ if (kind === 'video') {
           
           // Attach the persisted earliest date to results for timeline
           reverseSearchResults.earliest_known_online = {
-            date: storedDate && storedDate < newDate ? stored.earliest_online_date : tineyeOldest.crawl_date,
-            url: storedDate && storedDate < newDate ? stored.earliest_online_url : tineyeOldest.url,
-            domain: storedDate && storedDate < newDate ? stored.earliest_online_domain : tineyeOldest.domain,
+            date: storedDate && storedDate < newDate ? stored.earliest_online_date : tineyeOldest.date,
+            url: storedDate && storedDate < newDate ? stored.earliest_online_url : tineyeOldest.source_url,
+            domain: storedDate && storedDate < newDate ? stored.earliest_online_domain : tineyeOldest.source_domain,
             source: 'persisted'
           };
         }
