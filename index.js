@@ -1770,8 +1770,9 @@ app.post('/verify-remote', authenticateApiKey, async (req, res) => {
                           embedding_method,
                           embedding_size,
                           segment_duration_seconds,
+                          account_id,
                           created_at
-                        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
+                        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())
                       `, [
                         null, // Will be updated after verification is saved
                         kind === 'video' ? 'video_extracted' : 'audio_file',
@@ -1780,7 +1781,8 @@ app.post('/verify-remote', authenticateApiKey, async (req, res) => {
                         JSON.stringify(voiceEmbedding.embedding),
                         voiceEmbedding.method,
                         voiceEmbedding.embedding_size,
-                        voiceEmbedding.duration
+                        voiceEmbedding.duration,
+                        req.account.id
                       ]);
                       console.log('   💾 Voice embedding saved to database');
                     } catch (dbErr) {
