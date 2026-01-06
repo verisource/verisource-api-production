@@ -31,6 +31,7 @@ const ProvenanceService = require('./services/provenance-service');
 const VoiceEmbeddingService = require('./services/voice-embedding-service');
 const tvCorroboration = require('./services/tv-corroboration');
 const { buildProvenanceTimeline } = require('./services/provenance-timeline');
+const { authenticateApiKey, getUserAccountId } = require('./api-key-middleware');
 // Import canonicalization only (workers not needed for minimal endpoint)
 let canonicalizeImage;
 try { 
@@ -238,6 +239,9 @@ app.get("/health", async (req, res) => {
     timestamp: new Date().toISOString()
   });
 });
+
+app.get('/my-account', authenticateApiKey, getUserAccountId);
+
 app.get("/ml-features/stats", async (req, res) => {
   try {
     const stats = await FeatureLogger.getStats();
@@ -641,7 +645,7 @@ async function applyHybridCameraRescue(aiDetection, verificationData, callExtern
 // REMOTE FILE VERIFY ENDPOINT (Full Featured)
 // Identical analysis to /verify endpoint
 // ============================================
-app.post('/verify-remote', async (req, res) => {
+app.post('/verify-remote', authenticateApiKey, async (req, res) => {
   const requestId = Date.now();
   console.log(`\n📡 [${requestId}] Remote File Verification Request`);
   
@@ -1734,6 +1738,7 @@ app.post('/verify-remote', async (req, res) => {
                     voiceMatches = await VoiceEmbeddingService.searchVoiceMatches(
                       embeddingResult.embedding,
                       db,
+                      req.account.id,
                       { threshold: 0.88, limit: 5 }
                     );
                     
@@ -1861,7 +1866,8 @@ app.post('/verify-remote', async (req, res) => {
         phash: phash || null,
         phash_regions: phashRegions || null,
         google_vision_labels: googleVisionResult?.results?.labels || [],
-        audio_fingerprint: videoAudioFingerprint?.fingerprint || null
+        audio_fingerprint: videoAudioFingerprint?.fingerprint || null,
+        account_id: req.account.id
       });
       console.log('💾 Verification saved to database');
     } catch (err) {
@@ -2257,7 +2263,7 @@ app.post('/verify-remote', async (req, res) => {
 // ============================================
 const UrlVerification = require('./services/url-verification');
 
-app.post('/verify-url', async (req, res) => {
+app.post('/verify-url', authenticateApiKey, async (req, res) => {
   const requestId = Date.now();
   console.log(`\n🌐 [${requestId}] URL Verification Request`);
   
@@ -2719,7 +2725,7 @@ app.get('/verify-url/platforms', (req, res) => {
 // ============================================
 // SINGLE FILE VERIFY ENDPOINT
 // ============================================
-app.post('/verify', upload.single('file'), async (req, res) => {
+app.post('/verify', upload.single('file'), authenticateApiKey, async (req, res) => {
   const requestId = Date.now();
   if (!req.file) {
     return res.status(400).json({ error: 'No file uploaded' });

@@ -118,7 +118,8 @@ async function saveVerification(data) {
         fingerprint, fingerprint_algorithm, original_filename,
         file_size, file_type, media_kind, ip_address,
         polygon_block_number, polygon_tx_hash, polygon_timestamp,
-        bitcoin_proof_status, bitcoin_submitted_at, phash, phash_regions
+        bitcoin_proof_status, bitcoin_submitted_at, phash, phash_regions,
+        account_id
       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13,$14)
       RETURNING id, upload_date
     `;
@@ -137,7 +138,8 @@ async function saveVerification(data) {
       data.bitcoin_proof_status || null,
       data.bitcoin_submitted_at || null,
       data.phash || null,
-      data.phash_regions ? JSON.stringify(data.phash_regions) : null
+      data.phash_regions ? JSON.stringify(data.phash_regions) : null,
+      data.account_id || null 
     
     ];
     

@@ -201,7 +201,7 @@ except Exception as e:
   /**
    * Search for matching voices in database
    */
-  static async searchVoiceMatches(embedding, db, options = {}) {
+  static async searchVoiceMatches(embedding, db, accountId, options = {}) {
     const { threshold = 0.80, limit = 10, excludeIds = [] } = options;
     
     try {
@@ -209,10 +209,11 @@ except Exception as e:
         SELECT id, verification_id, source_type, source_file_hash, 
                voice_embedding, embedding_method, created_at
         FROM voice_prints 
-        WHERE voice_embedding IS NOT NULL
+        WHERE voice_embedding IS NOT NULL 
+          AND account_id = $1
         ORDER BY created_at DESC
         LIMIT 100
-      `);
+      `, [accountId]);
       
       if (result.rows.length === 0) {
         return { found: false, count: 0, matches: [], threshold_used: threshold };
