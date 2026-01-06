@@ -29,6 +29,7 @@ const PlatformDetection = require('./services/platform-signature-detection');
 const FeatureLogger = require('./services/feature-logger');
 const ProvenanceService = require('./services/provenance-service');
 const VoiceEmbeddingService = require('./services/voice-embedding-service');
+const VideoThumbnailService = require('./services/video-thumbnail-service');
 const tvCorroboration = require('./services/tv-corroboration');
 const { buildProvenanceTimeline } = require('./services/provenance-timeline');
 const { authenticateApiKey, getUserAccountId } = require('./api-key-middleware');
@@ -827,6 +828,24 @@ app.post('/verify-remote', authenticateApiKey, async (req, res) => {
     const isAud = /^audio\//i.test(dm) || /\.(mp3|wav|m4a|flac)$/i.test(mockFile.originalname);
     const kind = isImg ? 'image' : (isVid ? 'video' : (isAud ? 'audio' : 'unknown'));
 
+    // ============================================
+// THUMBNAIL EXTRACTION FOR VIDEOS
+// ============================================
+let videoThumbnail = null;
+if (kind === 'video') {
+  try {
+    console.log('🖼️ Extracting video thumbnail...');
+    videoThumbnail = await VideoThumbnailService.extractThumbnail(tempFilePath, {
+      width: 480,
+      quality: 85
+    });
+    if (videoThumbnail.success) {
+      console.log(`✅ Thumbnail extracted: ${videoThumbnail.dimensions.width}x${videoThumbnail.dimensions.height}`);
+    }
+  } catch (err) {
+    console.error('⚠️ Thumbnail extraction error:', err.message);
+  }
+}
     // ============================================
     // STEP 2B: Start Reverse Image Search (async - runs in parallel)
     // ============================================
@@ -2160,6 +2179,7 @@ app.post('/verify-remote', authenticateApiKey, async (req, res) => {
       file_url: file_url,
       filename: tempFileName,
       size_bytes: stats.size,
+      thumbnail: videoThumbnail?.success ? videoThumbnail.thumbnail_base64 : null,
       fingerprint: {
         algorithm: 'sha256',
         hash: fingerprint,
