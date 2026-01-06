@@ -120,7 +120,7 @@ async function saveVerification(data) {
         polygon_block_number, polygon_tx_hash, polygon_timestamp,
         bitcoin_proof_status, bitcoin_submitted_at, phash, phash_regions,
         account_id
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13,$14)
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
       RETURNING id, upload_date
     `;
     
