@@ -249,9 +249,9 @@ class TinEyeSearchService {
       total_backlinks: results.total_backlinks || 0,
       
       first_appearance: firstAppearance ? {
-        date: firstAppearance.crawl_date,
+        date: firstAppearance.crawl_date || (Array.isArray(firstAppearance.backlinks) && firstAppearance.backlinks[0]?.crawl_date) || null,
         age: ageInfo,
-        source_url: firstAppearance.page_url,
+        source_url: firstAppearance.page_url || (Array.isArray(firstAppearance.backlinks) && firstAppearance.backlinks[0]?.backlink) || null,
         source_domain: firstAppearance.domain || this.extractDomain(firstAppearance.page_url),
         image_url: firstAppearance.image_url,
         backlinks: firstAppearance.backlinks || 0
