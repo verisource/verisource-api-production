@@ -8,8 +8,8 @@
     "start": "node index.js",
     "dev": "NODE_ENV=development node index.js",
     "test": "node test.js",
-    "collector": "node bluesky-worker.js",
-    "collector:dev": "DEBUG=true node bluesky-worker.js"
+    "collector": "node hash-collector.js",
+    "collector:dev": "DEBUG=true node hash-collector.js"
   },
   "keywords": [
     "media",
