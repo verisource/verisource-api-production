@@ -55,11 +55,12 @@ async function filterBlurryFrames(framePaths, options = {}) {
   
   console.log(`🔍 Analyzing sharpness of ${framePaths.length} frames...`);
   
-  const framesWithScores = [];
-  for (const framePath of framePaths) {
-    const blurScore = await calculateBlurScore(framePath);
-    framesWithScores.push({ path: framePath, blurScore });
-  }
+  const framesWithScores = await Promise.all(
+  framePaths.map(async (framePath) => ({
+    path: framePath,
+    blurScore: await calculateBlurScore(framePath)
+  }))
+);
   
   // Sort by sharpness (highest first)
   framesWithScores.sort((a, b) => b.blurScore - a.blurScore);
