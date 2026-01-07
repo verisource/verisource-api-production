@@ -186,14 +186,14 @@ async function processPost(commit) {
         
       } catch (err) {
         stats.errors++;
-        if (process.env.DEBUG) {
+        if (true) {
           console.error(`Image process error: ${err.message}`);
         }
       }
     }
   } catch (err) {
     stats.errors++;
-    if (process.env.DEBUG) {
+    if (true) {
       console.error(`Post process error: ${err.message}`);
     }
   }
