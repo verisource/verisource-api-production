@@ -1670,7 +1670,7 @@ if (kind === 'video') {
                 ffmpeg(tempFilePath)
                   .on('end', resolve)
                   .on('error', reject)
-                  .outputOptions(['-vf', 'scale=1280:-2,fps=2', '-q:v', '2', '-frames:v', '30'])
+                  .outputOptions(['-vf', 'scale=1280:-2,fps=2', '-q:v', '5', '-frames:v', '30'])
                   .output(path.join(motionTempDir, 'frame-%04d.jpg'))
                   .run();
               });
@@ -2458,7 +2458,7 @@ app.post('/verify-url', authenticateApiKey, async (req, res) => {
               ffmpeg(filePath)
                 .on('end', resolve)
                 .on('error', reject)
-                .outputOptions(['-vf', 'fps=2', '-q:v', '2', '-frames:v', '30'])
+                .outputOptions(['-vf', 'fps=2', '-q:v', '5', '-frames:v', '30'])
                 .output(path.join(motionTempDir, 'frame-%04d.jpg'))
                 .run();
             });
@@ -3831,7 +3831,7 @@ module.exports = { applyHybridCameraRescue, calculateCameraAuthenticityScore };
                   ffmpeg(req.file.path)
                     .on('end', resolve)
                     .on('error', reject)
-                    .outputOptions(['-vf', 'fps=2', '-q:v', '2', '-frames:v', '30'])
+                    .outputOptions(['-vf', 'fps=2', '-q:v', '5', '-frames:v', '30'])
                     .output(path.join(motionTempDir, 'frame-%04d.jpg'))
                     .run();
                 });
@@ -3894,7 +3894,7 @@ module.exports = { applyHybridCameraRescue, calculateCameraAuthenticityScore };
                     ffmpeg(req.file.path)
                       .on('end', resolve)
                       .on('error', reject)
-                      .outputOptions(['-vf', 'select=eq(n\\,30)', '-frames:v', '1', '-q:v', '2'])
+                      .outputOptions(['-vf', 'select=eq(n\\,30)', '-frames:v', '1', '-q:v', '5'])
                       .output(framePath)
                       .run();
                   });
