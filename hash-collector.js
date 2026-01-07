@@ -17,7 +17,6 @@ const os = require('os');
 
 // Configuration
 const JETSTREAM_URL = 'wss://jetstream2.us-east.bsky.network/subscribe?wantedCollections=app.bsky.feed.post';
-const BLOB_BASE_URL = 'https://bsky.social/xrpc/com.atproto.sync.getBlob';
 
 // Database connection
 const pool = new Pool({
@@ -37,15 +36,16 @@ let stats = {
 };
 
 /**
- * Download blob from Bluesky
+ * Download blob from Bluesky CDN
  */
 async function downloadBlob(did, cid) {
   return new Promise((resolve, reject) => {
-    const url = `${BLOB_BASE_URL}?did=${encodeURIComponent(did)}&cid=${encodeURIComponent(cid)}`;
+    // Use the CDN URL format
+    const url = `https://cdn.bsky.app/img/feed_thumbnail/plain/${did}/${cid}@jpeg`;
     
     https.get(url, (res) => {
       if (res.statusCode !== 200) {
-        reject(new Error(`HTTP ${res.statusCode}`));
+        reject(new Error(`HTTP ${res.statusCode} for ${url}`));
         return;
       }
       
@@ -149,8 +149,17 @@ async function processPost(commit) {
     stats.imagesFound += images.length;
     
     for (const image of images) {
-      const cid = image.image?.ref?.$link || image.image?.ref?.toString();
-      if (!cid) continue;
+      // Try different ways to get the CID
+      const cid = image.image?.ref?.$link || 
+                  image.image?.ref?.toString() || 
+                  image.image?.cid ||
+                  (typeof image.image?.ref === 'string' ? image.image.ref : null);
+      
+      if (!cid) {
+        console.log('No CID found in image:', JSON.stringify(image).slice(0, 200));
+        stats.errors++;
+        continue;
+      }
       
       try {
         // Download blob
@@ -162,7 +171,10 @@ async function processPost(commit) {
           generateSHA256(imageBuffer)
         ]);
         
-        if (!phash) continue;
+        if (!phash) {
+          stats.errors++;
+          continue;
+        }
         
         stats.imagesHashed++;
         
@@ -175,27 +187,24 @@ async function processPost(commit) {
           sha256,
           source_id: `${did}/${rkey}/${cid}`,
           source_url: postUrl,
-          author_handle: null, // Would need additional lookup
+          author_handle: null,
           author_did: did,
           captured_at: new Date(record.createdAt)
         });
         
         if (saved) {
           stats.imagesSaved++;
+          console.log(`✅ Saved: ${postUrl}`);
         }
         
       } catch (err) {
         stats.errors++;
-        if (true) {
-          console.error(`Image process error: ${err.message}`);
-        }
+        console.error(`Image error: ${err.message}`);
       }
     }
   } catch (err) {
     stats.errors++;
-    if (true) {
-      console.error(`Post process error: ${err.message}`);
-    }
+    console.error(`Post error: ${err.message}`);
   }
 }
 
