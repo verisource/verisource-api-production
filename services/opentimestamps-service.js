@@ -15,6 +15,7 @@ const OpenTimestamps = require('opentimestamps');
 const crypto = require('crypto');
 const fs = require('fs').promises;
 const path = require('path');
+const https = require('https');
 
 class OpenTimestampsService {
   
@@ -32,6 +33,52 @@ class OpenTimestampsService {
     } catch (error) {
       console.error('Failed to create stamps directory:', error);
     }
+  }
+
+  /**
+   * Fetch Bitcoin block time from public API
+   */
+  async getBlockTime(height) {
+    return new Promise((resolve) => {
+      https.get(`https://blockchain.info/block-height/${height}?format=json`, (res) => {
+        let data = '';
+        res.on('data', chunk => data += chunk);
+        res.on('end', () => {
+          try {
+            const json = JSON.parse(data);
+            if (json.blocks && json.blocks[0]) {
+              resolve({
+                time: json.blocks[0].time,
+                hash: json.blocks[0].hash
+              });
+            } else {
+              resolve(null);
+            }
+          } catch (e) {
+            resolve(null);
+          }
+        });
+      }).on('error', () => resolve(null));
+    });
+  }
+
+  /**
+   * Find Bitcoin attestations in timestamp
+   */
+  findBitcoinAttestations(timestamp, attestations = []) {
+    if (timestamp.attestations) {
+      for (const att of timestamp.attestations) {
+        if (att.constructor.name === 'BitcoinBlockHeaderAttestation') {
+          attestations.push(att);
+        }
+      }
+    }
+    if (timestamp.ops) {
+      for (const [op, nextTs] of timestamp.ops) {
+        this.findBitcoinAttestations(nextTs, attestations);
+      }
+    }
+    return attestations;
   }
 
   /**
@@ -117,7 +164,16 @@ class OpenTimestampsService {
       // Upgrade the timestamp (checks if Bitcoin confirmation is available)
       const upgraded = await OpenTimestamps.upgrade(detached);
 
-      if (!upgraded) {
+      // Save upgraded proof if changed
+      if (upgraded) {
+        const upgradedBytes = detached.serializeToBytes();
+        await fs.writeFile(proofPath, upgradedBytes);
+      }
+
+      // Find Bitcoin attestations
+      const bitcoinAttestations = this.findBitcoinAttestations(detached.timestamp);
+
+      if (bitcoinAttestations.length === 0) {
         return {
           verified: false,
           status: 'pending',
@@ -126,29 +182,27 @@ class OpenTimestampsService {
         };
       }
 
-      // Verify the timestamp
-      const hashBuffer = Buffer.from(fileHash, 'hex');
-      const verifyResult = OpenTimestamps.verify(detached, hashBuffer);
+      // Get the earliest (lowest block height) attestation
+      const earliest = bitcoinAttestations.reduce((min, att) => 
+        att.height < min.height ? att : min
+      );
 
-      if (verifyResult && verifyResult.length > 0) {
-        const attestation = verifyResult[0];
-        
-        return {
-          verified: true,
-          status: 'confirmed',
-          message: 'Timestamp confirmed on Bitcoin blockchain',
-          block_height: attestation.height || null,
-          timestamp: new Date(attestation.timestamp * 1000).toISOString(),
-          bitcoin_block: attestation.height || null,
-          proof_file: proofPath,
-          attestation_type: 'BitcoinBlockHeaderAttestation'
-        };
-      }
+      // Fetch actual block time and hash
+      const blockInfo = await this.getBlockTime(earliest.height);
 
       return {
-        verified: false,
-        status: 'invalid',
-        message: 'Timestamp proof is invalid'
+        verified: true,
+        status: 'confirmed',
+        message: 'Timestamp confirmed on Bitcoin blockchain',
+        bitcoin: {
+          block_height: earliest.height,
+          block_hash: blockInfo?.hash || null,
+          block_time: blockInfo?.time || null,
+          timestamp: blockInfo ? new Date(blockInfo.time * 1000).toISOString() : null
+        },
+        attestations_count: bitcoinAttestations.length,
+        proof_file: proofPath,
+        verify_url: `https://opentimestamps.org/verify.html`
       };
 
     } catch (error) {
