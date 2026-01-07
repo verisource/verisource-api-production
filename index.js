@@ -1670,7 +1670,7 @@ if (kind === 'video') {
                 ffmpeg(tempFilePath)
                   .on('end', resolve)
                   .on('error', reject)
-                  .outputOptions(['-vf', 'fps=2', '-q:v', '2', '-frames:v', '30'])
+                  .outputOptions(['-vf', 'scale=1280:-2,fps=2', '-q:v', '2', '-frames:v', '30'])
                   .output(path.join(motionTempDir, 'frame-%04d.jpg'))
                   .run();
               });
