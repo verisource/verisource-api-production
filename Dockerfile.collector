@@ -7,4 +7,4 @@ RUN npm ci --only=production
 
 COPY . .
 
-CMD ["node", "bluesky-worker.js"]
+CMD ["node", "hash-collector.js"]
