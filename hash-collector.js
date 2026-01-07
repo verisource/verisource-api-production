@@ -1,8 +1,5 @@
 /**
  * Bluesky Hash Collector for VeriSource
- * 
- * Connects to Bluesky Jetstream firehose, filters for images,
- * generates pHash, and stores to database.
  */
 
 const WebSocket = require('ws');
@@ -40,12 +37,11 @@ let stats = {
  */
 async function downloadBlob(did, cid) {
   return new Promise((resolve, reject) => {
-    // Use the CDN URL format
     const url = `https://cdn.bsky.app/img/feed_thumbnail/plain/${did}/${cid}@jpeg`;
     
     https.get(url, (res) => {
       if (res.statusCode !== 200) {
-        reject(new Error(`HTTP ${res.statusCode} for ${url}`));
+        reject(new Error(`HTTP ${res.statusCode}`));
         return;
       }
       
@@ -62,26 +58,20 @@ async function downloadBlob(did, cid) {
  */
 async function generatePHash(imageBuffer) {
   try {
-    // Convert to PNG for consistent hashing
     const normalizedBuffer = await sharp(imageBuffer)
       .resize(64, 64, { fit: 'fill' })
       .grayscale()
       .png()
       .toBuffer();
     
-    // Save temp file for imghash
     const tempPath = path.join(os.tmpdir(), `hash_${Date.now()}_${Math.random().toString(36).slice(2)}.png`);
     fs.writeFileSync(tempPath, normalizedBuffer);
     
-    // Generate hash
     const hash = await imghash.hash(tempPath, 16);
-    
-    // Cleanup
     fs.unlinkSync(tempPath);
     
     return hash;
   } catch (err) {
-    console.error('pHash error:', err.message);
     return null;
   }
 }
@@ -123,13 +113,17 @@ async function saveHash(data) {
 }
 
 /**
- * Process a post with images
+ * Process a Jetstream event
  */
-async function processPost(commit) {
+async function processEvent(event) {
   try {
-    const record = commit.record;
-    const did = commit.did;
-    const rkey = commit.rkey;
+    // Get DID from the event (top level, not in commit)
+    const did = event.did;
+    const commit = event.commit;
+    const record = commit?.record;
+    const rkey = commit?.rkey;
+    
+    if (!did || !record || !rkey) return;
     
     // Check for embedded images
     const embed = record?.embed;
@@ -137,7 +131,6 @@ async function processPost(commit) {
     
     let images = [];
     
-    // Handle different embed types
     if (embed.$type === 'app.bsky.embed.images') {
       images = embed.images || [];
     } else if (embed.$type === 'app.bsky.embed.recordWithMedia') {
@@ -149,23 +142,18 @@ async function processPost(commit) {
     stats.imagesFound += images.length;
     
     for (const image of images) {
-      // Try different ways to get the CID
       const cid = image.image?.ref?.$link || 
                   image.image?.ref?.toString() || 
-                  image.image?.cid ||
-                  (typeof image.image?.ref === 'string' ? image.image.ref : null);
+                  image.image?.cid;
       
       if (!cid) {
-        console.log('No CID found in image:', JSON.stringify(image).slice(0, 200));
         stats.errors++;
         continue;
       }
       
       try {
-        // Download blob
         const imageBuffer = await downloadBlob(did, cid);
         
-        // Generate hashes
         const [phash, sha256] = await Promise.all([
           generatePHash(imageBuffer),
           generateSHA256(imageBuffer)
@@ -178,10 +166,8 @@ async function processPost(commit) {
         
         stats.imagesHashed++;
         
-        // Build post URL
         const postUrl = `https://bsky.app/profile/${did}/post/${rkey}`;
         
-        // Save to database
         const saved = await saveHash({
           phash,
           sha256,
@@ -204,7 +190,6 @@ async function processPost(commit) {
     }
   } catch (err) {
     stats.errors++;
-    console.error(`Post error: ${err.message}`);
   }
 }
 
@@ -241,10 +226,9 @@ function connect() {
     try {
       const event = JSON.parse(data.toString());
       
-      // Only process commit events for posts
       if (event.kind === 'commit' && event.commit?.operation === 'create') {
         stats.postsReceived++;
-        await processPost(event.commit);
+        await processEvent(event);
       }
     } catch (err) {
       stats.errors++;
@@ -252,7 +236,7 @@ function connect() {
   });
   
   ws.on('close', () => {
-    console.log('❌ Disconnected from Jetstream, reconnecting in 5s...');
+    console.log('❌ Disconnected, reconnecting in 5s...');
     stats.connected = false;
     setTimeout(connect, 5000);
   });
@@ -270,7 +254,6 @@ async function main() {
   console.log('🚀 Starting Bluesky Hash Collector');
   console.log(`📦 Database: ${process.env.DATABASE_URL ? 'configured' : 'NOT CONFIGURED'}`);
   
-  // Test database connection
   try {
     const result = await pool.query('SELECT NOW()');
     console.log(`✅ Database connected: ${result.rows[0].now}`);
@@ -279,14 +262,10 @@ async function main() {
     process.exit(1);
   }
   
-  // Start stats printer
   setInterval(printStats, 30000);
-  
-  // Connect to Jetstream
   connect();
 }
 
-// Handle shutdown
 process.on('SIGINT', async () => {
   console.log('\n🛑 Shutting down...');
   printStats();
