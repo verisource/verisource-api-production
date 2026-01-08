@@ -2397,6 +2397,21 @@ app.post('/verify-url', authenticateApiKey, async (req, res) => {
     console.log('🔍 Checking verification history...');
     const searchResults = await searchByFingerprint(fingerprint);
     
+    // 2b. Check fingerprint database
+    let fingerprintMatches = null;
+    try {
+      console.log('🔍 Checking fingerprint database...');
+      fingerprintMatches = await FingerprintDBService.search(fingerprint, null);
+      if (fingerprintMatches.total_matches > 0) {
+        console.log(`   ⚠️ Found ${fingerprintMatches.total_matches} prior appearances`);
+        console.log(`   📍 Earliest: ${fingerprintMatches.summary.earliest_source} (${fingerprintMatches.summary.age_label})`);
+      } else {
+        console.log('   ✅ No prior appearances in fingerprint database');
+      }
+    } catch (err) {
+      console.error('⚠️ Fingerprint database error:', err.message);
+    }
+
     // 3. Run AI detection
     let aiDetection = null;
     if (kind === 'video') {
@@ -2764,7 +2779,8 @@ if (download.platform && download.platform !== 'Direct URL') {
       tv_corroboration: tvCorroborationResult,
       blockchain_verification: blockchainVerification,
       polygon_verification: polygonVerification,
-      verified_at: new Date().toISOString()
+      verified_at: new Date().toISOString(),
+      fingerprint_matches: fingerprintMatches
     });
 
     // 7. Return response
@@ -2795,6 +2811,7 @@ if (download.platform && download.platform !== 'Direct URL') {
       polygon_verification: polygonVerification,
       reverse_search: videoReverseSearchResults,
       tv_corroboration: tvCorroborationResult,
+      fingerprint_database: fingerprintMatches?.summary || null,
       provenance_timeline: provenanceTimeline,
       confidence
     });
