@@ -208,6 +208,22 @@ function buildProvenanceTimeline(data) {
     timeline.push(...uniqueLandmarks.slice(0, 5));
   }
   
+  // 4f. Fingerprint database matches (Bluesky, Reddit, Wikimedia)
+  if (data.fingerprint_matches?.timeline_events?.length > 0) {
+    const fingerprintEvents = data.fingerprint_matches.timeline_events.map(event => ({
+      type: event.type,
+      timestamp: normalizeTimestamp(event.timestamp),
+      icon: event.icon,
+      label: event.label,
+      source: event.source,
+      details: event.details,
+      url: event.url,
+      relevance: event.relevance,
+      is_earliest_fingerprint: event.is_earliest
+    }));
+    
+    timeline.push(...fingerprintEvents);
+  }
   // 5. First verification (if previously seen)
   if (data.verification?.status === 'PREVIOUSLY_VERIFIED' && data.verification?.first_seen) {
     timeline.push({

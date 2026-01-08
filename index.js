@@ -32,6 +32,7 @@ const VoiceEmbeddingService = require('./services/voice-embedding-service');
 const VideoThumbnailService = require('./services/video-thumbnail-service');
 const tvCorroboration = require('./services/tv-corroboration');
 const { buildProvenanceTimeline } = require('./services/provenance-timeline');
+const FingerprintDBService = require('./services/fingerprint-db-service');
 const { authenticateApiKey, getUserAccountId } = require('./api-key-middleware');
 // Import canonicalization only (workers not needed for minimal endpoint)
 let canonicalizeImage;
@@ -2098,6 +2099,22 @@ if (kind === 'video') {
     }
 
     // ============================================
+    // STEP 17D: Fingerprint Database Check
+    // ============================================
+    let fingerprintMatches = null;
+    try {
+      console.log('🔍 Checking fingerprint database...');
+      fingerprintMatches = await FingerprintDBService.search(fingerprint, phash);
+      if (fingerprintMatches.total_matches > 0) {
+        console.log(`   ⚠️ Found ${fingerprintMatches.total_matches} prior appearances`);
+        console.log(`   📍 Earliest: ${fingerprintMatches.summary.earliest_source} (${fingerprintMatches.summary.age_label})`);
+      } else {
+        console.log('   ✅ No prior appearances in fingerprint database');
+      }
+    } catch (err) {
+      console.error('⚠️ Fingerprint database error:', err.message);
+    }
+    // ============================================
     // STEP 18: C2PA Verification
     // ============================================
     let c2paResult = null;
@@ -2219,7 +2236,8 @@ if (kind === 'video') {
       blockchain_verification: blockchainVerification,
       polygon_verification: polygonVerification,
       reverse_image_search: reverseSearchResults,
-      verified_at: new Date().toISOString()
+      verified_at: new Date().toISOString(),
+      fingerprint_matches: fingerprintMatches
     });
 
     // ============================================
@@ -2305,6 +2323,7 @@ if (kind === 'video') {
       virustotal: virusTotalResult,
       ...(tvCorroborationResult && { tv_corroboration: tvCorroborationResult }),
       confidence: confidence,
+      fingerprint_database: fingerprintMatches?.summary || null,
       provenance_timeline: provenanceTimeline,
       verified_at: new Date().toISOString()
     };
@@ -2840,6 +2859,20 @@ app.post('/verify', upload.single('file'), authenticateApiKey, async (req, res) 
       );
     } catch (err) {
       console.error('⚠️ Provenance check error:', err.message);
+    }
+    // Fingerprint database check
+    let fingerprintMatches = null;
+    try {
+      console.log('🔍 Checking fingerprint database...');
+      fingerprintMatches = await FingerprintDBService.search(fingerprint, phash);
+      if (fingerprintMatches.total_matches > 0) {
+        console.log(`   ⚠️ Found ${fingerprintMatches.total_matches} prior appearances`);
+        console.log(`   📍 Earliest: ${fingerprintMatches.summary.earliest_source} (${fingerprintMatches.summary.age_label})`);
+      } else {
+        console.log('   ✅ No prior appearances in fingerprint database');
+      }
+    } catch (err) {
+      console.error('⚠️ Fingerprint database error:', err.message);
     }
     // Only timestamp if NEW (not previously verified)
     let blockchainVerification = null;
@@ -4247,6 +4280,7 @@ module.exports = { applyHybridCameraRescue, calculateCameraAuthenticityScore };
           return { found: false, error: err.message };
         }
       })(),
+      fingerprint_database: fingerprintMatches?.summary || null,
       confidence: (() => {
         try {
           // Build data object for confidence calculation
@@ -4415,6 +4449,15 @@ app.get('/admin/migrate-region-phash', async (req, res) => {
 
 const fingerprintIndex = require('./services/fingerprint-index');
 
+// Fingerprint database stats (crawlers: Bluesky, Reddit, Wikimedia)
+app.get('/fingerprint/stats', async (req, res) => {
+  try {
+    const stats = await FingerprintDBService.getStats();
+    res.json(stats);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 // Get index stats
 app.get('/index/stats', (req, res) => {
   try {
