@@ -54,7 +54,7 @@ class FingerprintDatabaseService {
       FROM media_hashes
       WHERE sha256 = $1
       ORDER BY post_created_at ASC
-      LIMIT 10
+      LIMIT 100
     `;
     
     try {
@@ -74,7 +74,7 @@ class FingerprintDatabaseService {
    * @param {number} limit - Maximum results to return
    * @returns {Array} Matching records with distance
    */
-  async findPerceptualMatches(phash, threshold = 5, limit = 20) {
+  async findPerceptualMatches(phash, threshold = 5, limit = 100) {
     // For large databases, we do initial filtering in DB then refine in JS
     // This query gets candidates that might match (using prefix similarity)
     const query = `
@@ -144,18 +144,30 @@ class FingerprintDatabaseService {
       bySource[match.source].push(match);
     }
 
+    // Get earliest per source with count
+    const earliestBySource = {};
+    for (const source in bySource) {
+      const sourceMatches = bySource[source];
+      earliestBySource[source] = {
+        earliest: sourceMatches[0], // Already sorted by date
+        total_count: sourceMatches.length
+      };
+    }
+
     return {
       total_matches: allMatches.length,
       exact_matches: exactMatches.length,
       perceptual_matches: uniquePerceptual.length,
       earliest: earliest,
       matches: allMatches,
-      by_source: bySource
+      by_source: bySource,
+      earliest_by_source: earliestBySource
     };
   }
 
   /**
    * Format matches for provenance timeline
+   * Shows only earliest per platform with count
    * @param {Object} matchResults - Results from findMatches
    * @returns {Array} Timeline events
    */
@@ -181,45 +193,56 @@ class FingerprintDatabaseService {
       default: 'Social Media'
     };
 
-    for (const match of matchResults.matches) {
-      const isEarliest = match.id === matchResults.earliest?.id;
-      const icon = sourceIcons[match.source] || sourceIcons.default;
-      const label = sourceLabels[match.source] || sourceLabels.default;
+    // Only show earliest per source
+    for (const source in matchResults.earliest_by_source) {
+      const { earliest, total_count } = matchResults.earliest_by_source[source];
+      const isGlobalEarliest = earliest.id === matchResults.earliest?.id;
+      const icon = sourceIcons[source] || sourceIcons.default;
+      const label = sourceLabels[source] || sourceLabels.default;
 
       let details = '';
-      if (match.author_handle) {
-        if (match.source === 'reddit') {
-          details = `u/${match.author_handle}`;
-        } else if (match.source === 'bluesky') {
-          details = `@${match.author_handle}`;
-        } else if (match.source === 'wikimedia') {
-          details = match.author_handle; // Author name
-          if (match.author_did) { // License stored in author_did for wikimedia
-            details += ` • ${match.author_did}`;
+      if (earliest.author_handle) {
+        if (source === 'reddit') {
+          details = `u/${earliest.author_handle}`;
+        } else if (source === 'bluesky') {
+          details = `@${earliest.author_handle}`;
+        } else if (source === 'wikimedia') {
+          details = earliest.author_handle; // Author name
+          if (earliest.author_did) { // License stored in author_did for wikimedia
+            details += ` • ${earliest.author_did}`;
           }
         } else {
-          details = match.author_handle;
+          details = earliest.author_handle;
         }
       }
 
-      if (match.distance !== undefined && match.distance > 0) {
-        details += details ? ` • ${100 - match.distance * 2}% similar` : `${100 - match.distance * 2}% similar`;
+      // Add count if more than 1
+      if (total_count > 1) {
+        details += details ? ` • +${total_count - 1} more on ${label}` : `+${total_count - 1} more appearances`;
+      }
+
+      if (earliest.distance !== undefined && earliest.distance > 0) {
+        details += details ? ` • ${100 - earliest.distance * 2}% similar` : `${100 - earliest.distance * 2}% similar`;
       }
 
       events.push({
         type: 'FINGERPRINT_MATCH',
-        timestamp: match.post_created_at,
+        timestamp: earliest.post_created_at,
         icon: icon,
-        label: isEarliest ? `First Seen: ${label}` : `Found on ${label}`,
+        label: `First Seen: ${label}`,
         source: label,
-        source_platform: match.source,
+        source_platform: source,
         details: details || null,
-        url: match.source_url,
-        is_earliest: isEarliest,
-        match_type: match.distance === 0 || match.distance === undefined ? 'exact' : 'perceptual',
-        relevance: match.distance !== undefined ? 1 - (match.distance / 64) : 1
+        url: earliest.source_url,
+        is_earliest: isGlobalEarliest,
+        match_type: earliest.distance === 0 || earliest.distance === undefined ? 'exact' : 'perceptual',
+        relevance: earliest.distance !== undefined ? 1 - (earliest.distance / 64) : 1,
+        total_on_platform: total_count
       });
     }
+
+    // Sort by date (oldest first)
+    events.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
 
     return events;
   }
@@ -268,15 +291,21 @@ class FingerprintDatabaseService {
       mastodon: 'Mastodon'
     };
 
+    // Count platforms
+    const platformCount = Object.keys(sourceCounts).length;
+
     return {
       found: true,
       total_appearances: matchResults.total_matches,
+      platforms_found: platformCount,
       earliest_date: earliest.post_created_at,
       earliest_source: sourceLabels[earliest.source] || earliest.source,
       earliest_url: earliest.source_url,
+      earliest_author: earliest.author_handle,
       age_label: ageLabel,
       source_counts: sourceCounts,
-      message: `First appeared on ${sourceLabels[earliest.source] || earliest.source} ${ageLabel}`
+      message: `First appeared on ${sourceLabels[earliest.source] || earliest.source} ${ageLabel}` + 
+               (matchResults.total_matches > 1 ? ` • ${matchResults.total_matches} total appearances across ${platformCount} platform${platformCount > 1 ? 's' : ''}` : '')
     };
   }
 
