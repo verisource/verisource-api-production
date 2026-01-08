@@ -23,7 +23,7 @@ const os = require('os');
 // Configuration
 const API_BASE = 'https://commons.wikimedia.org/w/api.php';
 const BATCH_SIZE = 50; // Images per request
-const REQUEST_DELAY = 1000; // 1 second between requests (conservative)
+const REQUEST_DELAY = 2000; // 2 seconds between requests
 
 // Database connection
 const pool = new Pool({
@@ -37,6 +37,11 @@ let stats = {
   imagesFound: 0,
   imagesHashed: 0,
   imagesSaved: 0,
+  skippedNoUrl: 0,
+  skippedNotImage: 0,
+  skippedTooLarge: 0,
+  skippedDownload: 0,
+  skippedHash: 0,
   errors: 0,
   startTime: Date.now()
 };
@@ -45,17 +50,18 @@ let stats = {
 let continueToken = null;
 
 /**
- * Fetch JSON from URL
+ * Fetch JSON from URL with timeout
  */
 function fetchJson(url) {
   return new Promise((resolve, reject) => {
     const options = {
       headers: {
         'User-Agent': 'VeriSource/1.0 (Content Verification Service; https://verisource.io; contact@verisource.io)'
-      }
+      },
+      timeout: 30000
     };
 
-    https.get(url, options, (res) => {
+    const req = https.get(url, options, (res) => {
       if (res.statusCode !== 200) {
         reject(new Error(`HTTP ${res.statusCode}`));
         return;
@@ -71,27 +77,34 @@ function fetchJson(url) {
         }
       });
       res.on('error', reject);
-    }).on('error', reject);
+    });
+
+    req.on('error', reject);
+    req.on('timeout', () => {
+      req.destroy();
+      reject(new Error('Request timeout'));
+    });
   });
 }
 
 /**
- * Download image from URL
+ * Download image from URL with timeout
  */
-function downloadImage(url) {
+function downloadImage(url, maxSize = 5 * 1024 * 1024) {
   return new Promise((resolve, reject) => {
     const protocol = url.startsWith('https') ? https : require('http');
     
     const options = {
       headers: {
         'User-Agent': 'VeriSource/1.0 (Content Verification Service)'
-      }
+      },
+      timeout: 30000
     };
 
-    protocol.get(url, options, (res) => {
+    const req = protocol.get(url, options, (res) => {
       // Handle redirects
       if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
-        downloadImage(res.headers.location).then(resolve).catch(reject);
+        downloadImage(res.headers.location, maxSize).then(resolve).catch(reject);
         return;
       }
 
@@ -101,10 +114,26 @@ function downloadImage(url) {
       }
 
       const chunks = [];
-      res.on('data', chunk => chunks.push(chunk));
+      let totalSize = 0;
+
+      res.on('data', chunk => {
+        totalSize += chunk.length;
+        if (totalSize > maxSize) {
+          req.destroy();
+          reject(new Error('File too large'));
+          return;
+        }
+        chunks.push(chunk);
+      });
       res.on('end', () => resolve(Buffer.concat(chunks)));
       res.on('error', reject);
-    }).on('error', reject);
+    });
+
+    req.on('error', reject);
+    req.on('timeout', () => {
+      req.destroy();
+      reject(new Error('Download timeout'));
+    });
   });
 }
 
@@ -150,6 +179,7 @@ async function getImageInfo(titles) {
     return data.query?.pages || {};
   } catch (err) {
     stats.errors++;
+    console.error(`API error: ${err.message}`);
     return {};
   }
 }
@@ -174,7 +204,7 @@ function extractMetadata(imageInfo) {
     mime: info.mime,
     license: extmeta.LicenseShortName?.value || null,
     licenseUrl: extmeta.LicenseUrl?.value || null,
-    artist: extmeta.Artist?.value?.replace(/<[^>]*>/g, '') || null, // Strip HTML
+    artist: extmeta.Artist?.value?.replace(/<[^>]*>/g, '') || null,
     description: extmeta.ImageDescription?.value?.replace(/<[^>]*>/g, '')?.slice(0, 500) || null,
     categories: extmeta.Categories?.value || null,
     dateOriginal: extmeta.DateTimeOriginal?.value || null,
@@ -204,8 +234,8 @@ async function saveHash(data) {
       'wikimedia',
       data.source_id,
       data.source_url,
-      data.author, // Store in author_handle
-      data.license, // Store license in author_did for now
+      data.author,
+      data.license,
       data.post_created_at
     ]);
     return result.rows.length > 0;
@@ -220,21 +250,35 @@ async function saveHash(data) {
  */
 async function processImage(title, metadata) {
   try {
-    if (!metadata?.url) return;
+    // Check for URL
+    if (!metadata?.url) {
+      stats.skippedNoUrl++;
+      return;
+    }
 
-    // Skip non-image files
-    if (!metadata.mime?.startsWith('image/')) return;
+    // Check mime type
+    const validMimes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+    if (!validMimes.includes(metadata.mime)) {
+      stats.skippedNotImage++;
+      return;
+    }
     
-    // Skip very large files (>10MB)
-    if (metadata.size > 10 * 1024 * 1024) return;
-
-    // Skip SVG (can't hash well)
-    if (metadata.mime === 'image/svg+xml') return;
+    // Skip very large files (>5MB)
+    if (metadata.size > 5 * 1024 * 1024) {
+      stats.skippedTooLarge++;
+      return;
+    }
 
     stats.imagesFound++;
 
     // Download image
-    const imageBuffer = await downloadImage(metadata.url);
+    let imageBuffer;
+    try {
+      imageBuffer = await downloadImage(metadata.url);
+    } catch (err) {
+      stats.skippedDownload++;
+      return;
+    }
 
     // Generate hashes
     const [phash, sha256] = await Promise.all([
@@ -243,7 +287,7 @@ async function processImage(title, metadata) {
     ]);
 
     if (!phash) {
-      stats.errors++;
+      stats.skippedHash++;
       return;
     }
 
@@ -268,17 +312,16 @@ async function processImage(title, metadata) {
 
   } catch (err) {
     stats.errors++;
-    if (process.env.DEBUG) {
-      console.error(`Image error: ${err.message}`);
-    }
+    console.error(`Process error: ${err.message}`);
   }
 }
 
 /**
- * Fetch recent uploads
+ * Fetch recent uploads - images only
  */
 async function fetchRecentUploads() {
-  let url = `${API_BASE}?action=query&list=allimages&ailimit=${BATCH_SIZE}&aisort=timestamp&aidir=descending&format=json`;
+  // Use aimime to filter to images only
+  let url = `${API_BASE}?action=query&list=allimages&ailimit=${BATCH_SIZE}&aisort=timestamp&aidir=descending&aiprop=timestamp|url|size|mime|user&format=json`;
   
   if (continueToken) {
     url += `&aicontinue=${encodeURIComponent(continueToken)}`;
@@ -292,20 +335,26 @@ async function fetchRecentUploads() {
     // Update continue token
     continueToken = data.continue?.aicontinue || null;
 
-    const images = data.query?.allimages || [];
+    const allImages = data.query?.allimages || [];
     
+    // Filter to only actual image files
+    const images = allImages.filter(img => 
+      /\.(jpg|jpeg|png|gif|webp)$/i.test(img.name)
+    );
+
+    console.log(`   Found ${images.length} images (filtered from ${allImages.length})`);
+
     if (images.length === 0) {
-      console.log('No images found in batch');
       return;
     }
 
     // Get full metadata for these images
-    const titles = images.map(img => img.name);
-    const infoPages = await getImageInfo(titles.map(t => `File:${t}`));
+    const titles = images.map(img => `File:${img.name}`);
+    const infoPages = await getImageInfo(titles);
 
     // Process each image
     for (const [pageId, pageInfo] of Object.entries(infoPages)) {
-      if (pageId === '-1') continue; // Missing page
+      if (pageId === '-1') continue;
       
       const title = pageInfo.title;
       const metadata = extractMetadata(pageInfo);
@@ -313,7 +362,7 @@ async function fetchRecentUploads() {
       await processImage(title, metadata);
       
       // Small delay between image downloads
-      await new Promise(resolve => setTimeout(resolve, 100));
+      await new Promise(resolve => setTimeout(resolve, 200));
     }
 
   } catch (err) {
@@ -334,8 +383,14 @@ function printStats() {
   console.log(`   Images found: ${stats.imagesFound}`);
   console.log(`   Images hashed: ${stats.imagesHashed}`);
   console.log(`   Images saved: ${stats.imagesSaved}`);
-  console.log(`   Errors: ${stats.errors}`);
   console.log(`   Rate: ${rate.toFixed(1)} images/min`);
+  console.log(`   Skipped:`);
+  console.log(`     - No URL: ${stats.skippedNoUrl}`);
+  console.log(`     - Not image: ${stats.skippedNotImage}`);
+  console.log(`     - Too large: ${stats.skippedTooLarge}`);
+  console.log(`     - Download fail: ${stats.skippedDownload}`);
+  console.log(`     - Hash fail: ${stats.skippedHash}`);
+  console.log(`   Errors: ${stats.errors}`);
 }
 
 /**
