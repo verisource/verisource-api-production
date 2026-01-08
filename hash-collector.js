@@ -88,7 +88,7 @@ function generateSHA256(buffer) {
  */
 async function saveHash(data) {
   const query = `
-    INSERT INTO media_hashes (phash, sha256, source, source_id, source_url, author_handle, author_did, captured_at)
+    INSERT INTO media_hashes (phash, sha256, source, source_id, source_url, author_handle, author_did, post_created_at)
     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
     ON CONFLICT (source, source_id) DO NOTHING
     RETURNING id
@@ -103,7 +103,7 @@ async function saveHash(data) {
       data.source_url,
       data.author_handle,
       data.author_did,
-      data.captured_at
+      data.post_created_at
     ]);
     return result.rows.length > 0;
   } catch (err) {
@@ -175,7 +175,7 @@ async function processEvent(event) {
           source_url: postUrl,
           author_handle: null,
           author_did: did,
-          captured_at: new Date(record.createdAt)
+          post_created_at: new Date(record.createdAt)
         });
         
         if (saved) {
