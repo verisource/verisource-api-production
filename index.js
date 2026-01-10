@@ -328,6 +328,57 @@ app.get("/provenance/:hash/similar", async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+// ============================================================================
+// CONTRIBUTE ENDPOINT - Chrome Extension Fingerprint Collection
+// ============================================================================
+app.post('/contribute', async (req, res) => {
+  try {
+    const { fingerprints, source, version } = req.body;
+    
+    if (!fingerprints || !Array.isArray(fingerprints)) {
+      return res.status(400).json({ success: false, error: 'Invalid fingerprints array' });
+    }
+    
+    if (fingerprints.length === 0) {
+      return res.json({ success: true, saved: 0, received: 0 });
+    }
+    
+    if (fingerprints.length > 100) {
+      return res.status(400).json({ success: false, error: 'Maximum 100 fingerprints per request' });
+    }
+    
+    let saved = 0;
+    let duplicates = 0;
+    
+    for (const fp of fingerprints) {
+      if (!fp.phash || typeof fp.phash !== 'string' || fp.phash.length < 16) continue;
+      
+      const platform = (fp.platform || 'unknown').toLowerCase().replace(/[^a-z0-9]/g, '');
+      
+      try {
+        const result = await db.query(`
+          INSERT INTO media_hashes (phash, source, source_url, author_handle, ingested_at)
+          VALUES ($1, $2, $3, $4, NOW())
+          ON CONFLICT (phash, source, source_url) DO NOTHING
+          RETURNING id
+        `, [fp.phash, platform, fp.source_url || null, fp.author_handle || null]);
+        
+        if (result.rowCount > 0) saved++;
+        else duplicates++;
+      } catch (err) {
+        console.error('Contribute insert error:', err.message);
+      }
+    }
+    
+    console.log(`[Contribute] source=${source} version=${version} received=${fingerprints.length} saved=${saved} duplicates=${duplicates}`);
+    
+    res.json({ success: true, saved, duplicates, received: fingerprints.length });
+    
+  } catch (err) {
+    console.error('Contribute endpoint error:', err);
+    res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
 
 app.get("/debug-env", (req, res) => res.json({ 
   has_database_url: !!process.env.DATABASE_URL,
