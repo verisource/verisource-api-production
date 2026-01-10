@@ -355,13 +355,18 @@ app.post('/contribute', async (req, res) => {
       
       const platform = (fp.platform || 'unknown').toLowerCase().replace(/[^a-z0-9]/g, '');
       
+      // Generate source_id from URL or create unique ID
+      const sourceId = fp.source_url 
+        ? fp.source_url.split('/').pop().substring(0, 250) 
+        : `ext_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      
       try {
         const result = await db.query(`
-          INSERT INTO media_hashes (phash, source, source_url, author_handle, ingested_at)
-          VALUES ($1, $2, $3, $4, NOW())
-          ON CONFLICT (phash, source, source_url) DO NOTHING
+          INSERT INTO media_hashes (phash, source, source_id, source_url, author_handle, post_created_at, ingested_at)
+          VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
+          ON CONFLICT (source, source_id) DO NOTHING
           RETURNING id
-        `, [fp.phash, platform, fp.source_url || null, fp.author_handle || null]);
+        `, [fp.phash, platform, sourceId, fp.source_url || null, fp.author_handle || null]);
         
         if (result.rowCount > 0) saved++;
         else duplicates++;
