@@ -44,40 +44,27 @@ const CONFIG = {
 // ============================================================================
 
 const CURATED_DIDS = new Set([
-  // === MAJOR NEWS ORGANIZATIONS ===
-  'did:plc:eclio37ymobqex2ncko63h4r', // @ap.bsky.social - Associated Press
-  'did:plc:7ry3jiicqzfihc5lszwhqwqv', // @reuters.com - Reuters
-  'did:plc:ivp5xbxkweakqr7s5hpfk2v6', // @bbc.bsky.social - BBC
-  'did:plc:fwa4hprbyjkrdofxhsqaanpv', // @nytimes.bsky.social - NY Times
-  'did:plc:kkf4naxqmweop7dv4l2iqqf5', // @washingtonpost.com - Washington Post
-  'did:plc:cnhmdsp5vxqhfkq3iqgmsmca', // @wsj.com - Wall Street Journal
-  'did:plc:oynzqp6v3wogw6qiscefgpwp', // @theguardian.com - The Guardian
-  'did:plc:2yahghyxsqgrpkpfq7c3gq5g', // @cnn.com - CNN
-  'did:plc:qmfctzqj4n3w4wryokpwluhc', // @nbcnews.com - NBC News
-  'did:plc:c72ykktj6sva4sdjxpbmwccw', // @cbsnews.com - CBS News
-  'did:plc:mjdqupffcfmcxk4dha6rltvc', // @abcnews.com - ABC News
-  'did:plc:6z5botgrc5vekq7j26xnvawq', // @npr.org - NPR
-  'did:plc:wde2auqh4c3ljgnni6wuhaol', // @politico.com - Politico
+  // === MAJOR NEWS ORGANIZATIONS (VERIFIED) ===
+  'did:plc:a67zdrt4nl2tv2qojpngogbq', // @apnews.com - Associated Press
+  'did:plc:jbvnehrrdqoulco4rf5gxg5r', // @reuters.com - Reuters
+  'did:plc:eclio37ymobqex2ncko63h4r', // @nytimes.com - NY Times
+  'did:plc:k5nskatzhyxersjilvtnz4lh', // @washingtonpost.com - Washington Post
+  'did:plc:i3fhjvvkbmirhyu4aeihhrnv', // @wsj.com - Wall Street Journal
+  'did:plc:dzezcmpb3fhcpns4n4xm4ur5', // @cnn.com - CNN
+  'did:plc:ln72v57ivz2g46uqf4xxqiuh', // @npr.org - NPR
+  'did:plc:vovinwhtulbsx4mwfw26r5ni', // @theguardian.com - The Guardian
+  'did:plc:wmho6q2uiyktkam3jsvrms3s', // @nbcnews.com - NBC News
+  'did:plc:3bxtpdpr73tf7tldv5q4oyqc', // @cbsnews.com - CBS News
+  'did:plc:yf6hctt2ug3qyfty4in64yob', // @politico.com - Politico
+  'did:plc:uewxgchsjy4kmtu7dcxa77es', // @bloomberg.com - Bloomberg
   
-  // === WIRE SERVICES ===
-  'did:plc:m36zngpj3b7h7c5t52zabmae', // @afp.com - AFP
+  // === TECH NEWS (VERIFIED) ===
+  'did:plc:vtpyqvwce4x6gpa5dcizqecy', // @techcrunch.com - TechCrunch
+  'did:plc:7exlcsle4mjfhu3wnhcgizz6', // @theverge.com - The Verge
+  'did:plc:inz4fkbbp7ms3ixufw6xuvdi', // @wired.com - Wired
   
-  // === INTERNATIONAL NEWS ===
-  'did:plc:gnmxqo3ybq4u6jkxvxndjsrz', // @dwnews.bsky.social - DW News
-  
-  // === TECH/BUSINESS NEWS ===
-  'did:plc:hyptj2td7o2qrqfqhkwmrd6i', // @techcrunch.com - TechCrunch
-  'did:plc:6isaipmxzcmmuejqvlhr6wux', // @theverge.com - The Verge
-  'did:plc:4gjc34o3c7dpkvl6wfpxgcki', // @wired.com - Wired
-  'did:plc:dfcqbgowxzqnziqwagfwclkq', // @arstechnica.com - Ars Technica
-  'did:plc:rh6lkfz2fmhxzdeu7dvgbnav', // @bloomberg.com - Bloomberg
-  
-  // === FACT-CHECKERS ===
-  'did:plc:yl4agelr2lvedagujrx7o4kh', // @snopes.com - Snopes
-  'did:plc:t7y5bcqftfplprlzgfhovnex', // @politifact.com - PolitiFact
-  
-  // === INVESTIGATIVE / OSINT ===
-  'did:plc:sxkcvldywxbxbsxpybvpjzav', // @bellingcat.bsky.social - Bellingcat
+  // Note: bbc.com, abcnews.go.com, bellingcat.bsky.social not found on Bluesky
+  // Add more verified DIDs as news orgs join Bluesky
 ]);
 
 // ============================================================================
