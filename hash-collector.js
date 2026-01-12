@@ -1,5 +1,11 @@
 /**
- * Bluesky Hash Collector for VeriSource
+ * VeriSource Bluesky Hash Collector - HYBRID MODE
+ * 
+ * Strategy:
+ * - Tier 1: Curated journalist accounts → Index IMMEDIATELY
+ * - Tier 2: All other posts → Queue, check engagement after 1 hour, index if 50+ likes
+ * 
+ * This maximizes provenance value while catching viral citizen journalism.
  */
 
 const WebSocket = require('ws');
@@ -12,29 +18,144 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 
-// Configuration
-const JETSTREAM_URL = 'wss://jetstream2.us-east.bsky.network/subscribe?wantedCollections=app.bsky.feed.post';
+// ============================================================================
+// CONFIGURATION
+// ============================================================================
 
-// Database connection
+const CONFIG = {
+  // Engagement threshold for non-curated posts
+  minLikes: parseInt(process.env.MIN_LIKES) || 50,
+  
+  // How long to wait before checking engagement (ms)
+  engagementDelay: parseInt(process.env.ENGAGEMENT_DELAY) || 60 * 60 * 1000, // 1 hour
+  
+  // How often to process the pending queue (ms)
+  queueInterval: parseInt(process.env.QUEUE_INTERVAL) || 5 * 60 * 1000, // 5 minutes
+  
+  // Max pending queue size (oldest dropped if exceeded)
+  maxQueueSize: parseInt(process.env.MAX_QUEUE_SIZE) || 10000,
+  
+  // Bluesky API rate limit (requests per minute)
+  apiRateLimit: 100
+};
+
+// ============================================================================
+// CURATED ACCOUNTS - Journalists & News Organizations
+// ============================================================================
+
+const CURATED_DIDS = new Set([
+  // === MAJOR NEWS ORGANIZATIONS ===
+  'did:plc:eclio37ymobqex2ncko63h4r', // @ap.bsky.social - Associated Press
+  'did:plc:7ry3jiicqzfihc5lszwhqwqv', // @reuters.com - Reuters
+  'did:plc:ivp5xbxkweakqr7s5hpfk2v6', // @bbc.bsky.social - BBC
+  'did:plc:fwa4hprbyjkrdofxhsqaanpv', // @nytimes.bsky.social - NY Times
+  'did:plc:kkf4naxqmweop7dv4l2iqqf5', // @washingtonpost.com - Washington Post
+  'did:plc:cnhmdsp5vxqhfkq3iqgmsmca', // @wsj.com - Wall Street Journal
+  'did:plc:oynzqp6v3wogw6qiscefgpwp', // @theguardian.com - The Guardian
+  'did:plc:2yahghyxsqgrpkpfq7c3gq5g', // @cnn.com - CNN
+  'did:plc:qmfctzqj4n3w4wryokpwluhc', // @nbcnews.com - NBC News
+  'did:plc:c72ykktj6sva4sdjxpbmwccw', // @cbsnews.com - CBS News
+  'did:plc:mjdqupffcfmcxk4dha6rltvc', // @abcnews.com - ABC News
+  'did:plc:6z5botgrc5vekq7j26xnvawq', // @npr.org - NPR
+  'did:plc:wde2auqh4c3ljgnni6wuhaol', // @politico.com - Politico
+  
+  // === WIRE SERVICES ===
+  'did:plc:m36zngpj3b7h7c5t52zabmae', // @afp.com - AFP
+  
+  // === INTERNATIONAL NEWS ===
+  'did:plc:gnmxqo3ybq4u6jkxvxndjsrz', // @dwnews.bsky.social - DW News
+  
+  // === TECH/BUSINESS NEWS ===
+  'did:plc:hyptj2td7o2qrqfqhkwmrd6i', // @techcrunch.com - TechCrunch
+  'did:plc:6isaipmxzcmmuejqvlhr6wux', // @theverge.com - The Verge
+  'did:plc:4gjc34o3c7dpkvl6wfpxgcki', // @wired.com - Wired
+  'did:plc:dfcqbgowxzqnziqwagfwclkq', // @arstechnica.com - Ars Technica
+  'did:plc:rh6lkfz2fmhxzdeu7dvgbnav', // @bloomberg.com - Bloomberg
+  
+  // === FACT-CHECKERS ===
+  'did:plc:yl4agelr2lvedagujrx7o4kh', // @snopes.com - Snopes
+  'did:plc:t7y5bcqftfplprlzgfhovnex', // @politifact.com - PolitiFact
+  
+  // === INVESTIGATIVE / OSINT ===
+  'did:plc:sxkcvldywxbxbsxpybvpjzav', // @bellingcat.bsky.social - Bellingcat
+]);
+
+// ============================================================================
+// DATABASE & STATE
+// ============================================================================
+
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
 });
 
-// Stats tracking
+// In-memory pending queue for engagement checks
+// Map: postUri -> { did, rkey, images[], createdAt, queuedAt }
+const pendingQueue = new Map();
+
 let stats = {
   connected: false,
   postsReceived: 0,
+  curatedIndexed: 0,
+  queuedForEngagement: 0,
+  engagementChecks: 0,
+  engagementPassed: 0,
+  engagementFailed: 0,
   imagesFound: 0,
   imagesHashed: 0,
   imagesSaved: 0,
   errors: 0,
+  apiCalls: 0,
   startTime: Date.now()
 };
 
-/**
- * Download blob from Bluesky CDN
- */
+// ============================================================================
+// BLUESKY API - Engagement Check
+// ============================================================================
+
+async function getPostEngagement(did, rkey) {
+  return new Promise((resolve, reject) => {
+    const uri = `at://${did}/app.bsky.feed.post/${rkey}`;
+    const url = `https://public.api.bsky.app/xrpc/app.bsky.feed.getPostThread?uri=${encodeURIComponent(uri)}&depth=0`;
+    
+    https.get(url, (res) => {
+      let data = '';
+      res.on('data', chunk => data += chunk);
+      res.on('end', () => {
+        try {
+          if (res.statusCode !== 200) {
+            resolve({ likes: 0, reposts: 0, error: `HTTP ${res.statusCode}` });
+            return;
+          }
+          
+          const json = JSON.parse(data);
+          const post = json.thread?.post;
+          
+          if (!post) {
+            resolve({ likes: 0, reposts: 0, error: 'Post not found' });
+            return;
+          }
+          
+          resolve({
+            likes: post.likeCount || 0,
+            reposts: post.repostCount || 0,
+            replies: post.replyCount || 0
+          });
+        } catch (err) {
+          resolve({ likes: 0, reposts: 0, error: err.message });
+        }
+      });
+      res.on('error', () => resolve({ likes: 0, reposts: 0, error: 'Request failed' }));
+    }).on('error', () => resolve({ likes: 0, reposts: 0, error: 'Connection failed' }));
+    
+    stats.apiCalls++;
+  });
+}
+
+// ============================================================================
+// IMAGE PROCESSING
+// ============================================================================
+
 async function downloadBlob(did, cid) {
   return new Promise((resolve, reject) => {
     const url = `https://cdn.bsky.app/img/feed_thumbnail/plain/${did}/${cid}@jpeg`;
@@ -53,9 +174,6 @@ async function downloadBlob(did, cid) {
   });
 }
 
-/**
- * Generate perceptual hash from image buffer
- */
 async function generatePHash(imageBuffer) {
   try {
     const normalizedBuffer = await sharp(imageBuffer)
@@ -76,16 +194,14 @@ async function generatePHash(imageBuffer) {
   }
 }
 
-/**
- * Generate SHA256 hash from buffer
- */
 function generateSHA256(buffer) {
   return crypto.createHash('sha256').update(buffer).digest('hex');
 }
 
-/**
- * Save hash to database
- */
+// ============================================================================
+// DATABASE
+// ============================================================================
+
 async function saveHash(data) {
   const query = `
     INSERT INTO media_hashes (phash, sha256, source, source_id, source_url, author_handle, author_did, post_created_at)
@@ -112,12 +228,135 @@ async function saveHash(data) {
   }
 }
 
-/**
- * Process a Jetstream event
- */
+// ============================================================================
+// IMAGE INDEXING
+// ============================================================================
+
+async function indexImages(did, rkey, images, createdAt, tier) {
+  const postUrl = `https://bsky.app/profile/${did}/post/${rkey}`;
+  let savedCount = 0;
+  
+  for (const image of images) {
+    const cid = image.image?.ref?.$link || 
+                image.image?.ref?.toString() || 
+                image.image?.cid;
+    
+    if (!cid) {
+      stats.errors++;
+      continue;
+    }
+    
+    try {
+      const imageBuffer = await downloadBlob(did, cid);
+      
+      const [phash, sha256] = await Promise.all([
+        generatePHash(imageBuffer),
+        generateSHA256(imageBuffer)
+      ]);
+      
+      if (!phash) {
+        stats.errors++;
+        continue;
+      }
+      
+      stats.imagesHashed++;
+      
+      const saved = await saveHash({
+        phash,
+        sha256,
+        source_id: `${did}/${rkey}/${cid}`,
+        source_url: postUrl,
+        author_handle: null,
+        author_did: did,
+        post_created_at: new Date(createdAt)
+      });
+      
+      if (saved) {
+        stats.imagesSaved++;
+        savedCount++;
+        console.log(`✅ [${tier}] Saved: ${postUrl}`);
+      }
+      
+    } catch (err) {
+      stats.errors++;
+    }
+  }
+  
+  return savedCount;
+}
+
+// ============================================================================
+// PENDING QUEUE MANAGEMENT
+// ============================================================================
+
+function addToQueue(did, rkey, images, createdAt) {
+  const uri = `${did}/${rkey}`;
+  
+  // Don't re-queue
+  if (pendingQueue.has(uri)) return;
+  
+  // Enforce max queue size (drop oldest)
+  if (pendingQueue.size >= CONFIG.maxQueueSize) {
+    const oldest = pendingQueue.keys().next().value;
+    pendingQueue.delete(oldest);
+  }
+  
+  pendingQueue.set(uri, {
+    did,
+    rkey,
+    images,
+    createdAt,
+    queuedAt: Date.now()
+  });
+  
+  stats.queuedForEngagement++;
+}
+
+async function processQueue() {
+  const now = Date.now();
+  const toProcess = [];
+  
+  // Find posts ready for engagement check (queued > 1 hour ago)
+  for (const [uri, data] of pendingQueue) {
+    if (now - data.queuedAt >= CONFIG.engagementDelay) {
+      toProcess.push({ uri, ...data });
+    }
+  }
+  
+  if (toProcess.length === 0) return;
+  
+  console.log(`\n🔍 Processing ${toProcess.length} pending posts for engagement check...`);
+  
+  // Rate limit: process up to 100 per interval
+  const batch = toProcess.slice(0, CONFIG.apiRateLimit);
+  
+  for (const post of batch) {
+    pendingQueue.delete(post.uri);
+    stats.engagementChecks++;
+    
+    const engagement = await getPostEngagement(post.did, post.rkey);
+    const totalEngagement = (engagement.likes || 0) + (engagement.reposts || 0);
+    
+    if (totalEngagement >= CONFIG.minLikes) {
+      stats.engagementPassed++;
+      console.log(`📈 Engagement passed: ${totalEngagement} (${engagement.likes} likes, ${engagement.reposts} reposts)`);
+      await indexImages(post.did, post.rkey, post.images, post.createdAt, 'VIRAL');
+    } else {
+      stats.engagementFailed++;
+      // Silently discard low-engagement posts
+    }
+    
+    // Small delay between API calls
+    await new Promise(r => setTimeout(r, 100));
+  }
+}
+
+// ============================================================================
+// EVENT PROCESSING
+// ============================================================================
+
 async function processEvent(event) {
   try {
-    // Get DID from the event (top level, not in commit)
     const did = event.did;
     const commit = event.commit;
     const record = commit?.record;
@@ -141,84 +380,65 @@ async function processEvent(event) {
     
     stats.imagesFound += images.length;
     
-    for (const image of images) {
-      const cid = image.image?.ref?.$link || 
-                  image.image?.ref?.toString() || 
-                  image.image?.cid;
-      
-      if (!cid) {
-        stats.errors++;
-        continue;
-      }
-      
-      try {
-        const imageBuffer = await downloadBlob(did, cid);
-        
-        const [phash, sha256] = await Promise.all([
-          generatePHash(imageBuffer),
-          generateSHA256(imageBuffer)
-        ]);
-        
-        if (!phash) {
-          stats.errors++;
-          continue;
-        }
-        
-        stats.imagesHashed++;
-        
-        const postUrl = `https://bsky.app/profile/${did}/post/${rkey}`;
-        
-        const saved = await saveHash({
-          phash,
-          sha256,
-          source_id: `${did}/${rkey}/${cid}`,
-          source_url: postUrl,
-          author_handle: null,
-          author_did: did,
-          post_created_at: new Date(record.createdAt)
-        });
-        
-        if (saved) {
-          stats.imagesSaved++;
-          console.log(`✅ Saved: ${postUrl}`);
-        }
-        
-      } catch (err) {
-        stats.errors++;
-        console.error(`Image error: ${err.message}`);
-      }
+    // TIER 1: Curated accounts - index immediately
+    if (CURATED_DIDS.has(did)) {
+      stats.curatedIndexed++;
+      await indexImages(did, rkey, images, record.createdAt, 'CURATED');
+      return;
     }
+    
+    // TIER 2: All others - queue for engagement check
+    addToQueue(did, rkey, images, record.createdAt);
+    
   } catch (err) {
     stats.errors++;
   }
 }
 
-/**
- * Print stats every 30 seconds
- */
+// ============================================================================
+// STATS
+// ============================================================================
+
 function printStats() {
   const uptime = Math.floor((Date.now() - stats.startTime) / 1000);
-  const rate = stats.imagesSaved / (uptime / 60) || 0;
+  const uptimeMin = uptime / 60;
+  const rate = stats.imagesSaved / uptimeMin || 0;
   
-  console.log(`\n📊 Stats (${uptime}s uptime):`);
+  console.log(`\n📊 Stats (${Math.floor(uptimeMin)}m uptime) - HYBRID MODE`);
+  console.log(`   ─────────────────────────────────`);
   console.log(`   Posts received: ${stats.postsReceived}`);
-  console.log(`   Images found: ${stats.imagesFound}`);
+  console.log(`   ─────────────────────────────────`);
+  console.log(`   TIER 1 (Curated - Immediate):`);
+  console.log(`     Indexed: ${stats.curatedIndexed}`);
+  console.log(`   ─────────────────────────────────`);
+  console.log(`   TIER 2 (Engagement Check):`);
+  console.log(`     Queued: ${stats.queuedForEngagement}`);
+  console.log(`     Pending: ${pendingQueue.size}`);
+  console.log(`     Checked: ${stats.engagementChecks}`);
+  console.log(`     Passed (${CONFIG.minLikes}+ likes): ${stats.engagementPassed}`);
+  console.log(`     Discarded: ${stats.engagementFailed}`);
+  console.log(`   ─────────────────────────────────`);
   console.log(`   Images hashed: ${stats.imagesHashed}`);
   console.log(`   Images saved: ${stats.imagesSaved}`);
+  console.log(`   API calls: ${stats.apiCalls}`);
   console.log(`   Errors: ${stats.errors}`);
   console.log(`   Rate: ${rate.toFixed(1)} images/min`);
 }
 
-/**
- * Connect to Jetstream
- */
+// ============================================================================
+// WEBSOCKET CONNECTION
+// ============================================================================
+
 function connect() {
-  console.log('🔌 Connecting to Bluesky Jetstream...');
+  const url = 'wss://jetstream2.us-east.bsky.network/subscribe?wantedCollections=app.bsky.feed.post';
+  console.log('🔌 Connecting to Bluesky Jetstream (HYBRID MODE)...');
   
-  const ws = new WebSocket(JETSTREAM_URL);
+  const ws = new WebSocket(url);
   
   ws.on('open', () => {
     console.log('✅ Connected to Jetstream');
+    console.log(`📋 Tier 1: ${CURATED_DIDS.size} curated accounts (immediate)`);
+    console.log(`📈 Tier 2: Others queued, indexed if ${CONFIG.minLikes}+ likes after 1 hour`);
     stats.connected = true;
   });
   
@@ -247,12 +467,18 @@ function connect() {
   });
 }
 
-/**
- * Main entry point
- */
+// ============================================================================
+// MAIN
+// ============================================================================
+
 async function main() {
-  console.log('🚀 Starting Bluesky Hash Collector');
+  console.log('═══════════════════════════════════════════════════');
+  console.log('   VeriSource Bluesky Hash Collector - HYBRID MODE');
+  console.log('═══════════════════════════════════════════════════');
   console.log(`📦 Database: ${process.env.DATABASE_URL ? 'configured' : 'NOT CONFIGURED'}`);
+  console.log(`⚙️  Min engagement: ${CONFIG.minLikes} likes`);
+  console.log(`⏱️  Engagement delay: ${CONFIG.engagementDelay / 60000} minutes`);
+  console.log(`📋 Curated accounts: ${CURATED_DIDS.size}`);
   
   try {
     const result = await pool.query('SELECT NOW()');
@@ -262,13 +488,21 @@ async function main() {
     process.exit(1);
   }
   
+  // Start queue processor
+  setInterval(processQueue, CONFIG.queueInterval);
+  console.log(`🔄 Queue processor: every ${CONFIG.queueInterval / 60000} minutes`);
+  
+  // Start stats printer
   setInterval(printStats, 30000);
+  
+  // Connect to firehose
   connect();
 }
 
 process.on('SIGINT', async () => {
   console.log('\n🛑 Shutting down...');
   printStats();
+  console.log(`⚠️  ${pendingQueue.size} posts in pending queue will be lost`);
   await pool.end();
   process.exit(0);
 });
