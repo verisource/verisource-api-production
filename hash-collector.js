@@ -5,7 +5,9 @@
  * - Tier 1: Curated journalist accounts → Index IMMEDIATELY
  * - Tier 2: All other posts → Queue, check engagement after 1 hour, index if 50+ likes
  * 
- * This maximizes provenance value while catching viral citizen journalism.
+ * Supports: Images AND Videos
+ * - Images: pHash + SHA256
+ * - Videos: Keyframe pHashes + Audio fingerprint (Chromaprint)
  */
 
 const WebSocket = require('ws');
@@ -17,6 +19,7 @@ const { Pool } = require('pg');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
+const { execSync, exec } = require('child_process');
 
 // ============================================================================
 // CONFIGURATION
@@ -36,7 +39,14 @@ const CONFIG = {
   maxQueueSize: parseInt(process.env.MAX_QUEUE_SIZE) || 10000,
   
   // Bluesky API rate limit (requests per minute)
-  apiRateLimit: 100
+  apiRateLimit: 100,
+  
+  // Video settings
+  video: {
+    maxDurationSeconds: 300, // 5 minutes max
+    keyframeInterval: 2,     // Extract 1 frame every 2 seconds
+    maxKeyframes: 30         // Max frames to hash
+  }
 };
 
 // ============================================================================
@@ -91,6 +101,9 @@ let stats = {
   imagesFound: 0,
   imagesHashed: 0,
   imagesSaved: 0,
+  videosFound: 0,
+  videosProcessed: 0,
+  videosSaved: 0,
   errors: 0,
   apiCalls: 0,
   startTime: Date.now()
@@ -186,6 +199,239 @@ function generateSHA256(buffer) {
 }
 
 // ============================================================================
+// VIDEO PROCESSING
+// ============================================================================
+
+/**
+ * Download video blob from Bluesky CDN
+ */
+async function downloadVideo(did, cid) {
+  return new Promise((resolve, reject) => {
+    const url = `https://bsky.social/xrpc/com.atproto.sync.getBlob?did=${did}&cid=${cid}`;
+    
+    https.get(url, (res) => {
+      if (res.statusCode === 302 || res.statusCode === 301) {
+        // Follow redirect
+        https.get(res.headers.location, (res2) => {
+          const chunks = [];
+          res2.on('data', chunk => chunks.push(chunk));
+          res2.on('end', () => resolve(Buffer.concat(chunks)));
+          res2.on('error', reject);
+        }).on('error', reject);
+        return;
+      }
+      
+      if (res.statusCode !== 200) {
+        reject(new Error(`HTTP ${res.statusCode}`));
+        return;
+      }
+      
+      const chunks = [];
+      res.on('data', chunk => chunks.push(chunk));
+      res.on('end', () => resolve(Buffer.concat(chunks)));
+      res.on('error', reject);
+    }).on('error', reject);
+  });
+}
+
+/**
+ * Extract keyframes from video and generate pHashes
+ * Returns array of hashes representing video visual fingerprint
+ */
+async function extractVideoFingerprint(videoBuffer) {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'video-'));
+  const videoPath = path.join(tempDir, 'video.mp4');
+  const framePattern = path.join(tempDir, 'frame-%04d.jpg');
+  
+  try {
+    // Write video to temp file
+    fs.writeFileSync(videoPath, videoBuffer);
+    
+    // Get video duration
+    let duration = 0;
+    try {
+      const probeResult = execSync(
+        `ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "${videoPath}"`,
+        { encoding: 'utf8', timeout: 30000 }
+      );
+      duration = parseFloat(probeResult.trim()) || 0;
+    } catch (e) {
+      console.log('Could not get video duration');
+    }
+    
+    // Skip if too long
+    if (duration > CONFIG.video.maxDurationSeconds) {
+      console.log(`Video too long (${duration}s > ${CONFIG.video.maxDurationSeconds}s), skipping`);
+      return null;
+    }
+    
+    // Extract keyframes (1 per N seconds)
+    const fps = 1 / CONFIG.video.keyframeInterval;
+    execSync(
+      `ffmpeg -i "${videoPath}" -vf "fps=${fps}" -frames:v ${CONFIG.video.maxKeyframes} -q:v 5 "${framePattern}" -y`,
+      { timeout: 60000, stdio: 'pipe' }
+    );
+    
+    // Read extracted frames and generate hashes
+    const frames = fs.readdirSync(tempDir)
+      .filter(f => f.startsWith('frame-') && f.endsWith('.jpg'))
+      .sort();
+    
+    const frameHashes = [];
+    for (const frame of frames) {
+      const framePath = path.join(tempDir, frame);
+      const frameBuffer = fs.readFileSync(framePath);
+      const hash = await generatePHash(frameBuffer);
+      if (hash) {
+        frameHashes.push(hash);
+      }
+    }
+    
+    return {
+      frameHashes,
+      frameCount: frameHashes.length,
+      duration: duration
+    };
+    
+  } catch (err) {
+    console.error('Video frame extraction error:', err.message);
+    return null;
+  } finally {
+    // Cleanup temp directory
+    try {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    } catch (e) {}
+  }
+}
+
+/**
+ * Extract audio fingerprint using Chromaprint/fpcalc
+ */
+async function extractAudioFingerprint(videoBuffer) {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'audio-'));
+  const videoPath = path.join(tempDir, 'video.mp4');
+  
+  try {
+    fs.writeFileSync(videoPath, videoBuffer);
+    
+    // Use fpcalc (Chromaprint) to generate audio fingerprint
+    const result = execSync(
+      `fpcalc -raw -json "${videoPath}"`,
+      { encoding: 'utf8', timeout: 60000 }
+    );
+    
+    const data = JSON.parse(result);
+    return {
+      fingerprint: data.fingerprint,
+      duration: data.duration
+    };
+    
+  } catch (err) {
+    // fpcalc might not be installed, or video has no audio
+    console.log('Audio fingerprint extraction skipped:', err.message);
+    return null;
+  } finally {
+    try {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    } catch (e) {}
+  }
+}
+
+/**
+ * Process and fingerprint a video
+ */
+async function processVideo(did, cid, rkey, createdAt, tier) {
+  try {
+    console.log(`🎬 Processing video: ${did}/${rkey}`);
+    
+    // Download video
+    const videoBuffer = await downloadVideo(did, cid);
+    const sha256 = generateSHA256(videoBuffer);
+    
+    // Extract visual fingerprint (keyframe hashes)
+    const visualFp = await extractVideoFingerprint(videoBuffer);
+    
+    // Extract audio fingerprint
+    const audioFp = await extractAudioFingerprint(videoBuffer);
+    
+    if (!visualFp && !audioFp) {
+      console.log('Could not extract any fingerprints from video');
+      stats.errors++;
+      return false;
+    }
+    
+    const postUrl = `https://bsky.app/profile/${did}/post/${rkey}`;
+    
+    // Save to database
+    const saved = await saveVideoHash({
+      sha256,
+      frameHashes: visualFp?.frameHashes || [],
+      frameCount: visualFp?.frameCount || 0,
+      duration: visualFp?.duration || audioFp?.duration || 0,
+      audioFingerprint: audioFp?.fingerprint || null,
+      source_id: `${did}/${rkey}/${cid}`,
+      source_url: postUrl,
+      author_did: did,
+      post_created_at: new Date(createdAt)
+    });
+    
+    if (saved) {
+      stats.videosSaved++;
+      console.log(`✅ [${tier}] Video saved: ${postUrl}`);
+      return true;
+    }
+    
+    return false;
+    
+  } catch (err) {
+    console.error('Video processing error:', err.message);
+    stats.errors++;
+    return false;
+  }
+}
+
+/**
+ * Save video hash to database
+ */
+async function saveVideoHash(data) {
+  const query = `
+    INSERT INTO media_hashes (
+      phash, sha256, source, source_id, source_url, 
+      author_handle, author_did, post_created_at,
+      media_type, frame_hashes, frame_count, duration, audio_fingerprint
+    )
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+    ON CONFLICT (source, source_id) DO NOTHING
+    RETURNING id
+  `;
+  
+  // Use first frame hash as primary pHash for quick lookups
+  const primaryHash = data.frameHashes.length > 0 ? data.frameHashes[0] : null;
+  
+  try {
+    const result = await pool.query(query, [
+      primaryHash,
+      data.sha256,
+      'bluesky',
+      data.source_id,
+      data.source_url,
+      null, // author_handle
+      data.author_did,
+      data.post_created_at,
+      'video',
+      JSON.stringify(data.frameHashes),
+      data.frameCount,
+      data.duration,
+      data.audioFingerprint
+    ]);
+    return result.rows.length > 0;
+  } catch (err) {
+    console.error('DB video save error:', err.message);
+    return false;
+  }
+}
+
+// ============================================================================
 // DATABASE
 // ============================================================================
 
@@ -276,7 +522,7 @@ async function indexImages(did, rkey, images, createdAt, tier) {
 // PENDING QUEUE MANAGEMENT
 // ============================================================================
 
-function addToQueue(did, rkey, images, createdAt) {
+function addToQueue(did, rkey, images, createdAt, media = { type: 'image' }) {
   const uri = `${did}/${rkey}`;
   
   // Don't re-queue
@@ -293,7 +539,8 @@ function addToQueue(did, rkey, images, createdAt) {
     rkey,
     images,
     createdAt,
-    queuedAt: Date.now()
+    queuedAt: Date.now(),
+    media // { type: 'image' } or { type: 'video', cid: '...' }
   });
   
   stats.queuedForEngagement++;
@@ -340,7 +587,14 @@ async function processQueue() {
     if (totalEngagement >= CONFIG.minLikes) {
       stats.engagementPassed++;
       console.log(`📈 Engagement passed: ${totalEngagement} (${engagement.likes} likes, ${engagement.reposts} reposts)`);
-      await indexImages(post.did, post.rkey, post.images, post.createdAt, 'VIRAL');
+      
+      // Handle video vs image
+      if (post.media?.type === 'video' && post.media?.cid) {
+        stats.videosProcessed++;
+        await processVideo(post.did, post.media.cid, post.rkey, post.createdAt, 'VIRAL');
+      } else {
+        await indexImages(post.did, post.rkey, post.images, post.createdAt, 'VIRAL');
+      }
     } else {
       stats.engagementFailed++;
       // Silently discard low-engagement posts
@@ -364,18 +618,49 @@ async function processEvent(event) {
     
     if (!did || !record || !rkey) return;
     
-    // Check for embedded images
+    // Check for embedded media
     const embed = record?.embed;
     if (!embed) return;
     
     let images = [];
+    let video = null;
     
+    // Detect images
     if (embed.$type === 'app.bsky.embed.images') {
       images = embed.images || [];
     } else if (embed.$type === 'app.bsky.embed.recordWithMedia') {
       images = embed.media?.images || [];
+      // Check for video in recordWithMedia
+      if (embed.media?.$type === 'app.bsky.embed.video') {
+        video = embed.media.video;
+      }
     }
     
+    // Detect video embed
+    if (embed.$type === 'app.bsky.embed.video') {
+      video = embed.video;
+    }
+    
+    // Process video if found
+    if (video) {
+      const videoCid = video.ref?.$link || video.ref?.toString() || video.cid;
+      if (videoCid) {
+        stats.videosFound++;
+        
+        // TIER 1: Curated accounts - process video immediately
+        if (CURATED_DIDS.has(did)) {
+          stats.videosProcessed++;
+          await processVideo(did, videoCid, rkey, record.createdAt, 'CURATED');
+          return;
+        }
+        
+        // TIER 2: Queue video for engagement check
+        addToQueue(did, rkey, [], record.createdAt, { type: 'video', cid: videoCid });
+        return;
+      }
+    }
+    
+    // Process images
     if (images.length === 0) return;
     
     stats.imagesFound += images.length;
@@ -388,7 +673,7 @@ async function processEvent(event) {
     }
     
     // TIER 2: All others - queue for engagement check
-    addToQueue(did, rkey, images, record.createdAt);
+    addToQueue(did, rkey, images, record.createdAt, { type: 'image' });
     
   } catch (err) {
     stats.errors++;
@@ -402,7 +687,7 @@ async function processEvent(event) {
 function printStats() {
   const uptime = Math.floor((Date.now() - stats.startTime) / 1000);
   const uptimeMin = uptime / 60;
-  const rate = stats.imagesSaved / uptimeMin || 0;
+  const rate = (stats.imagesSaved + stats.videosSaved) / uptimeMin || 0;
   
   console.log(`\n📊 Stats (${Math.floor(uptimeMin)}m uptime) - HYBRID MODE`);
   console.log(`   ─────────────────────────────────`);
@@ -418,11 +703,19 @@ function printStats() {
   console.log(`     Passed (${CONFIG.minLikes}+ likes): ${stats.engagementPassed}`);
   console.log(`     Discarded: ${stats.engagementFailed}`);
   console.log(`   ─────────────────────────────────`);
-  console.log(`   Images hashed: ${stats.imagesHashed}`);
-  console.log(`   Images saved: ${stats.imagesSaved}`);
+  console.log(`   IMAGES:`);
+  console.log(`     Found: ${stats.imagesFound}`);
+  console.log(`     Hashed: ${stats.imagesHashed}`);
+  console.log(`     Saved: ${stats.imagesSaved}`);
+  console.log(`   ─────────────────────────────────`);
+  console.log(`   VIDEOS:`);
+  console.log(`     Found: ${stats.videosFound}`);
+  console.log(`     Processed: ${stats.videosProcessed}`);
+  console.log(`     Saved: ${stats.videosSaved}`);
+  console.log(`   ─────────────────────────────────`);
   console.log(`   API calls: ${stats.apiCalls}`);
   console.log(`   Errors: ${stats.errors}`);
-  console.log(`   Rate: ${rate.toFixed(1)} images/min`);
+  console.log(`   Rate: ${rate.toFixed(1)} media/min`);
 }
 
 // ============================================================================
