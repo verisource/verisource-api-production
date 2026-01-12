@@ -304,18 +304,31 @@ async function processQueue() {
   const toProcess = [];
   
   // Find posts ready for engagement check (queued > 1 hour ago)
+  // OR if queue is at capacity, process oldest items regardless of age
+  const queueAtCapacity = pendingQueue.size >= CONFIG.maxQueueSize * 0.9; // 90% full
+  
   for (const [uri, data] of pendingQueue) {
-    if (now - data.queuedAt >= CONFIG.engagementDelay) {
-      toProcess.push({ uri, ...data });
+    const ageMs = now - data.queuedAt;
+    
+    // Process if old enough OR if queue is nearly full (process oldest first)
+    if (ageMs >= CONFIG.engagementDelay) {
+      toProcess.push({ uri, ...data, age: ageMs });
+    } else if (queueAtCapacity && toProcess.length < CONFIG.apiRateLimit) {
+      // Queue is full - process even if not old enough
+      toProcess.push({ uri, ...data, age: ageMs, earlyProcess: true });
     }
   }
   
   if (toProcess.length === 0) return;
   
-  console.log(`\n🔍 Processing ${toProcess.length} pending posts for engagement check...`);
+  // Sort by age (oldest first)
+  toProcess.sort((a, b) => b.age - a.age);
   
   // Rate limit: process up to 100 per interval
   const batch = toProcess.slice(0, CONFIG.apiRateLimit);
+  
+  const earlyCount = batch.filter(p => p.earlyProcess).length;
+  console.log(`\n🔍 Processing ${batch.length} pending posts for engagement check${earlyCount > 0 ? ` (${earlyCount} early due to queue capacity)` : ''}...`);
   
   for (const post of batch) {
     pendingQueue.delete(post.uri);
