@@ -24,6 +24,7 @@ const EnhancedAIDetector = require('./services/enhanced-ai-detector');
 const JPEGForensics = require('./services/jpeg-forensics');
 // REMOVED: const BlockchainService = require('./services/opentimestamps-service');
 const PolygonService = require('./services/polygon-timestamp');
+const BaseService = require('./services/base-timestamp');
 const sightengineDetector = require('./services/sightengine-ai-detection');
 const PlatformDetection = require('./services/platform-signature-detection');
 const FeatureLogger = require('./services/feature-logger');
@@ -68,6 +69,55 @@ const CompressionSignature = require('./services/compression-signature-detector'
 const { detectScreenshot, getScreenshotVerdictAdjustment } = require('./screenshot-detection');
 
 const app = express();
+// ============================================
+// TIER-BASED BLOCKCHAIN TIMESTAMPING
+// ============================================
+// Tiers: standard (Polygon), premium (Base), enterprise (ETH L1 - future)
+async function timestampByTier(fingerprint, filename, tier = 'standard', accountTier = 'standard') {
+  // Use account tier if no explicit tier specified
+  const effectiveTier = tier || accountTier;
+  
+  const results = {
+    polygon: null,
+    base: null,
+    ethereum: null
+  };
+  
+  // Standard tier: Polygon only (default)
+  console.log("🔷 Timestamping to Polygon...");
+  try {
+    results.polygon = await PolygonService.timestamp(fingerprint, filename);
+    if (results.polygon.success) {
+      console.log(`✅ Polygon: Block ${results.polygon.block_number}`);
+    }
+  } catch (err) {
+    console.error("⚠️ Polygon failed:", err.message);
+    results.polygon = { success: false, error: err.message };
+  }
+  
+  // Premium tier: Also timestamp to Base
+  if (effectiveTier === 'premium' || effectiveTier === 'enterprise') {
+    console.log("🔵 Timestamping to Base...");
+    try {
+      results.base = await BaseService.timestamp(fingerprint, filename);
+      if (results.base.success) {
+        console.log(`✅ Base: Block ${results.base.block_number}`);
+      }
+    } catch (err) {
+      console.error("⚠️ Base failed:", err.message);
+      results.base = { success: false, error: err.message };
+    }
+  }
+  
+  // Enterprise tier: Also timestamp to Ethereum L1 (future)
+  // if (effectiveTier === 'enterprise') {
+  //   results.ethereum = await EthereumService.timestamp(fingerprint, filename);
+  // }
+  
+  return results;
+}
+
+
 
 // View engine for batch dashboard
 app.set('view engine', 'ejs');
@@ -807,20 +857,15 @@ app.post('/verify-remote', authenticateApiKey, async (req, res) => {
     // STEP 3: Blockchain timestamping (if new)
     // ============================================
     let polygonVerification = null;
-    let polygonPromise = null;
+    let baseVerification = null;
+    let blockchainResults = null;
     
     if (!searchResults.found) {
-      
-      console.log("🔷 Timestamping to Polygon blockchain (async)...");
-      polygonPromise = PolygonService.timestamp(fingerprint, tempFileName)
-        .then(result => {
-          if (result.success) console.log(`✅ Polygon: Block: ${result.block_number}`);
-          return result;
-        })
-        .catch(error => {
-          console.error("⚠️ Polygon timestamping failed:", error.message);
-          return { success: false, error: error.message };
-        });
+      // Get account tier (default to standard)
+      const accountTier = req.accountTier || 'standard';
+      blockchainResults = await timestampByTier(fingerprint, tempFileName, null, accountTier);
+      polygonVerification = blockchainResults.polygon;
+      baseVerification = blockchainResults.base;
     } else {
       console.log("⏭️ Skipping blockchain - already timestamped");
       polygonVerification = { 
@@ -833,6 +878,17 @@ app.post('/verify-remote', authenticateApiKey, async (req, res) => {
         first_timestamped: searchResults.first_seen,
         message: 'File was previously timestamped on Polygon.'
       };
+      // Check for existing Base verification
+      if (searchResults.base_block_number) {
+        baseVerification = {
+          success: true,
+          status: 'previously_timestamped',
+          skipped: true,
+          block_number: searchResults.base_block_number,
+          transaction_hash: searchResults.base_tx_hash,
+          timestamp: searchResults.base_timestamp
+        };
+      }
     }
 
     // ============================================
@@ -2737,17 +2793,16 @@ if (download.platform && download.platform !== 'Direct URL') {
         tvCorroborationResult = { found: false, error: tvErr.message };
       }
     } 
-    // 4. Blockchain timestamping
+    // 4. Blockchain timestamping (tier-based)
     let polygonVerification = null;
+    let baseVerification = null;
     
     if (!searchResults.found) {
       console.log('⛓️ Submitting to blockchain...');
-      
-      try {
-       polygonVerification = await PolygonService.timestamp(fingerprint, download.filename); 
-      } catch (err) {
-        console.error('Polygon error:', err.message);
-      }
+      const accountTier = req.accountTier || 'standard';
+      const blockchainResults = await timestampByTier(fingerprint, download.filename, null, accountTier);
+      polygonVerification = blockchainResults.polygon;
+      baseVerification = blockchainResults.base;
     }
     
     // 5. Save to database
@@ -2897,25 +2952,17 @@ app.post('/verify', upload.single('file'), authenticateApiKey, async (req, res) 
     }
     // Only timestamp if NEW (not previously verified)
     let polygonVerification = null;
-    
-    // Start blockchain submissions in parallel (dont await yet - will resolve before response)
-    let polygonPromise = null;
+    let baseVerification = null;
+    let blockchainResults = null;
     
     if (!searchResults.found) {
-      
-      console.log("🔷 Timestamping to Polygon blockchain (async)...");
-      polygonPromise = PolygonService.timestamp(fingerprint, req.file.originalname)
-        .then(result => {
-          if (result.success) console.log(`✅ Polygon: Block: ${result.block_number}`);
-          return result;
-        })
-        .catch(error => {
-          console.error("⚠️ Polygon timestamping failed:", error.message);
-          return { success: false, error: error.message };
-        });
+      // Get account tier (default to standard)
+      const accountTier = req.accountTier || 'standard';
+      blockchainResults = await timestampByTier(fingerprint, req.file.originalname, null, accountTier);
+      polygonVerification = blockchainResults.polygon;
+      baseVerification = blockchainResults.base;
     } else {
       console.log("⏭️ Skipping blockchain - already timestamped");
-      // Return existing proof info from database
       polygonVerification = { 
         success: true, 
         status: 'previously_timestamped', 
@@ -2926,8 +2973,17 @@ app.post('/verify', upload.single('file'), authenticateApiKey, async (req, res) 
         first_timestamped: searchResults.first_seen,
         message: 'File was previously timestamped on Polygon.'
       };
+      if (searchResults.base_block_number) {
+        baseVerification = {
+          success: true,
+          status: 'previously_timestamped',
+          skipped: true,
+          block_number: searchResults.base_block_number,
+          transaction_hash: searchResults.base_tx_hash,
+          timestamp: searchResults.base_timestamp
+        };
+      }
     }
-
     const dm = req.file.mimetype || mime.lookup(req.file.originalname) || 'application/octet-stream';
     const isImg = /^image\//i.test(dm) || /\.(png|jpe?g|gif|webp)$/i.test(req.file.originalname);
     const isVid = /^video\//i.test(dm) || /\.(mp4|mov|avi|mkv)$/i.test(req.file.originalname);
@@ -4338,6 +4394,9 @@ app.get('/admin/migrate-audio', async (req, res) => {
       ADD COLUMN IF NOT EXISTS polygon_block_number INTEGER,
       ADD COLUMN IF NOT EXISTS polygon_tx_hash VARCHAR(66),
       ADD COLUMN IF NOT EXISTS polygon_timestamp TIMESTAMP,
+      ADD COLUMN IF NOT EXISTS base_block_number INTEGER,
+      ADD COLUMN IF NOT EXISTS base_tx_hash VARCHAR(66),
+      ADD COLUMN IF NOT EXISTS base_timestamp TIMESTAMP
     `);
    await db.query('ALTER TABLE verifications ALTER COLUMN phash TYPE VARCHAR(64)');
     console.log('✅ Blockchain columns added');

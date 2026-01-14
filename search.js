@@ -47,8 +47,9 @@ async function searchByFingerprint(fingerprint) {
       polygon_block_number: matches[0].polygon_block_number,
       polygon_tx_hash: matches[0].polygon_tx_hash,
       polygon_timestamp: matches[0].polygon_timestamp,
-      bitcoin_proof_status: matches[0].bitcoin_proof_status,
-      bitcoin_submitted_at: matches[0].bitcoin_submitted_at,
+      base_block_number: matches[0].base_block_number,
+      base_tx_hash: matches[0].base_tx_hash,
+      base_timestamp: matches[0].base_timestamp,
       local_index: localResult,
       matches: matches.map(m => ({
         verification_id: m.id,
@@ -118,9 +119,9 @@ async function saveVerification(data) {
         fingerprint, fingerprint_algorithm, original_filename,
         file_size, file_type, media_kind, ip_address,
         polygon_block_number, polygon_tx_hash, polygon_timestamp,
-        bitcoin_proof_status, bitcoin_submitted_at, phash, phash_regions,
-        account_id
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+        base_block_number, base_tx_hash, base_timestamp,
+        phash, phash_regions, account_id
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
       RETURNING id, upload_date
     `;
     
@@ -135,12 +136,12 @@ async function saveVerification(data) {
       data.polygon_block_number || null,
       data.polygon_tx_hash || null,
       data.polygon_timestamp || null,
-      data.bitcoin_proof_status || null,
-      data.bitcoin_submitted_at || null,
+      data.base_block_number || null,
+      data.base_tx_hash || null,
+      data.base_timestamp || null,
       data.phash || null,
       data.phash_regions ? JSON.stringify(data.phash_regions) : null,
-      data.account_id || null 
-    
+      data.account_id || null
     ];
     
     const result = await db.query(query, values);
