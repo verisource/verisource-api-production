@@ -281,10 +281,30 @@ app.get("/health", async (req, res) => {
     polygonStatus = { enabled: false, error: error.message };
   }
   
+  let baseStatus = { enabled: false };
+  
+  try {
+    if (BaseService.enabled) {
+      const balance = await BaseService.getBalance();
+      const balanceNum = parseFloat(balance) || 0;
+      baseStatus = {
+        enabled: true,
+        wallet: BaseService.wallet?.address || 'unknown',
+        balance_eth: balanceNum.toFixed(6),
+        balance_usd: (balanceNum * 3500).toFixed(2),
+        status: balanceNum < 0.001 ? 'LOW_BALANCE' : 'ok',
+        warning: balanceNum < 0.001 ? 'Base wallet balance is low. Please add ETH.' : null
+      };
+    }
+  } catch (error) {
+    baseStatus = { enabled: false, error: error.message };
+  }
+
   res.json({ 
     status: "ok", 
     uptime: process.uptime(),
     polygon: polygonStatus,
+    base: baseStatus,
     timestamp: new Date().toISOString()
   });
 });
