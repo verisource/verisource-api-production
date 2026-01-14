@@ -22,7 +22,7 @@ const CameraValidation = require('./services/camera-validation');
 const AudioSpectralAnalysis = require('./services/audio-spectral-analysis');
 const EnhancedAIDetector = require('./services/enhanced-ai-detector');
 const JPEGForensics = require('./services/jpeg-forensics');
-const BlockchainService = require('./services/opentimestamps-service');
+// REMOVED: const BlockchainService = require('./services/opentimestamps-service');
 const PolygonService = require('./services/polygon-timestamp');
 const sightengineDetector = require('./services/sightengine-ai-detection');
 const PlatformDetection = require('./services/platform-signature-detection');
@@ -84,7 +84,6 @@ if (process.env.RAILWAY_ENVIRONMENT) {
   app.set('trust proxy', false);
 }
 
-
 app.use(express.json());
 app.use(express.urlencoded({ extended: true })); // For parsing form data
 
@@ -96,8 +95,6 @@ app.use((req, res, next) => {
   if (req.method === 'OPTIONS') return res.sendStatus(200);
   next();
 });
-
-
 
 const upload = multer({ dest: os.tmpdir(), limits: { fileSize: 100 * 1024 * 1024 } });
 
@@ -409,7 +406,6 @@ app.post("/init-database", async (req, res) => {
 // --- Start server with proper async initialization ---
 const PORT = process.env.PORT || 3000;
 
-
 // --- Database initialization ---
 let dbReady = false;
 
@@ -481,19 +477,6 @@ app.get('/test/weather', async (req, res) => {
     weather_data: result 
   });
 });
-
-// Check blockchain verification status
-app.get('/blockchain/verify/:hash', async (req, res) => {
-  try {
-    const { hash } = req.params;
-    const verification = await BlockchainService.verify(hash);
-    res.json(verification);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-  // Initialize database before starting server
   await initializeDatabase();
   
   // Preload face detection models for faster video analysis
@@ -823,22 +806,10 @@ app.post('/verify-remote', authenticateApiKey, async (req, res) => {
     // ============================================
     // STEP 3: Blockchain timestamping (if new)
     // ============================================
-    let blockchainVerification = null;
     let polygonVerification = null;
-    let blockchainPromise = null;
     let polygonPromise = null;
     
     if (!searchResults.found) {
-      console.log("📦 Timestamping to Bitcoin blockchain (async)...");
-      blockchainPromise = BlockchainService.timestamp(fingerprint, tempFileName)
-        .then(result => {
-          console.log(`✅ Blockchain: ${result.status}`);
-          return result;
-        })
-        .catch(error => {
-          console.error("⚠️ Blockchain timestamping failed:", error.message);
-          return { success: false, error: error.message };
-        });
       
       console.log("🔷 Timestamping to Polygon blockchain (async)...");
       polygonPromise = PolygonService.timestamp(fingerprint, tempFileName)
@@ -852,18 +823,6 @@ app.post('/verify-remote', authenticateApiKey, async (req, res) => {
         });
     } else {
       console.log("⏭️ Skipping blockchain - already timestamped");
-      const proofPath = `blockchain-stamps/${fingerprint}.ots`;
-      const proofExists = fs.existsSync(proofPath);
-      blockchainVerification = { 
-        success: true, 
-        status: 'previously_timestamped', 
-        skipped: true,
-        hash: fingerprint,
-        proof_file: proofExists ? proofPath : null,
-        first_timestamped: searchResults.first_seen,
-        submitted_at: searchResults.bitcoin_submitted_at,
-        message: 'File was previously timestamped. Original proof preserved.'
-      };
       polygonVerification = { 
         success: true, 
         status: 'previously_timestamped', 
@@ -1990,8 +1949,6 @@ if (kind === 'video') {
         polygon_block_number: polygonVerification?.block_number || null,
         polygon_tx_hash: polygonVerification?.transaction_hash || null,
         polygon_timestamp: polygonVerification?.timestamp || null,
-        bitcoin_proof_status: blockchainVerification?.status || null,
-        bitcoin_submitted_at: blockchainVerification?.submitted_at || null,
         phash: phash || null,
         phash_regions: phashRegions || null,
         google_vision_labels: googleVisionResult?.results?.labels || [],
@@ -2204,9 +2161,6 @@ if (kind === 'video') {
     // ============================================
     // STEP 20: Await blockchain results
     // ============================================
-    if (blockchainPromise) {
-      blockchainVerification = await blockchainPromise;
-    }
     if (polygonPromise) {
       polygonVerification = await polygonPromise;
       
@@ -2289,7 +2243,7 @@ if (kind === 'video') {
         first_seen: searchResults.found ? searchResults.first_seen : null,
         times_verified: searchResults.found ? searchResults.total_verifications : 1
       },
-      blockchain_verification: blockchainVerification,
+      blockchain_verification: null, // Bitcoin removed
       polygon_verification: polygonVerification,
       reverse_image_search: reverseSearchResults,
       verified_at: new Date().toISOString(),
@@ -2310,7 +2264,7 @@ if (kind === 'video') {
         hash: fingerprint,
         version: 'v1'
       },
-      blockchain_verification: blockchainVerification,
+      blockchain_verification: null, // Bitcoin removed
       polygon_verification: polygonVerification,
       ai_detection: aiDetection,
       ...(screenshotDetection && { screenshot_detection: screenshotDetection }),
@@ -2784,16 +2738,10 @@ if (download.platform && download.platform !== 'Direct URL') {
       }
     } 
     // 4. Blockchain timestamping
-    let blockchainVerification = null;
     let polygonVerification = null;
     
     if (!searchResults.found) {
       console.log('⛓️ Submitting to blockchain...');
-      try {
-      blockchainVerification = await BlockchainService.timestamp(fingerprint, download.filename);  
-      } catch (err) {
-        console.error('Blockchain error:', err.message);
-      }
       
       try {
        polygonVerification = await PolygonService.timestamp(fingerprint, download.filename); 
@@ -2833,7 +2781,7 @@ if (download.platform && download.platform !== 'Direct URL') {
       },
       reverse_search: videoReverseSearchResults,
       tv_corroboration: tvCorroborationResult,
-      blockchain_verification: blockchainVerification,
+      blockchain_verification: null, // Bitcoin removed
       polygon_verification: polygonVerification,
       verified_at: new Date().toISOString(),
       fingerprint_matches: fingerprintMatches
@@ -2863,7 +2811,7 @@ if (download.platform && download.platform !== 'Direct URL') {
         times_verified: searchResults.found ? searchResults.total_verifications : 1
       },
       ai_detection: aiDetection,
-      blockchain_verification: blockchainVerification,
+      blockchain_verification: null, // Bitcoin removed
       polygon_verification: polygonVerification,
       reverse_search: videoReverseSearchResults,
       tv_corroboration: tvCorroborationResult,
@@ -2948,24 +2896,12 @@ app.post('/verify', upload.single('file'), authenticateApiKey, async (req, res) 
       console.error('⚠️ Fingerprint database error:', err.message);
     }
     // Only timestamp if NEW (not previously verified)
-    let blockchainVerification = null;
     let polygonVerification = null;
     
     // Start blockchain submissions in parallel (dont await yet - will resolve before response)
-    let blockchainPromise = null;
     let polygonPromise = null;
     
     if (!searchResults.found) {
-      console.log("📦 Timestamping to Bitcoin blockchain (async)...");
-      blockchainPromise = BlockchainService.timestamp(fingerprint, req.file.originalname)
-        .then(result => {
-          console.log(`✅ Blockchain: ${result.status}`);
-          return result;
-        })
-        .catch(error => {
-          console.error("⚠️ Blockchain timestamping failed:", error.message);
-          return { success: false, error: error.message };
-        });
       
       console.log("🔷 Timestamping to Polygon blockchain (async)...");
       polygonPromise = PolygonService.timestamp(fingerprint, req.file.originalname)
@@ -2980,18 +2916,6 @@ app.post('/verify', upload.single('file'), authenticateApiKey, async (req, res) 
     } else {
       console.log("⏭️ Skipping blockchain - already timestamped");
       // Return existing proof info from database
-      const proofPath = `blockchain-stamps/${fingerprint}.ots`;
-      const proofExists = require('fs').existsSync(proofPath);
-      blockchainVerification = { 
-        success: true, 
-        status: 'previously_timestamped', 
-        skipped: true,
-        hash: fingerprint,
-        proof_file: proofExists ? proofPath : null,
-        first_timestamped: searchResults.first_seen,
-        submitted_at: searchResults.bitcoin_submitted_at,
-        message: 'File was previously timestamped. Original proof preserved.'
-      };
       polygonVerification = { 
         success: true, 
         status: 'previously_timestamped', 
@@ -3702,7 +3626,6 @@ module.exports = { applyHybridCameraRescue, calculateCameraAuthenticityScore };
       }
       // ========== END HYBRID CAMERA RESCUE ==========
 
-
               const gpsAndDate = LandmarkVerification.extractGPSAndDate(exifData);
               
               if (gpsAndDate.gps || gpsAndDate.date) {
@@ -4090,8 +4013,6 @@ module.exports = { applyHybridCameraRescue, calculateCameraAuthenticityScore };
        polygon_block_number: polygonVerification?.block_number || null,
        polygon_tx_hash: polygonVerification?.transaction_hash || null,
        polygon_timestamp: polygonVerification?.timestamp || null,
-       bitcoin_proof_status: blockchainVerification?.status || null,
-       bitcoin_submitted_at: blockchainVerification?.submitted_at || null,
        phash: phash || null,
         phash_regions: phashRegions || null,
        phash_regions: phashRegions || null,
@@ -4180,8 +4101,6 @@ module.exports = { applyHybridCameraRescue, calculateCameraAuthenticityScore };
       }
     }
 
-
-
     // ============================================================================
     // SCREENSHOT DETECTION - Runs for ALL images (moved outside EXIF block)
     // ============================================================================
@@ -4231,9 +4150,6 @@ module.exports = { applyHybridCameraRescue, calculateCameraAuthenticityScore };
     // ============================================================================
 
     // Await blockchain results before sending response
-    if (blockchainPromise) {
-      blockchainVerification = await blockchainPromise;
-    }
     if (polygonPromise) {
       polygonVerification = await polygonPromise;
     }
@@ -4247,7 +4163,7 @@ module.exports = { applyHybridCameraRescue, calculateCameraAuthenticityScore };
         hash: fingerprint,
         version: 'v1'
       },
-      blockchain_verification: blockchainVerification,
+      blockchain_verification: null, // Bitcoin removed
       polygon_verification: polygonVerification,
       ai_detection: aiDetection,
       ...(screenshotDetection && { screenshot_detection: screenshotDetection }),
@@ -4422,8 +4338,6 @@ app.get('/admin/migrate-audio', async (req, res) => {
       ADD COLUMN IF NOT EXISTS polygon_block_number INTEGER,
       ADD COLUMN IF NOT EXISTS polygon_tx_hash VARCHAR(66),
       ADD COLUMN IF NOT EXISTS polygon_timestamp TIMESTAMP,
-      ADD COLUMN IF NOT EXISTS bitcoin_proof_status VARCHAR(50),
-      ADD COLUMN IF NOT EXISTS bitcoin_submitted_at TIMESTAMP
     `);
    await db.query('ALTER TABLE verifications ALTER COLUMN phash TYPE VARCHAR(64)');
     console.log('✅ Blockchain columns added');
@@ -4650,7 +4564,6 @@ app.get('/index/labels', (req, res) => {
     res.status(500).json({ success: false, error: err.message });
   }
 });
-
 
 // Get external matches for a fingerprint
 app.get('/index/fingerprint/:id/external', (req, res) => {
