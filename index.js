@@ -2945,6 +2945,11 @@ app.post('/verify', upload.single('file'), authenticateApiKey, async (req, res) 
   let videoAnalysis = null;
   let deepfakeAnalysis = null;
   let screenshotDetection = null;
+  let videoAudioFingerprint = null;
+  let videoAudioMatches = null;
+  let voiceEmbedding = null;
+  let voiceMatches = null;
+  let generatorDetection = null;
 
   try {
     const buf = fs.readFileSync(req.file.path);
