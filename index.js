@@ -2235,27 +2235,39 @@ if (kind === 'video') {
     }
 
     // ============================================
-    // STEP 20: Await blockchain results
+    // STEP 20: Save blockchain results to database
     // ============================================
-    if (polygonPromise) {
-      polygonVerification = await polygonPromise;
-      
-      // Update database with Polygon data (fire and forget - don't block response)
-      if (polygonVerification?.success && polygonVerification?.transaction_hash) {
-        db.query(`
-          UPDATE verifications 
-          SET polygon_block_number = $1, polygon_tx_hash = $2, polygon_timestamp = $3
-          WHERE fingerprint = $4 
-          AND polygon_tx_hash IS NULL
-        `, [
-          polygonVerification.block_number,
-          polygonVerification.transaction_hash,
-          polygonVerification.timestamp,
-          fingerprint
-        ]).then(() => {
-          console.log('✅ Polygon data saved to database');
-        }).catch(err => console.error('⚠️ Polygon DB update error:', err.message));
-      }
+    // Update database with Polygon data (fire and forget - don't block response)
+    if (polygonVerification?.success && polygonVerification?.transaction_hash) {
+      db.query(`
+        UPDATE verifications 
+        SET polygon_block_number = $1, polygon_tx_hash = $2, polygon_timestamp = $3
+        WHERE fingerprint = $4 
+        AND polygon_tx_hash IS NULL
+      `, [
+        polygonVerification.block_number,
+        polygonVerification.transaction_hash,
+        polygonVerification.timestamp,
+        fingerprint
+      ]).then(() => {
+        console.log('✅ Polygon data saved to database');
+      }).catch(err => console.error('⚠️ Polygon DB update error:', err.message));
+    }
+    // Update database with Base data
+    if (baseVerification?.success && baseVerification?.transaction_hash) {
+      db.query(`
+        UPDATE verifications 
+        SET base_block_number = $1, base_tx_hash = $2, base_timestamp = $3
+        WHERE fingerprint = $4 
+        AND base_tx_hash IS NULL
+      `, [
+        baseVerification.block_number,
+        baseVerification.transaction_hash,
+        baseVerification.timestamp,
+        fingerprint
+      ]).then(() => {
+        console.log('✅ Base data saved to database');
+      }).catch(err => console.error('⚠️ Base DB update error:', err.message));
     }
     // ============================================
     // STEP 21: Calculate Confidence Score
@@ -2321,6 +2333,7 @@ if (kind === 'video') {
       },
       blockchain_verification: null, // Bitcoin removed
       polygon_verification: polygonVerification,
+      base_verification: baseVerification,
       reverse_image_search: reverseSearchResults,
       verified_at: new Date().toISOString(),
       fingerprint_matches: fingerprintMatches
@@ -2342,6 +2355,7 @@ if (kind === 'video') {
       },
       blockchain_verification: null, // Bitcoin removed
       polygon_verification: polygonVerification,
+      base_verification: baseVerification,
       ai_detection: aiDetection,
       ...(screenshotDetection && { screenshot_detection: screenshotDetection }),
       ...(screenshotTextAnalysis && { screenshot_text_analysis: screenshotTextAnalysis }),
@@ -2858,6 +2872,7 @@ if (download.platform && download.platform !== 'Direct URL') {
       tv_corroboration: tvCorroborationResult,
       blockchain_verification: null, // Bitcoin removed
       polygon_verification: polygonVerification,
+      base_verification: baseVerification,
       verified_at: new Date().toISOString(),
       fingerprint_matches: fingerprintMatches
     });
@@ -2888,6 +2903,7 @@ if (download.platform && download.platform !== 'Direct URL') {
       ai_detection: aiDetection,
       blockchain_verification: null, // Bitcoin removed
       polygon_verification: polygonVerification,
+      base_verification: baseVerification,
       reverse_search: videoReverseSearchResults,
       tv_corroboration: tvCorroborationResult,
       fingerprint_database: fingerprintMatches?.summary || null,
@@ -4225,11 +4241,6 @@ module.exports = { applyHybridCameraRescue, calculateCameraAuthenticityScore };
 
     // ============================================================================
 
-    // Await blockchain results before sending response
-    if (polygonPromise) {
-      polygonVerification = await polygonPromise;
-    }
-
     res.json({
       kind: kind,
       filename: req.file.originalname,
@@ -4241,6 +4252,7 @@ module.exports = { applyHybridCameraRescue, calculateCameraAuthenticityScore };
       },
       blockchain_verification: null, // Bitcoin removed
       polygon_verification: polygonVerification,
+      base_verification: baseVerification,
       ai_detection: aiDetection,
       ...(screenshotDetection && { screenshot_detection: screenshotDetection }),
       ...(provenanceResult && { provenance: provenanceResult }),
