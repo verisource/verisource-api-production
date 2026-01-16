@@ -83,6 +83,9 @@ class BaseTimestampService {
       console.log(`✅ Base confirmed in block ${receipt.blockNumber}`);
 
       const block = await this.provider.getBlock(receipt.blockNumber);
+      const blockTimestamp = block?.timestamp 
+        ? new Date(block.timestamp * 1000).toISOString() 
+        : new Date().toISOString();
       
       let ethCost = '0';
       try {
@@ -105,7 +108,7 @@ class BaseTimestampService {
         success: true,
         transaction_hash: tx.hash || receipt.hash,
         block_number: receipt.blockNumber,
-        timestamp: new Date(block.timestamp * 1000).toISOString(),
+        timestamp: blockTimestamp,
         gas_used: receipt.gasUsed.toString(),
         gas_cost_eth: ethCost,
         gas_cost_usd: costUSD,
@@ -136,12 +139,15 @@ class BaseTimestampService {
 
       const receipt = await this.provider.getTransactionReceipt(txHash);
       const block = await this.provider.getBlock(receipt.blockNumber);
+      const blockTimestamp = block?.timestamp 
+        ? new Date(block.timestamp * 1000).toISOString() 
+        : new Date().toISOString();
 
       return {
         success: true,
         hash: tx.data.substring(2),
         block_number: receipt.blockNumber,
-        timestamp: new Date(block.timestamp * 1000).toISOString(),
+        timestamp: blockTimestamp,
         confirmations: await this.provider.getBlockNumber() - receipt.blockNumber
       };
 
