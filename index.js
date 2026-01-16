@@ -882,7 +882,7 @@ app.post('/verify-remote', authenticateApiKey, async (req, res) => {
     
     if (!searchResults.found) {
       // Get account tier (default to standard)
-      const accountTier = req.accountTier || 'standard';
+      const accountTier = req.headers['x-account-tier'] || req.account?.tier || 'standard';
       blockchainResults = await timestampByTier(fingerprint, tempFileName, null, accountTier);
       polygonVerification = blockchainResults.polygon;
       baseVerification = blockchainResults.base;
@@ -2833,7 +2833,7 @@ if (download.platform && download.platform !== 'Direct URL') {
     
     if (!searchResults.found) {
       console.log('⛓️ Submitting to blockchain...');
-      const accountTier = req.accountTier || 'standard';
+      const accountTier = req.headers['x-account-tier'] || req.account?.tier || 'standard';
       const blockchainResults = await timestampByTier(fingerprint, download.filename, null, accountTier);
       polygonVerification = blockchainResults.polygon;
       baseVerification = blockchainResults.base;
@@ -2998,7 +2998,7 @@ app.post('/verify', upload.single('file'), authenticateApiKey, async (req, res) 
     
     if (!searchResults.found) {
       // Get account tier (default to standard)
-      const accountTier = req.accountTier || 'standard';
+      const accountTier = req.headers['x-account-tier'] || req.account?.tier || 'standard';
       blockchainResults = await timestampByTier(fingerprint, req.file.originalname, null, accountTier);
       polygonVerification = blockchainResults.polygon;
       baseVerification = blockchainResults.base;
