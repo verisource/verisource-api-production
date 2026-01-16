@@ -76,6 +76,7 @@ const app = express();
 async function timestampByTier(fingerprint, filename, tier = 'standard', accountTier = 'standard') {
   // Use account tier if no explicit tier specified
   const effectiveTier = tier || accountTier;
+  console.log(`🎯 Blockchain tier: ${effectiveTier} (tier=${tier}, accountTier=${accountTier})`);
   
   const results = {
     polygon: null,
