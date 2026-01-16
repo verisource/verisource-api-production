@@ -275,6 +275,42 @@ function buildProvenanceTimeline(data) {
     });
   }
   
+  // Base L2 blockchain timestamp (premium tier)
+  if (data.base_verification?.timestamp) {
+    timeline.push({
+      type: 'BLOCKCHAIN_BASE',
+      timestamp: normalizeTimestamp(data.base_verification.timestamp),
+      icon: '🔵',
+      label: 'Base Timestamp',
+      source: 'Base Network (L2)',
+      details: data.base_verification.block_number 
+        ? `Block #${data.base_verification.block_number}`
+        : null,
+      url: data.base_verification.transaction_hash 
+        ? `https://basescan.org/tx/${data.base_verification.transaction_hash}`
+        : null,
+      relevance: null
+    });
+  }
+  
+  // Ethereum L1 blockchain timestamp (enterprise tier - future)
+  if (data.ethereum_verification?.timestamp) {
+    timeline.push({
+      type: 'BLOCKCHAIN_ETHEREUM',
+      timestamp: normalizeTimestamp(data.ethereum_verification.timestamp),
+      icon: '⟠',
+      label: 'Ethereum Timestamp',
+      source: 'Ethereum Mainnet (L1)',
+      details: data.ethereum_verification.block_number 
+        ? `Block #${data.ethereum_verification.block_number}`
+        : null,
+      url: data.ethereum_verification.transaction_hash 
+        ? `https://etherscan.io/tx/${data.ethereum_verification.transaction_hash}`
+        : null,
+      relevance: null
+    });
+  }
+  
   // 7. Current submission
   if (data.verified_at) {
     timeline.push({
@@ -612,7 +648,12 @@ function generateTimelineSummary(timeline, anomalies, data) {
   }
   
   if (hasBlockchain) {
-    parts.push('Blockchain anchored');
+    const blockchainCount = timeline.filter(e => e.type.startsWith('BLOCKCHAIN_')).length;
+    if (blockchainCount > 1) {
+      parts.push(`Anchored on ${blockchainCount} blockchains`);
+    } else {
+      parts.push('Blockchain anchored');
+    }
   }
   
   // Add warning if high severity anomaly
