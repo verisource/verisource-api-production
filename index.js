@@ -25,6 +25,7 @@ const JPEGForensics = require('./services/jpeg-forensics');
 // REMOVED: const BlockchainService = require('./services/opentimestamps-service');
 const PolygonService = require('./services/polygon-timestamp');
 const BaseService = require('./services/base-timestamp');
+const EthereumService = require('./services/ethereum-timestamp');
 const sightengineDetector = require('./services/sightengine-ai-detection');
 const PlatformDetection = require('./services/platform-signature-detection');
 const FeatureLogger = require('./services/feature-logger');
@@ -72,7 +73,7 @@ const app = express();
 // ============================================
 // TIER-BASED BLOCKCHAIN TIMESTAMPING
 // ============================================
-// Tiers: standard (Polygon), premium (Base), enterprise (ETH L1 - future)
+// Tiers: standard (Polygon), premium (Base), enterprise (ETH L1)
 async function timestampByTier(fingerprint, filename, tier = 'standard', accountTier = 'standard') {
   // Use account tier if no explicit tier specified
   const effectiveTier = tier || accountTier;
@@ -109,15 +110,22 @@ async function timestampByTier(fingerprint, filename, tier = 'standard', account
     }
   }
   
-  // Enterprise tier: Also timestamp to Ethereum L1 (future)
-  // if (effectiveTier === 'enterprise') {
-  //   results.ethereum = await EthereumService.timestamp(fingerprint, filename);
-  // }
+  // Enterprise tier: Also timestamp to Ethereum L1
+  if (effectiveTier === 'enterprise') {
+    console.log("⟠ Timestamping to Ethereum L1...");
+    try {
+      results.ethereum = await EthereumService.timestamp(fingerprint, filename);
+      if (results.ethereum.success) {
+        console.log(`✅ Ethereum L1: Block ${results.ethereum.block_number}`);
+      }
+    } catch (err) {
+      console.error("⚠️ Ethereum L1 failed:", err.message);
+      results.ethereum = { success: false, error: err.message };
+    }
+  }
   
   return results;
 }
-
-
 
 // View engine for batch dashboard
 app.set('view engine', 'ejs');
@@ -300,11 +308,37 @@ app.get("/health", async (req, res) => {
     baseStatus = { enabled: false, error: error.message };
   }
 
+  let ethereumStatus = { enabled: false };
+  
+  try {
+    if (EthereumService.enabled) {
+      const balance = await EthereumService.getBalance();
+      const balanceNum = parseFloat(balance) || 0;
+      const gasCost = await EthereumService.estimateGasCost();
+      ethereumStatus = {
+        enabled: true,
+        wallet: EthereumService.wallet?.address || 'unknown',
+        balance_eth: balanceNum.toFixed(6),
+        balance_usd: (balanceNum * 3500).toFixed(2),
+        estimated_tx_cost: gasCost ? {
+          eth: gasCost.estimated_eth,
+          usd: gasCost.estimated_usd,
+          gas_price_gwei: gasCost.gas_price_gwei
+        } : null,
+        status: balanceNum < 0.01 ? 'LOW_BALANCE' : 'ok',
+        warning: balanceNum < 0.01 ? 'Ethereum wallet balance is low. Please add ETH for enterprise timestamping.' : null
+      };
+    }
+  } catch (error) {
+    ethereumStatus = { enabled: false, error: error.message };
+  }
+
   res.json({ 
     status: "ok", 
     uptime: process.uptime(),
     polygon: polygonStatus,
     base: baseStatus,
+    ethereum: ethereumStatus,
     timestamp: new Date().toISOString()
   });
 });
@@ -873,11 +907,11 @@ app.post('/verify-remote', authenticateApiKey, async (req, res) => {
     } catch (err) {
       console.error('⚠️ Provenance check error:', err.message);
     }
-    // ============================================
-    // STEP 3: Blockchain timestamping (if new)
+   // STEP 3: Blockchain timestamping (if new)
     // ============================================
     let polygonVerification = null;
     let baseVerification = null;
+    let ethereumVerification = null;
     let blockchainResults = null;
     
     if (!searchResults.found) {
@@ -886,6 +920,7 @@ app.post('/verify-remote', authenticateApiKey, async (req, res) => {
       blockchainResults = await timestampByTier(fingerprint, tempFileName, null, accountTier);
       polygonVerification = blockchainResults.polygon;
       baseVerification = blockchainResults.base;
+      ethereumVerification = blockchainResults.ethereum; 
     } else {
       console.log("⏭️ Skipping blockchain - already timestamped");
       polygonVerification = { 
@@ -907,6 +942,17 @@ app.post('/verify-remote', authenticateApiKey, async (req, res) => {
           block_number: searchResults.base_block_number,
           transaction_hash: searchResults.base_tx_hash,
           timestamp: searchResults.base_timestamp
+        };
+      }
+      // Check for existing Ethereum verification
+      if (searchResults.ethereum_block_number) {
+        ethereumVerification = {
+          success: true,
+          status: 'previously_timestamped',
+          skipped: true,
+          block_number: searchResults.ethereum_block_number,
+          transaction_hash: searchResults.ethereum_tx_hash,
+          timestamp: searchResults.ethereum_timestamp
         };
       }
     }
@@ -2269,6 +2315,22 @@ if (kind === 'video') {
         console.log('✅ Base data saved to database');
       }).catch(err => console.error('⚠️ Base DB update error:', err.message));
     }
+    // ADD THIS - Update database with Ethereum data
+    if (ethereumVerification?.success && ethereumVerification?.transaction_hash) {
+      db.query(`
+       UPDATE verifications 
+       SET ethereum_block_number = $1, ethereum_tx_hash = $2, ethereum_timestamp = $3
+       WHERE fingerprint = $4 
+       AND ethereum_tx_hash IS NULL
+      `, [
+       ethereumVerification.block_number,
+       ethereumVerification.transaction_hash,
+       ethereumVerification.timestamp,
+       fingerprint
+     ]).then(() => {
+      console.log('✅ Ethereum data saved to database');
+     }).catch(err => console.error('⚠️ Ethereum DB update error:', err.message));
+    }
     // ============================================
     // STEP 21: Calculate Confidence Score
     // ============================================
@@ -2334,6 +2396,7 @@ if (kind === 'video') {
       blockchain_verification: null, // Bitcoin removed
       polygon_verification: polygonVerification,
       base_verification: baseVerification,
+      ethereum_verification: ethereumVerification,
       reverse_image_search: reverseSearchResults,
       verified_at: new Date().toISOString(),
       fingerprint_matches: fingerprintMatches
@@ -2356,6 +2419,7 @@ if (kind === 'video') {
       blockchain_verification: null, // Bitcoin removed
       polygon_verification: polygonVerification,
       base_verification: baseVerification,
+      ethereum_verification: ethereumVerification,
       ai_detection: aiDetection,
       ...(screenshotDetection && { screenshot_detection: screenshotDetection }),
       ...(screenshotTextAnalysis && { screenshot_text_analysis: screenshotTextAnalysis }),
@@ -2873,6 +2937,7 @@ if (download.platform && download.platform !== 'Direct URL') {
       blockchain_verification: null, // Bitcoin removed
       polygon_verification: polygonVerification,
       base_verification: baseVerification,
+      ethereum_verification: ethereumVerification,
       verified_at: new Date().toISOString(),
       fingerprint_matches: fingerprintMatches
     });
@@ -2904,6 +2969,7 @@ if (download.platform && download.platform !== 'Direct URL') {
       blockchain_verification: null, // Bitcoin removed
       polygon_verification: polygonVerification,
       base_verification: baseVerification,
+      ethereum_verification: ethereumVerification,
       reverse_search: videoReverseSearchResults,
       tv_corroboration: tvCorroborationResult,
       fingerprint_database: fingerprintMatches?.summary || null,
@@ -3023,8 +3089,19 @@ app.post('/verify', upload.single('file'), authenticateApiKey, async (req, res) 
           transaction_hash: searchResults.base_tx_hash,
           timestamp: searchResults.base_timestamp
         };
+      // Check for existing Ethereum verification
+      if (searchResults.ethereum_block_number) {
+        ethereumVerification = {
+        success: true,
+        status: 'previously_timestamped',
+        skipped: true,
+        block_number: searchResults.ethereum_block_number,
+        transaction_hash: searchResults.ethereum_tx_hash,
+        timestamp: searchResults.ethereum_timestamp
+        };
+      }  
+        }
       }
-    }
     const dm = req.file.mimetype || mime.lookup(req.file.originalname) || 'application/octet-stream';
     const isImg = /^image\//i.test(dm) || /\.(png|jpe?g|gif|webp)$/i.test(req.file.originalname);
     const isVid = /^video\//i.test(dm) || /\.(mp4|mov|avi|mkv)$/i.test(req.file.originalname);
@@ -4258,6 +4335,7 @@ module.exports = { applyHybridCameraRescue, calculateCameraAuthenticityScore };
       blockchain_verification: null, // Bitcoin removed
       polygon_verification: polygonVerification,
       base_verification: baseVerification,
+      ethereum_verification: ethereumVerification,
       ai_detection: aiDetection,
       ...(screenshotDetection && { screenshot_detection: screenshotDetection }),
       ...(provenanceResult && { provenance: provenanceResult }),
@@ -4498,6 +4576,45 @@ app.get('/admin/migrate-provenance', async (req, res) => {
     res.status(500).json({ success: false, error: err.message });
   }
 }); 
+
+app.get('/admin/migrate-provenance', async (req, res) => {
+  // ... existing provenance migration code ...
+}); 
+
+// ============================================================================
+// ETHEREUM L1 DATABASE MIGRATION
+// ============================================================================
+app.get('/admin/migrate-ethereum', async (req, res) => {
+  try {
+    console.log('🔄 Running Ethereum L1 migration...');
+    
+    // Add Ethereum columns to verifications table
+    await db.query(`
+      ALTER TABLE verifications 
+      ADD COLUMN IF NOT EXISTS ethereum_block_number INTEGER,
+      ADD COLUMN IF NOT EXISTS ethereum_tx_hash VARCHAR(66),
+      ADD COLUMN IF NOT EXISTS ethereum_timestamp TIMESTAMP
+    `);
+    console.log('✅ Ethereum columns added to verifications');
+    
+    // Create index for ethereum_tx_hash lookups
+    await db.query(`
+      CREATE INDEX IF NOT EXISTS idx_ethereum_tx_hash 
+      ON verifications(ethereum_tx_hash) 
+      WHERE ethereum_tx_hash IS NOT NULL
+    `);
+    console.log('✅ Ethereum transaction hash index created');
+    
+    res.json({ 
+      success: true, 
+      message: 'Ethereum L1 migration complete!',
+      columns_added: ['ethereum_block_number', 'ethereum_tx_hash', 'ethereum_timestamp']
+    });
+  } catch (err) {
+    console.error('❌ Ethereum migration failed:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
 // ============================================================================
 // MULTI-REGION PHASH MIGRATION
 // ============================================================================
