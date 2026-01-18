@@ -223,7 +223,7 @@ async function processImage(imageData) {
     ]);
     return { success: true, id: imageData.id };
   } catch (error) {
-    return { error: true, message: error.message, id: imageData.id };
+    console.error(`\nError processing ${imageData.id}: ${error.message}`); return { error: true, message: error.message, id: imageData.id };
   }
 }
 
