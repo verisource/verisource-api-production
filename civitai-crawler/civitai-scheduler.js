@@ -121,6 +121,7 @@ async function main() {
   console.log(`   Interval: ${SCHEDULE.intervalMinutes} minutes`);
   await initDatabase();
   await initMetadata();
+  await pool.query(`ALTER TABLE ai_image_hashes ALTER COLUMN phash TYPE TEXT, ALTER COLUMN dhash TYPE TEXT, ALTER COLUMN average_hash TYPE TEXT;`).then(() => console.log("✓ Hash columns migrated")).catch(err => console.error("Migration error:", err.message));
   startHealthCheck();
   await runCrawlCycle();
   const intervalMs = SCHEDULE.intervalMinutes * 60 * 1000;
