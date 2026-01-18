@@ -1,0 +1,22 @@
+{
+  "name": "verisource-civitai-crawler",
+  "version": "1.0.0",
+  "description": "Crawls Civitai to build AI image hash database for VeriSource",
+  "main": "civitai-crawler.js",
+  "scripts": {
+    "crawl": "node civitai-crawler.js crawl",
+    "crawl:small": "node civitai-crawler.js crawl 100",
+    "crawl:medium": "node civitai-crawler.js crawl 1000",
+    "crawl:large": "node civitai-crawler.js crawl 10000",
+    "stats": "node civitai-crawler.js stats",
+    "init": "node civitai-crawler.js init",
+    "start": "node civitai-scheduler.js"
+  },
+  "dependencies": {
+    "pg": "^8.11.3",
+    "sharp": "^0.33.2"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
