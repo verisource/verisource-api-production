@@ -1,0 +1,22 @@
+{
+  "name": "verisource-lexica-crawler",
+  "version": "1.0.0",
+  "description": "Crawls Lexica to build AI image hash database for VeriSource",
+  "main": "lexica-crawler.js",
+  "scripts": {
+    "crawl": "node lexica-crawler.js crawl",
+    "crawl:small": "node lexica-crawler.js crawl 100",
+    "crawl:medium": "node lexica-crawler.js crawl 1000",
+    "crawl:large": "node lexica-crawler.js crawl 10000",
+    "stats": "node lexica-crawler.js stats",
+    "init": "node lexica-crawler.js init",
+    "start": "node lexica-scheduler.js"
+  },
+  "dependencies": {
+    "pg": "^8.11.3",
+    "sharp": "^0.33.2"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
