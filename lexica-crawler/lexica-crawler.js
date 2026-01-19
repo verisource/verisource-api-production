@@ -21,7 +21,7 @@ const pool = new Pool({
 
 // Lexica API configuration
 const LEXICA_API = 'https://lexica.art/api/v1/search';
-const REQUEST_DELAY = 2000; // 2 seconds between requests (be respectful)
+const REQUEST_DELAY = 5000; // 2 seconds between requests (be respectful)
 
 // Diverse search terms for broad coverage
 const SEARCH_TERMS = [
@@ -368,7 +368,7 @@ function delay(ms) {
 async function crawl(options = {}) {
   const {
     maxImages = 500,
-    termsPerRun = 10, // Number of search terms to process per run
+    termsPerRun = 5, // Number of search terms to process per run
     skipNsfw = true
   } = options;
   
@@ -437,7 +437,7 @@ async function crawl(options = {}) {
     await saveCrawlProgress(termIndex);
     
     // Delay between searches
-    await delay(REQUEST_DELAY);
+    await delay(REQUEST_DELAY * 2);
   }
   
   console.log(`\n\n==================================================`);
