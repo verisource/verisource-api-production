@@ -7,7 +7,7 @@ const http = require('http');
 
 const CRAWL_INTERVAL = parseInt(process.env.CRAWL_INTERVAL) || 60;
 const MAX_IMAGES_PER_SOURCE = parseInt(process.env.MAX_IMAGES_PER_SOURCE) || 50;
-const CRAWL_TIERS = (process.env.CRAWL_TIERS || 'wire_services,international,us_major').split(',');
+const CRAWL_TIERS = (process.env.CRAWL_TIERS || 'wire_services,international,us_major,other_major').split(',');
 const PORT = process.env.PORT || 8080;
 
 let isRunning = false;

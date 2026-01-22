@@ -144,6 +144,27 @@ const NEWS_SOURCES = {
       name: 'Sky News',
       slug: 'sky',
       feeds: ['https://feeds.skynews.com/feeds/rss/world.xml']
+    },
+    {
+      name: 'USA Today',
+      slug: 'usatoday',
+      feeds: [
+        'http://rssfeeds.usatoday.com/usatoday-NewsTopStories',
+        'http://rssfeeds.usatoday.com/UsatodaycomWorld-TopStories'
+      ]
+    },
+    {
+      name: 'The Independent',
+      slug: 'independent',
+      feeds: [
+        'https://www.independent.co.uk/news/world/rss',
+        'https://www.independent.co.uk/news/uk/rss'
+      ]
+    },
+    {
+      name: 'Daily Mail',
+      slug: 'dailymail',
+      feeds: ['https://www.dailymail.co.uk/articles.rss']
     }
   ],
 
