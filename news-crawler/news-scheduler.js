@@ -105,6 +105,12 @@ async function main() {
   console.log(`   Interval: ${CRAWL_INTERVAL} minutes`);
   
   await initDatabase();
+
+  // Fix hash column sizes if needed
+  const { Pool } = require("pg");
+  const pool = new Pool({ connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } });
+  await pool.query("ALTER TABLE news_images ALTER COLUMN phash TYPE TEXT, ALTER COLUMN dhash TYPE TEXT;").catch(() => {});
+  await pool.end();
   startHealthServer();
   await runCrawlCycle();
   
