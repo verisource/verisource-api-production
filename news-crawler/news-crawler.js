@@ -149,8 +149,7 @@ const NEWS_SOURCES = {
       name: 'USA Today',
       slug: 'usatoday',
       feeds: [
-        'http://rssfeeds.usatoday.com/usatoday-NewsTopStories',
-        'http://rssfeeds.usatoday.com/UsatodaycomWorld-TopStories'
+        'https://news.google.com/rss/search?q=when:24h+allinurl:usatoday.com&ceid=US:en&hl=en-US&gl=US'
       ]
     },
     {
@@ -165,6 +164,23 @@ const NEWS_SOURCES = {
       name: 'Daily Mail',
       slug: 'dailymail',
       feeds: ['https://www.dailymail.co.uk/articles.rss']
+    },
+    {
+      name: 'Fox News',
+      slug: 'foxnews',
+      feeds: [
+        'https://moxie.foxnews.com/google-publisher/us.xml',
+        'https://moxie.foxnews.com/google-publisher/world.xml'
+      ]
+    },
+    {
+      name: 'Newsmax',
+      slug: 'newsmax',
+      feeds: [
+        'https://www.newsmax.com/rss/Politics/1',
+        'https://www.newsmax.com/rss/US/18',
+        'https://www.newsmax.com/rss/GlobalTalk/162'
+      ]
     }
   ],
 
