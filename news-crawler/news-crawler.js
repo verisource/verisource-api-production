@@ -37,17 +37,14 @@ const NEWS_SOURCES = {
       name: 'Reuters',
       slug: 'reuters',
       feeds: [
-        'https://www.reutersagency.com/feed/?best-topics=world&post_type=best',
-        'https://www.reutersagency.com/feed/?best-topics=business&post_type=best',
-        'https://www.reutersagency.com/feed/?best-topics=tech&post_type=best'
+        'https://news.google.com/rss/search?q=when:24h+allinurl:reuters.com&ceid=US:en&hl=en-US&gl=US'
       ]
     },
     {
       name: 'Associated Press',
       slug: 'ap',
       feeds: [
-        'https://rsshub.app/apnews/topics/apf-topnews',
-        'https://rsshub.app/apnews/topics/apf-WorldNews'
+        'https://news.google.com/rss/search?q=when:24h+allinurl:apnews.com&ceid=US:en&hl=en-US&gl=US'
       ]
     }
   ],
@@ -70,7 +67,7 @@ const NEWS_SOURCES = {
     {
       name: 'DW News',
       slug: 'dw',
-      feeds: ['https://rss.dw.com/rdf/rss-en-all']
+      feeds: ['https://rss.dw.com/xml/rss-en-all']
     },
     {
       name: 'France 24',
@@ -314,7 +311,7 @@ function extractMediaUrls(item) {
   return [...new Set(urls.filter(url => 
     url && 
     (url.startsWith('http://') || url.startsWith('https://')) &&
-    /\.(jpg|jpeg|png|gif|webp)/i.test(url)
+    (/\.(jpg|jpeg|png|gif|webp)/i.test(url) || /image|img|photo|media|cdn/i.test(url))
   ))];
 }
 
