@@ -15,7 +15,7 @@ ENV NODE_ENV=production
 ENV PORT=8080
 ENV CRAWL_INTERVAL=60
 ENV MAX_IMAGES_PER_SOURCE=50
-ENV CRAWL_TIERS=wire_services,international,us_major
+ENV CRAWL_TIERS=wire_services,international,us_major,other_major
 
 EXPOSE 8080
 
