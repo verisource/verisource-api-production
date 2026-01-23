@@ -10,7 +10,7 @@
  * - Original publication date verification
  */
 
-const db = require('./db-minimal');
+const db = require('../db-minimal');
 
 // Hamming distance threshold for perceptual hash matching
 // Lower = stricter matching, Higher = more fuzzy
