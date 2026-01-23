@@ -36,6 +36,7 @@ const tvCorroboration = require('./services/tv-corroboration');
 const { buildProvenanceTimeline } = require('./services/provenance-timeline');
 const FingerprintDBService = require('./services/fingerprint-db-service');
 const { authenticateApiKey, getUserAccountId } = require('./api-key-middleware');
+const { searchNewsDatabase, formatNewsSourceResponse, getNewsStats } = require('./services/news-source-search');
 // Import canonicalization only (workers not needed for minimal endpoint)
 let canonicalizeImage;
 try { 
@@ -2350,6 +2351,7 @@ if (kind === 'video') {
         ...(audioAIDetection && { audio_ai_detection: audioAIDetection }),
         ...(shadowPhysicsResult && { shadow_physics: shadowPhysicsResult }),
         ...(reverseSearchResults && { reverse_image_search: reverseSearchResults }),
+        ...(newsSourceMatch && { news_source_match: newsSourceMatch }),
         ...(cameraVerification && { camera_verification: cameraVerification }),
         ...(exifData && { metadata: { has_exif: true, exif: exifData } }),
         ...(softwareAnalysis && { software_analysis: softwareAnalysis }),
@@ -2483,6 +2485,7 @@ if (kind === 'video') {
       ...(deepfakeAnalysis && { deepfake_detection: deepfakeAnalysis }),
       ...(authorityResult && authorityResult.authorityDetected && { authority_detection: authorityResult }),
       ...(reverseSearchResults && { reverse_image_search: reverseSearchResults }),
+      ...(newsSourceMatch && { news_source_match: newsSourceMatch }),
       c2pa_verification: c2paResult,
       virustotal: virusTotalResult,
       ...(tvCorroborationResult && { tv_corroboration: tvCorroborationResult }),
@@ -3176,7 +3179,63 @@ app.post('/verify', upload.single('file'), authenticateApiKey, async (req, res) 
         if (phashResult.success) {
           phash = phashResult.phash;
           console.log('✅ pHash generated:', phash);
+      // ============================================
+    // NEWS DATABASE SEARCH - Verified News Source Matching
+    // ============================================
+    let newsSourceMatch = null;
+    if (kind === 'image' && (phash || fingerprint)) {
+      try {
+        console.log('📰 Searching news database...');
+        
+        // Generate MD5 for exact matching
+        const md5Hash = crypto.createHash('md5').update(buf).digest('hex');
+        
+        // Get dHash if available (you may need to generate this)
+        let dhash = null;
+        try {
+          const sharp = require('sharp');
+          const dHashBuffer = await sharp(req.file.path)
+            .resize(9, 8, { fit: 'fill' })
+            .grayscale()
+            .raw()
+            .toBuffer();
           
+          // Generate dHash
+          const pixels = Array.from(dHashBuffer);
+          let hashBits = '';
+          for (let y = 0; y < 8; y++) {
+            for (let x = 0; x < 8; x++) {
+              const left = pixels[y * 9 + x];
+              const right = pixels[y * 9 + x + 1];
+              hashBits += left > right ? '1' : '0';
+            }
+          }
+          dhash = '';
+          for (let i = 0; i < hashBits.length; i += 4) {
+            dhash += parseInt(hashBits.substr(i, 4), 2).toString(16);
+          }
+        } catch (e) {
+          console.log('⚠️ dHash generation failed:', e.message);
+        }
+        
+        const newsResults = await searchNewsDatabase({
+          phash: phash,
+          dhash: dhash,
+          md5: md5Hash
+        });
+        
+        if (newsResults.found) {
+          newsSourceMatch = formatNewsSourceResponse(newsResults);
+          console.log(`📰 News match found: ${newsSourceMatch.verified_attribution.source} (${newsSourceMatch.match_type})`);
+          console.log(`   Published: ${newsSourceMatch.verified_attribution.published_at}`);
+          console.log(`   Total sources: ${newsSourceMatch.sources_found.length}`);
+        } else {
+          console.log('📰 No news database match');
+        }
+      } catch (err) {
+        console.error('⚠️ News database search error:', err.message);
+      }
+    }    
           // Search for similar images
           if (dbReady) {
             const similar = await searchSimilarImages(phash, db);
@@ -4401,6 +4460,7 @@ module.exports = { applyHybridCameraRescue, calculateCameraAuthenticityScore };
       ...(deepfakeAnalysis && { deepfake_detection: deepfakeAnalysis }),
       ...(authorityResult && authorityResult.authorityDetected && { authority_detection: authorityResult }),
       ...(reverseSearchResults && { reverse_image_search: reverseSearchResults }),
+      ...(newsSourceMatch && { news_source_match: newsSourceMatch }),
       //...(stockPhotoResult && { stock_photo_detection: stockPhotoResult }),
       // C2PA/Blockchain verification (Phase 1 Step 3)
       c2pa_verification: await (async () => {
@@ -4458,6 +4518,7 @@ module.exports = { applyHybridCameraRescue, calculateCameraAuthenticityScore };
             ...(audioAIDetection && { audio_ai_detection: audioAIDetection }),
             ...(shadowPhysicsResult && { shadow_physics: shadowPhysicsResult }),
             ...(reverseSearchResults && { reverse_image_search: reverseSearchResults }),
+            ...(newsSourceMatch && { news_source_match: newsSourceMatch }),
             ...(cameraVerification && { camera_verification: cameraVerification }),
             ...(exifData && { metadata: { has_exif: true, exif: exifData } }),
           };
@@ -4560,9 +4621,6 @@ app.get('/admin/migrate-provenance', async (req, res) => {
     
     // Backfill first_seen_at for existing records
     await db.query(`
-      UPDATE verifications v
-      SET first_seen_at = (
-        SELECT MIN(upload_date) 
         FROM verifications 
         WHERE fingerprint = v.fingerprint
       )
