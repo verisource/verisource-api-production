@@ -2526,6 +2526,7 @@ if (kind === 'video') {
       ...(tvCorroborationResult && { tv_corroboration: tvCorroborationResult }),
       confidence: confidence,
       fingerprint_database: fingerprintMatches?.summary || null,
+      internal_search: internalSearchResults || null,
       provenance_timeline: provenanceTimeline,
       verified_at: new Date().toISOString()
     };
@@ -3011,6 +3012,7 @@ if (download.platform && download.platform !== 'Direct URL') {
       reverse_search: videoReverseSearchResults,
       tv_corroboration: tvCorroborationResult,
       fingerprint_database: fingerprintMatches?.summary || null,
+      internal_search: internalSearchResults || null,
       provenance_timeline: provenanceTimeline,
       confidence
     });
@@ -4536,6 +4538,7 @@ module.exports = { applyHybridCameraRescue, calculateCameraAuthenticityScore };
         }
       })(),
       fingerprint_database: fingerprintMatches?.summary || null,
+      internal_search: internalSearchResults || null,
       confidence: (() => {
         try {
           // Build data object for confidence calculation
