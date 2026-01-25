@@ -1762,6 +1762,27 @@ if (kind === 'video') {
       }
     }
     // ============================================
+    // CACHE EXTERNAL SEARCH RESULTS (PostgreSQL)
+    // ============================================
+    if (reverseSearchResults && fingerprint && !reverseSearchResults.from_cache) {
+      try {
+        if (reverseSearchResults.tineye && reverseSearchResults.tineye.status !== 'error') {
+          await FingerprintCachePG.cacheExternalSearch(fingerprint, 'tineye', reverseSearchResults.tineye);
+          console.log('📦 Cached TinEye results');
+        }
+        if (reverseSearchResults.google && reverseSearchResults.google.status !== 'error') {
+          await FingerprintCachePG.cacheExternalSearch(fingerprint, 'google', reverseSearchResults.google);
+          console.log('📦 Cached Google results');
+        }
+        if (reverseSearchResults.bing && reverseSearchResults.bing.status !== 'error') {
+          await FingerprintCachePG.cacheExternalSearch(fingerprint, 'bing', reverseSearchResults.bing);
+          console.log('📦 Cached Bing results');
+        }
+      } catch (err) {
+        console.error('⚠️ External cache error:', err.message);
+      }
+    }
+    // ============================================
     // STEP 12B: Persist Earliest Online Date
     // ============================================
     if (reverseSearchResults?.tineye?.first_appearance?.date) {
