@@ -35,6 +35,7 @@ const VideoThumbnailService = require('./services/video-thumbnail-service');
 const tvCorroboration = require('./services/tv-corroboration');
 const { buildProvenanceTimeline } = require('./services/provenance-timeline');
 const FingerprintDBService = require('./services/fingerprint-db-service');
+const { searchInternal, shouldSearchExternal } = require('./services/privacy-safe-search');
 const { authenticateApiKey, getUserAccountId } = require('./api-key-middleware');
 const { searchNewsDatabase, formatNewsSourceResponse, getNewsStats } = require('./services/news-source-search');
 // Import canonicalization only (workers not needed for minimal endpoint)
@@ -891,6 +892,33 @@ app.post('/verify-remote', authenticateApiKey, async (req, res) => {
       console.error('⚠️ Database search error:', err.message);
     }
 // ============================================
+    // STEP 2.1: Privacy-Safe Internal Search
+    // ============================================
+    let internalSearchResults = null;
+    let externalSearchRecommendation = { recommended: true, skip_tineye: false, skip_google: false };
+    try {
+      console.log('🔍 Running privacy-safe internal search...');
+      const currentAccountId = req.account?.id || null;
+      internalSearchResults = await searchInternal(fingerprint, null, currentAccountId);
+      externalSearchRecommendation = shouldSearchExternal(internalSearchResults);
+      
+      if (internalSearchResults.found_in_database) {
+        console.log('   ✅ Found in internal database');
+        if (internalSearchResults.exact_match) {
+          console.log('   📊 Verified ' + internalSearchResults.exact_match.times_verified + ' times');
+        }
+        if (internalSearchResults.crawled_sources?.total_matches > 0) {
+          console.log('   🌐 Found on ' + internalSearchResults.crawled_sources.platforms_found + ' platforms');
+        }
+      }
+      
+      if (!externalSearchRecommendation.recommended) {
+        console.log('   ⏭️ Skipping external search: ' + externalSearchRecommendation.reason);
+      }
+    } catch (err) {
+      console.error('⚠️ Privacy-safe search error:', err.message);
+    }
+// ============================================
     // STEP 2.5: Provenance check
     // ============================================
     let provenanceResult = null;
@@ -989,7 +1017,7 @@ if (kind === 'video') {
     // STEP 2B: Start Reverse Image Search (async - runs in parallel)
     // ============================================
     let reverseSearchPromise = null;
-    if (kind === 'image') {
+    if (kind === 'image' && !externalSearchRecommendation.skip_tineye) {
       console.log('🔍 Starting reverse image search (async)...');
       reverseSearchPromise = reverseImageSearch.search(buf, {
         services: ['tineye', 'bing'],
@@ -998,8 +1026,14 @@ if (kind === 'video') {
         console.error('⚠️ Reverse image search error:', err.message);
         return { search_performed: false, error: err.message };
       });
+    } else if (kind === 'image' && externalSearchRecommendation.skip_tineye) {
+      console.log('⏭️ Skipping reverse image search (sufficient internal results)');
+      reverseSearchPromise = Promise.resolve({ 
+        search_performed: false, 
+        skipped: true, 
+        reason: externalSearchRecommendation.reason 
+      });
     }
-
     // ============================================
     // Start Google Vision Analysis (async - runs in parallel)
     // ============================================
