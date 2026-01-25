@@ -55,6 +55,7 @@ const { AudioAIDetection } = require('./services/audio-ai-detection');
 const { detectAIGeneration } = require('./services/ensemble-ai-detection');
 const { generatePHash, searchSimilarImages } = require('./phash-module');
 const { analyzeCrossReference, analyzeTemporalConsistency, cacheExternalSearchResults, analyzeExternalSources, getCachedSearchBySha256 } = require('./services/fingerprint-index');
+const FingerprintCachePG = require('./services/fingerprint-cache-pg');
 const ConfidenceScoring = require('./services/confidence-scoring');
 const ChromaprintService = require('./services/chromaprint');
 const VideoAudioFingerprint = require('./services/video-audio-fingerprint');
@@ -556,6 +557,57 @@ async function initializeDatabase() {
     console.log('🔨 Creating audio fingerprint index...');
     await db.query('CREATE INDEX IF NOT EXISTS idx_audio_fingerprint ON verifications(audio_fingerprint) WHERE audio_fingerprint IS NOT NULL');
     
+    // Create external search cache table (PostgreSQL - replaces SQLite)
+    console.log('🔨 Creating external search cache table...');
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS external_search_cache (
+        id SERIAL PRIMARY KEY,
+        fingerprint VARCHAR(64) NOT NULL,
+        service VARCHAR(20) NOT NULL,
+        total_matches INTEGER DEFAULT 0,
+        match_urls JSONB,
+        raw_response JSONB,
+        queried_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        expires_at TIMESTAMP,
+        UNIQUE(fingerprint, service)
+      )
+    `);
+    await db.query('CREATE INDEX IF NOT EXISTS idx_esc_fingerprint ON external_search_cache(fingerprint)');
+
+    // Create content labels table
+    console.log('🔨 Creating content labels table...');
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS content_labels (
+        id SERIAL PRIMARY KEY,
+        fingerprint VARCHAR(64) NOT NULL,
+        label VARCHAR(255) NOT NULL,
+        confidence REAL DEFAULT 0,
+        source VARCHAR(50) DEFAULT 'google_vision',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(fingerprint, label, source)
+      )
+    `);
+    await db.query('CREATE INDEX IF NOT EXISTS idx_cl_fingerprint ON content_labels(fingerprint)');
+
+    // Create external matches table
+    console.log('🔨 Creating external matches table...');
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS external_matches (
+        id SERIAL PRIMARY KEY,
+        fingerprint VARCHAR(64) NOT NULL,
+        service VARCHAR(20),
+        match_url TEXT,
+        match_domain VARCHAR(255),
+        match_title TEXT,
+        match_date TIMESTAMP,
+        domain_type VARCHAR(50),
+        discovered_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(fingerprint, service, match_url)
+      )
+    `);
+    await db.query('CREATE INDEX IF NOT EXISTS idx_em_fingerprint ON external_matches(fingerprint)');
+    await db.query('CREATE INDEX IF NOT EXISTS idx_em_domain_type ON external_matches(domain_type)');
+    
     // Get record count
     const countResult = await db.query('SELECT COUNT(*) as count FROM verifications');
     const recordCount = countResult.rows[0].count;
@@ -1029,7 +1081,7 @@ if (kind === 'video') {
     } else if (kind === 'image' && externalSearchRecommendation.skip_tineye) {
       console.log('⏭️ Skipping reverse image search (sufficient internal results)');
       // Try to get cached external results
-      const cachedExternal = getCachedSearchBySha256(fingerprint);
+      const cachedExternal = await FingerprintCachePG.getCachedExternalSearch(fingerprint);
       if (cachedExternal) {
         console.log('📦 Using cached external search results');
         reverseSearchPromise = Promise.resolve({ 
@@ -4358,25 +4410,26 @@ module.exports = { applyHybridCameraRescue, calculateCameraAuthenticityScore };
     // ============================================================================
     // CACHE EXTERNAL SEARCH RESULTS
     // ============================================================================
-    if (reverseSearchResults && crossReference?.index_status?.fingerprint_id) {
-      const fpId = crossReference.index_status.fingerprint_id;
+    if (reverseSearchResults && fingerprint) {
       try {
         if (reverseSearchResults.tineye && reverseSearchResults.tineye.status !== 'error') {
-          cacheExternalSearchResults(fpId, 'tineye', reverseSearchResults.tineye);
+          await FingerprintCachePG.cacheExternalSearch(fingerprint, 'tineye', reverseSearchResults.tineye);
           console.log('📦 Cached TinEye results');
         }
         if (reverseSearchResults.google && reverseSearchResults.google.status !== 'error') {
-          cacheExternalSearchResults(fpId, 'google', reverseSearchResults.google);
+          await FingerprintCachePG.cacheExternalSearch(fingerprint, 'google', reverseSearchResults.google);
           console.log('📦 Cached Google results');
         }
         if (reverseSearchResults.bing && reverseSearchResults.bing.status !== 'error') {
-          cacheExternalSearchResults(fpId, 'bing', reverseSearchResults.bing);
+          await FingerprintCachePG.cacheExternalSearch(fingerprint, 'bing', reverseSearchResults.bing);
           console.log('📦 Cached Bing results');
         }
         // Add source analysis to cross-reference
-        crossReference.external_sources = analyzeExternalSources(fpId);
-        if (crossReference.external_sources.total_external_matches > 0) {
-          console.log(`📊 External sources: ${crossReference.external_sources.total_external_matches} matches indexed`);
+        const externalSources = await FingerprintCachePG.analyzeExternalSources(fingerprint);
+        if (externalSources && externalSources.total_external_matches > 0) {
+          crossReference = crossReference || {};
+          crossReference.external_sources = externalSources;
+          console.log('📊 External sources: ' + externalSources.total_external_matches + ' matches indexed');
         }
       } catch (err) {
         console.error('⚠️ External cache error:', err.message);

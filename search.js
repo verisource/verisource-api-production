@@ -1,5 +1,6 @@
 const db = require('./db-minimal');
 const fingerprintIndex = require('./services/fingerprint-index');
+const FingerprintCachePG = require('./services/fingerprint-cache-pg');
 
 async function searchByFingerprint(fingerprint) {
   try {
@@ -91,18 +92,17 @@ async function saveVerification(data) {
     } catch (err) {
       console.error('⚠️ Fingerprint index error:', err.message);
     }
-
-    // 2. Store Google Vision labels if provided
-    if (data.google_vision_labels && data.google_vision_labels.length > 0 && fingerprintResult) {
+// 2. Store Google Vision labels if provided (PostgreSQL)
+    if (data.google_vision_labels && data.google_vision_labels.length > 0 && data.fingerprint) {
       try {
-        const labelCount = fingerprintIndex.storeLabels(
-          fingerprintResult.id,
+        const labelCount = await FingerprintCachePG.storeLabels(
+          data.fingerprint,
           data.google_vision_labels.map(l => ({
             label: l.description || l.label || l,
             confidence: l.score || l.confidence || 0.5
           }))
         );
-        console.log(`🏷️ Cached ${labelCount} labels`);
+        console.log('🏷️ Cached ' + labelCount + ' labels');
       } catch (err) {
         console.error('⚠️ Label caching error:', err.message);
       }
