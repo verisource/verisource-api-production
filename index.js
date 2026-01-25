@@ -54,7 +54,7 @@ const { analyzeImage } = require('./google-vision-search');
 const { AudioAIDetection } = require('./services/audio-ai-detection');
 const { detectAIGeneration } = require('./services/ensemble-ai-detection');
 const { generatePHash, searchSimilarImages } = require('./phash-module');
-const { analyzeCrossReference, analyzeTemporalConsistency, cacheExternalSearchResults, analyzeExternalSources } = require('./services/fingerprint-index');
+const { analyzeCrossReference, analyzeTemporalConsistency, cacheExternalSearchResults, analyzeExternalSources, getCachedSearchBySha256 } = require('./services/fingerprint-index');
 const ConfidenceScoring = require('./services/confidence-scoring');
 const ChromaprintService = require('./services/chromaprint');
 const VideoAudioFingerprint = require('./services/video-audio-fingerprint');
@@ -1028,11 +1028,23 @@ if (kind === 'video') {
       });
     } else if (kind === 'image' && externalSearchRecommendation.skip_tineye) {
       console.log('⏭️ Skipping reverse image search (sufficient internal results)');
-      reverseSearchPromise = Promise.resolve({ 
-        search_performed: false, 
-        skipped: true, 
-        reason: externalSearchRecommendation.reason 
-      });
+      // Try to get cached external results
+      const cachedExternal = getCachedSearchBySha256(fingerprint);
+      if (cachedExternal) {
+        console.log('📦 Using cached external search results');
+        reverseSearchPromise = Promise.resolve({ 
+          search_performed: true, 
+          from_cache: true,
+          reason: externalSearchRecommendation.reason,
+          ...cachedExternal
+        });
+      } else {
+        reverseSearchPromise = Promise.resolve({ 
+          search_performed: false, 
+          skipped: true, 
+          reason: externalSearchRecommendation.reason 
+        });
+      }
     }
     // ============================================
     // Start Google Vision Analysis (async - runs in parallel)

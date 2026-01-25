@@ -707,3 +707,41 @@ module.exports.getCachedSearch = getCachedSearch;
 module.exports.getExternalMatches = getExternalMatches;
 module.exports.searchExternalMatchesByDomain = searchExternalMatchesByDomain;
 module.exports.analyzeExternalSources = analyzeExternalSources;
+
+// Get cached external search results by SHA256 hash
+function getCachedSearchBySha256(sha256) {
+  try {
+    // First get the fingerprint ID
+    const fp = db.prepare('SELECT id FROM fingerprints WHERE sha256 = ?').get(sha256);
+    if (!fp) return null;
+    
+    const results = {};
+    const services = ['tineye', 'bing', 'google'];
+    
+    for (const service of services) {
+      const cached = db.prepare(`
+        SELECT * FROM external_search_cache 
+        WHERE fingerprint_id = ? AND service = ?
+        ORDER BY queried_at DESC
+        LIMIT 1
+      `).get(fp.id, service);
+      
+      if (cached) {
+        results[service] = {
+          cached: true,
+          total_matches: cached.total_matches,
+          match_urls: JSON.parse(cached.match_urls || '[]'),
+          queried_at: cached.queried_at,
+          from_cache: true
+        };
+      }
+    }
+    
+    return Object.keys(results).length > 0 ? results : null;
+  } catch (err) {
+    console.error('getCachedSearchBySha256 error:', err.message);
+    return null;
+  }
+}
+
+module.exports.getCachedSearchBySha256 = getCachedSearchBySha256;
