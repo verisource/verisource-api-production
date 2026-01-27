@@ -495,11 +495,29 @@ class ProvenanceService {
         }
       }
       
+      // Return privacy-safe version (no filenames or full fingerprints)
+      const safeSimilarContent = similar.slice(0, 5).map(match => ({
+        fingerprint_prefix: match.fingerprint.substring(0, 8),
+        similarity: match.similarity,
+        first_seen: match.first_seen,
+        media_kind: match.media_kind,
+        match_type: match.match_type,
+        relationship_type: this.getRelationshipType(match.similarity, isScreenshot, match.match_type)
+      }));
+      
+      const safeMostSimilar = similar[0] ? {
+        fingerprint_prefix: similar[0].fingerprint.substring(0, 8),
+        similarity: similar[0].similarity,
+        first_seen: similar[0].first_seen,
+        match_type: similar[0].match_type,
+        relationship_type: this.getRelationshipType(similar[0].similarity, isScreenshot, similar[0].match_type)
+      } : null;
+      
       return {
         is_original: false,
-        similar_content: similar.slice(0, 5),
+        similar_content: safeSimilarContent,
         relationships_recorded: recorded,
-        most_similar: similar[0]
+        most_similar: safeMostSimilar
       };
       
     } catch (err) {

@@ -971,24 +971,12 @@ app.post('/verify-remote', authenticateApiKey, async (req, res) => {
       console.error('⚠️ Privacy-safe search error:', err.message);
     }
 // ============================================
-    // STEP 2.5: Provenance check
-    // ============================================
+ // STEP 2.5: Provenance check - MOVED to after pHash generation (Step 17C)
+    // The proper provenance check with pHash comparison happens later in the flow
     let provenanceResult = null;
-    try {
-      provenanceResult = await ProvenanceService.checkAndRecordProvenance(
-        fingerprint,
-        'url_submission',
-        file_url || url
-      );
-      if (provenanceResult.is_original) {
-        console.log('   ✅ Original content (first submission)');
-      } else {
-        console.log(`   🔀 Similar content found: ${provenanceResult.similar_content.length} matches`);
-      }
-    } catch (err) {
-      console.error('⚠️ Provenance check error:', err.message);
-    }
-   // STEP 3: Blockchain timestamping (if new)
+    // Note: provenanceResult is populated in Step 17C after pHash is generated
+   
+    // STEP 3: Blockchain timestamping (if new)
     // ============================================
     let polygonVerification = null;
     let baseVerification = null;
