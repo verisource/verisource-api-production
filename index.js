@@ -1153,7 +1153,7 @@ if (kind === 'video') {
     // ============================================
     // STEP 6: Generate pHash for images
     // ============================================
-    let phash = null;
+    // phash variable declared at outer scope (line 874)
     let similarImages = null;
     
     if (kind === 'image') {
