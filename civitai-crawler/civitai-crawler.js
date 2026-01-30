@@ -3,6 +3,8 @@
  * 
  * Crawls Civitai's public API to build a database of confirmed AI-generated images
  * for hash lookup (instant matching) and training data collection.
+ * 
+ * FIXED: Cursor now advances even when all images are skipped
  */
 
 const https = require('https');
@@ -223,7 +225,8 @@ async function processImage(imageData) {
     ]);
     return { success: true, id: imageData.id };
   } catch (error) {
-    console.error(`\nError processing ${imageData.id}: ${error.message}`); return { error: true, message: error.message, id: imageData.id };
+    console.error(`\nError processing ${imageData.id}: ${error.message}`);
+    return { error: true, message: error.message, id: imageData.id };
   }
 }
 
@@ -231,66 +234,122 @@ async function crawl(options = {}) {
   const {
     startCursor = null,
     maxImages = CONFIG.maxImagesPerRun,
-    sortBy = 'Most Reactions'
+    // FIXED: Use 'Newest' for continuous crawling to get fresh content
+    sortBy = 'Newest'
   } = options;
+  
   console.log('🚀 Starting Civitai crawler...');
   console.log(`   Max images: ${maxImages}`);
   console.log(`   Skip NSFW: ${CONFIG.skipNsfw}`);
+  console.log(`   Sort: ${sortBy}`);
+  
   await initDatabase();
+  
   let cursor = startCursor;
   let processedCount = 0;
   let successCount = 0;
   let skipCount = 0;
   let errorCount = 0;
+  let consecutiveSkipPages = 0;  // FIXED: Track pages with all skips
+  const MAX_CONSECUTIVE_SKIP_PAGES = 5;  // Stop after 5 pages of all duplicates
+  
   while (processedCount < maxImages) {
     try {
       let url = `${CONFIG.civitaiBaseUrl}/images?limit=${CONFIG.imagesPerPage}&sort=${encodeURIComponent(sortBy)}`;
       if (cursor) {
         url += `&cursor=${cursor}`;
       }
+      
       console.log(`\n📥 Fetching page... (processed: ${processedCount})`);
       const response = await fetchJson(url);
+      
       if (!response.items || response.items.length === 0) {
         console.log('No more images to process');
         break;
       }
+      
       console.log(`   Found ${response.items.length} images`);
+      
+      let pageSuccessCount = 0;  // FIXED: Track success per page
+      let pageSkipCount = 0;
+      
       for (const imageData of response.items) {
         if (processedCount >= maxImages) break;
+        
         const result = await processImage(imageData);
         processedCount++;
+        
         if (result.success) {
           successCount++;
+          pageSuccessCount++;
           process.stdout.write('.');
         } else if (result.skipped) {
           skipCount++;
+          pageSkipCount++;
           process.stdout.write('s');
         } else if (result.error) {
           errorCount++;
           process.stdout.write('x');
         }
+        
         await new Promise(r => setTimeout(r, CONFIG.imageDownloadDelayMs));
       }
-      cursor = response.metadata?.nextCursor;
-      if (!cursor) {
+      
+      // FIXED: Always update cursor from API response, regardless of skips
+      const nextCursor = response.metadata?.nextCursor;
+      
+      // FIXED: Detect when we're stuck (all duplicates)
+      if (pageSuccessCount === 0 && pageSkipCount > 0) {
+        consecutiveSkipPages++;
+        console.log(`\n   ⚠️ Page had 0 new images (${consecutiveSkipPages}/${MAX_CONSECUTIVE_SKIP_PAGES} skip pages)`);
+        
+        if (consecutiveSkipPages >= MAX_CONSECUTIVE_SKIP_PAGES) {
+          console.log('\n🛑 Caught up! All recent images already in database.');
+          console.log('   Resetting cursor to null to start fresh next run.');
+          cursor = null;  // Reset to get newest content next time
+          break;
+        }
+      } else {
+        consecutiveSkipPages = 0;  // Reset counter when we find new images
+      }
+      
+      // FIXED: Always advance cursor if available
+      if (nextCursor) {
+        cursor = nextCursor;
+      } else {
         console.log('\nNo more pages');
         break;
       }
+      
       await new Promise(r => setTimeout(r, CONFIG.requestDelayMs));
+      
     } catch (error) {
       console.error('\nPage fetch error:', error.message);
       await new Promise(r => setTimeout(r, 5000));
     }
   }
+  
   console.log('\n\n✅ Crawl complete!');
   console.log(`   Processed: ${processedCount}`);
   console.log(`   Success: ${successCount}`);
   console.log(`   Skipped: ${skipCount}`);
   console.log(`   Errors: ${errorCount}`);
+  
+  // FIXED: Return cursor even when mostly skipping, OR null if caught up
   if (cursor) {
-    console.log(`\n📌 Next cursor: ${cursor}`);
+    console.log(`\n📌 Next cursor: ${cursor.substring(0, 30)}...`);
+  } else {
+    console.log('\n📌 Cursor reset - will fetch newest images next run');
   }
-  return { processedCount, successCount, skipCount, errorCount, nextCursor: cursor };
+  
+  return { 
+    processedCount, 
+    successCount, 
+    skipCount, 
+    errorCount, 
+    nextCursor: cursor,
+    caughtUp: consecutiveSkipPages >= MAX_CONSECUTIVE_SKIP_PAGES
+  };
 }
 
 async function getStats() {
