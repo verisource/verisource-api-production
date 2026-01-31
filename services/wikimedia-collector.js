@@ -4,11 +4,7 @@
  * Crawls Wikimedia Commons for images, generates pHash,
  * and stores to database with rich metadata.
  * 
- * Features:
- * - No authentication required
- * - Rich metadata (author, license, date, categories)
- * - Historical backfill capability
- * - ~200 requests/sec allowed (very generous)
+ * FIXED: Proper User-Agent, retry logic, and rate limiting
  */
 
 const https = require('https');
@@ -23,7 +19,13 @@ const os = require('os');
 // Configuration
 const API_BASE = 'https://commons.wikimedia.org/w/api.php';
 const BATCH_SIZE = 50; // Images per request
-const REQUEST_DELAY = 2000; // 2 seconds between requests
+const REQUEST_DELAY = 3000; // 3 seconds between API requests
+const DOWNLOAD_DELAY = 500; // 500ms between image downloads (more conservative)
+const MAX_RETRIES = 3; // Retry failed downloads
+const RETRY_DELAY = 1000; // 1 second between retries
+
+// FIXED: Proper User-Agent with contact info (required by Wikimedia)
+const USER_AGENT = 'VeriSource/1.0 (Content Verification Service; https://verisource.io; contact@verisource.io)';
 
 // Database connection
 const pool = new Pool({
@@ -42,6 +44,8 @@ let stats = {
   skippedTooLarge: 0,
   skippedDownload: 0,
   skippedHash: 0,
+  skippedDuplicate: 0,
+  retriesSucceeded: 0,
   errors: 0,
   startTime: Date.now()
 };
@@ -50,13 +54,18 @@ let stats = {
 let continueToken = null;
 
 /**
+ * Sleep helper
+ */
+const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+/**
  * Fetch JSON from URL with timeout
  */
 function fetchJson(url) {
   return new Promise((resolve, reject) => {
     const options = {
       headers: {
-        'User-Agent': 'VeriSource/1.0 (Content Verification Service; https://verisource.io; contact@verisource.io)'
+        'User-Agent': USER_AGENT
       },
       timeout: 30000
     };
@@ -88,15 +97,18 @@ function fetchJson(url) {
 }
 
 /**
- * Download image from URL with timeout
+ * Download image from URL with timeout and retries
+ * FIXED: Proper User-Agent and retry logic
  */
-function downloadImage(url, maxSize = 5 * 1024 * 1024) {
+async function downloadImage(url, maxSize = 5 * 1024 * 1024, retryCount = 0) {
   return new Promise((resolve, reject) => {
     const protocol = url.startsWith('https') ? https : require('http');
     
     const options = {
       headers: {
-        'User-Agent': 'VeriSource/1.0 (Content Verification Service)'
+        'User-Agent': USER_AGENT,  // FIXED: Full User-Agent with contact info
+        'Accept': 'image/*',
+        'Accept-Encoding': 'identity'  // Don't request compressed (simpler)
       },
       timeout: 30000
     };
@@ -104,8 +116,20 @@ function downloadImage(url, maxSize = 5 * 1024 * 1024) {
     const req = protocol.get(url, options, (res) => {
       // Handle redirects
       if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
-        downloadImage(res.headers.location, maxSize).then(resolve).catch(reject);
+        downloadImage(res.headers.location, maxSize, retryCount).then(resolve).catch(reject);
         return;
+      }
+
+      // Handle rate limiting
+      if (res.statusCode === 429 || res.statusCode === 503) {
+        if (retryCount < MAX_RETRIES) {
+          const retryAfter = parseInt(res.headers['retry-after']) || RETRY_DELAY;
+          console.log(`   ⏳ Rate limited, waiting ${retryAfter}ms...`);
+          setTimeout(() => {
+            downloadImage(url, maxSize, retryCount + 1).then(resolve).catch(reject);
+          }, retryAfter);
+          return;
+        }
       }
 
       if (res.statusCode !== 200) {
@@ -129,10 +153,36 @@ function downloadImage(url, maxSize = 5 * 1024 * 1024) {
       res.on('error', reject);
     });
 
-    req.on('error', reject);
+    req.on('error', (err) => {
+      // Retry on network errors
+      if (retryCount < MAX_RETRIES) {
+        setTimeout(() => {
+          downloadImage(url, maxSize, retryCount + 1)
+            .then((result) => {
+              stats.retriesSucceeded++;
+              resolve(result);
+            })
+            .catch(reject);
+        }, RETRY_DELAY * (retryCount + 1));
+      } else {
+        reject(err);
+      }
+    });
+    
     req.on('timeout', () => {
       req.destroy();
-      reject(new Error('Download timeout'));
+      if (retryCount < MAX_RETRIES) {
+        setTimeout(() => {
+          downloadImage(url, maxSize, retryCount + 1)
+            .then((result) => {
+              stats.retriesSucceeded++;
+              resolve(result);
+            })
+            .catch(reject);
+        }, RETRY_DELAY * (retryCount + 1));
+      } else {
+        reject(new Error('Download timeout'));
+      }
     });
   });
 }
@@ -214,6 +264,21 @@ function extractMetadata(imageInfo) {
 }
 
 /**
+ * Check if image already exists in database
+ */
+async function imageExists(sourceId) {
+  try {
+    const result = await pool.query(
+      'SELECT id FROM media_hashes WHERE source = $1 AND source_id = $2',
+      ['wikimedia', sourceId]
+    );
+    return result.rows.length > 0;
+  } catch (err) {
+    return false;
+  }
+}
+
+/**
  * Save hash to database with metadata
  */
 async function saveHash(data) {
@@ -246,6 +311,30 @@ async function saveHash(data) {
 }
 
 /**
+ * Get thumbnail URL for smaller download
+ * FIXED: Use smaller thumbnails instead of full resolution
+ */
+function getThumbnailUrl(originalUrl, maxWidth = 800) {
+  // Wikimedia thumbnail URL pattern
+  // Original: https://upload.wikimedia.org/wikipedia/commons/a/ab/Example.jpg
+  // Thumb: https://upload.wikimedia.org/wikipedia/commons/thumb/a/ab/Example.jpg/800px-Example.jpg
+  
+  if (originalUrl.includes('/commons/thumb/')) {
+    // Already a thumbnail
+    return originalUrl;
+  }
+  
+  const match = originalUrl.match(/\/commons\/([a-f0-9])\/([a-f0-9]{2})\/(.+)$/i);
+  if (match) {
+    const [, first, second, filename] = match;
+    return `https://upload.wikimedia.org/wikipedia/commons/thumb/${first}/${second}/${filename}/${maxWidth}px-${filename}`;
+  }
+  
+  // Can't transform, use original
+  return originalUrl;
+}
+
+/**
  * Process a single image
  */
 async function processImage(title, metadata) {
@@ -263,21 +352,36 @@ async function processImage(title, metadata) {
       return;
     }
     
-    // Skip very large files (>5MB)
-    if (metadata.size > 5 * 1024 * 1024) {
-      stats.skippedTooLarge++;
+    // Skip very large files (>5MB) - but we'll try thumbnail first
+    const useOriginal = metadata.size <= 2 * 1024 * 1024; // Use original if under 2MB
+    
+    // FIXED: Check for duplicates before downloading
+    if (await imageExists(title)) {
+      stats.skippedDuplicate++;
       return;
     }
 
     stats.imagesFound++;
 
-    // Download image
+    // FIXED: Try thumbnail first for large files
     let imageBuffer;
+    let downloadUrl = useOriginal ? metadata.url : getThumbnailUrl(metadata.url, 800);
+    
     try {
-      imageBuffer = await downloadImage(metadata.url);
+      imageBuffer = await downloadImage(downloadUrl);
     } catch (err) {
-      stats.skippedDownload++;
-      return;
+      // If thumbnail fails, try original (if not already tried)
+      if (!useOriginal && metadata.size <= 5 * 1024 * 1024) {
+        try {
+          imageBuffer = await downloadImage(metadata.url);
+        } catch (err2) {
+          stats.skippedDownload++;
+          return;
+        }
+      } else {
+        stats.skippedDownload++;
+        return;
+      }
     }
 
     // Generate hashes
@@ -306,7 +410,7 @@ async function processImage(title, metadata) {
 
     if (saved) {
       stats.imagesSaved++;
-      const shortTitle = title.replace('File:', '').slice(0, 50);
+      const shortTitle = title.replace('File:', '').slice(0, 40);
       console.log(`✅ Saved: ${shortTitle}... [${metadata.license || 'unknown'}]`);
     }
 
@@ -361,8 +465,8 @@ async function fetchRecentUploads() {
       
       await processImage(title, metadata);
       
-      // Small delay between image downloads
-      await new Promise(resolve => setTimeout(resolve, 200));
+      // FIXED: More conservative delay between image downloads
+      await sleep(DOWNLOAD_DELAY);
     }
 
   } catch (err) {
@@ -384,7 +488,9 @@ function printStats() {
   console.log(`   Images hashed: ${stats.imagesHashed}`);
   console.log(`   Images saved: ${stats.imagesSaved}`);
   console.log(`   Rate: ${rate.toFixed(1)} images/min`);
+  console.log(`   Retries succeeded: ${stats.retriesSucceeded}`);
   console.log(`   Skipped:`);
+  console.log(`     - Duplicate: ${stats.skippedDuplicate}`);
   console.log(`     - No URL: ${stats.skippedNoUrl}`);
   console.log(`     - Not image: ${stats.skippedNotImage}`);
   console.log(`     - Too large: ${stats.skippedTooLarge}`);
@@ -401,7 +507,7 @@ async function crawlLoop() {
     await fetchRecentUploads();
     
     // Wait between batches
-    await new Promise(resolve => setTimeout(resolve, REQUEST_DELAY));
+    await sleep(REQUEST_DELAY);
   }
 }
 
@@ -412,6 +518,8 @@ async function main() {
   console.log('🚀 Starting Wikimedia Commons Hash Collector');
   console.log(`📦 Database: ${process.env.DATABASE_URL ? 'configured' : 'NOT CONFIGURED'}`);
   console.log(`📋 Batch size: ${BATCH_SIZE} images per request`);
+  console.log(`⏱️  Download delay: ${DOWNLOAD_DELAY}ms`);
+  console.log(`🔄 Max retries: ${MAX_RETRIES}`);
 
   // Test database connection
   try {
