@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "main": "lexica-scraper.js",
   "scripts": {
-    "start": "node lexica-scraper.js"
+    "start": "node debug.js"
   },
   "dependencies": {
     "pg": "^8.11.0",
