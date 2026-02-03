@@ -1,0 +1,14 @@
+{
+  "name": "lexica-scraper",
+  "version": "1.0.0",
+  "main": "lexica-scraper.js",
+  "scripts": {
+    "start": "node lexica-scraper.js",
+    "test": "node lexica-scraper.js test"
+  },
+  "dependencies": {
+    "pg": "^8.11.0",
+    "sharp": "^0.32.0",
+    "imghash": "^0.2.1"
+  }
+}
