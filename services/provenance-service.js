@@ -154,7 +154,7 @@ class ProvenanceService {
    * 3. Do precise comparison on the smaller candidate set
    */
   async findSimilarContent(phash, regionHashes = null, excludeFingerprint = null, threshold = 85) {
-    console.log('🔍 findSimilarContent:', { hasPhash: !!phash, hasRegions: !!regionHashes, exclude: excludeFingerprint?.substring(0,8), threshold });
+    console.log('🔍 findSimilarContent:', { hasPhash: !!phash, hasRegions: !!regionHashes, exclude: typeof excludeFingerprint === 'string' ? excludeFingerprint.substring(0,8) : excludeFingerprint, threshold });
     if (!phash && !regionHashes) return [];
     
     try {
