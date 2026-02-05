@@ -2322,7 +2322,7 @@ if (kind === 'video') {
     try {
       console.log('🔗 Checking content provenance...');
       const isScreenshot = screenshotDetection?.is_screenshot || false;
-       ProvenanceService.checkAndRecordProvenance(
+       provenanceResult = await ProvenanceService.checkAndRecordProvenance(
         fingerprint,
         phash,
         phashRegions,
