@@ -2325,11 +2325,23 @@ if (kind === 'video') {
     try {
       console.log('🔗 Checking content provenance...');
       const isScreenshot = screenshotDetection?.is_screenshot || false;
+      const fileMeta = {
+        width: imgMeta?.width || null,
+        height: imgMeta?.height || null,
+        format: imgMeta?.format || null,
+        file_size: stats?.size || null,
+        file_type: mockFile?.mimetype || null,
+        has_exif: !!(exifData?.Make || exifData?.Model),
+        camera_make: exifData?.Make || null,
+        gps_present: !!(exifData?.GPSLatitude),
+        upload_date: new Date().toISOString()
+      };
        provenanceResult = await ProvenanceService.checkAndRecordProvenance(
         fingerprint,
         phash,
         phashRegions,
-        isScreenshot
+        isScreenshot,
+        fileMeta
       );
       
       if (provenanceResult.is_original) {
