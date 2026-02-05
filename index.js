@@ -4695,7 +4695,15 @@ app.get('/admin/migrate-audio', async (req, res) => {
     res.status(500).json({ success: false, error: err.message });
   }
 });
-
+app.get('/admin/migrate-provenance-v3', async (req, res) => {
+  try {
+    const { migrate } = require('./migrate-provenance-v3');
+    await migrate();
+    res.json({ status: 'done' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 // ============================================================================
 // PROVENANCE MIGRATION
 // ============================================================================
