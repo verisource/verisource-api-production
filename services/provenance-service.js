@@ -205,17 +205,21 @@ class ProvenanceService {
               AND phash IS NOT NULL
           `;
           
+          // Build query with optional fingerprint exclusion
+          let regionParams = [];
           if (excludeFingerprint) {
             regionQuery += ` AND fingerprint != $1`;
-            regionQuery += ` ORDER BY fingerprint, upload_date ASC LIMIT 200`;
-            const regionResult = await db.query(regionQuery, [excludeFingerprint]);
-            
-            // Merge without duplicates
-            const existingFps = new Set(candidates.map(c => c.fingerprint));
-            for (const row of regionResult.rows) {
-              if (!existingFps.has(row.fingerprint)) {
-                candidates.push(row);
-              }
+            regionParams.push(excludeFingerprint);
+          }
+          regionQuery += ` ORDER BY fingerprint, upload_date ASC LIMIT 500`;
+          
+          const regionResult = await db.query(regionQuery, regionParams);
+          
+          // Merge without duplicates
+          const existingFps = new Set(candidates.map(c => c.fingerprint));
+          for (const row of regionResult.rows) {
+            if (!existingFps.has(row.fingerprint)) {
+              candidates.push(row);
             }
           }
         }
