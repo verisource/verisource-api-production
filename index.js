@@ -418,7 +418,8 @@ app.get("/provenance/:hash/similar", async (req, res) => {
     
     const similar = await ProvenanceService.findSimilarContent(
       result.rows[0].phash,
-      hash,
+      null,  // regionHashes
+      hash,  // excludeFingerprint
       threshold
     );
     
