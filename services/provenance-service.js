@@ -172,7 +172,7 @@ class ProvenanceService {
           let query = `
             SELECT DISTINCT ON (fingerprint) 
               fingerprint, phash, phash_regions, upload_date, media_kind, 
-              original_filename, file_size, file_type
+              original_filename, file_size, file_type, width, height
             FROM verifications 
             WHERE phash IS NOT NULL
               AND LEFT(phash, $1) = $2
@@ -200,7 +200,7 @@ class ProvenanceService {
           let regionQuery = `
             SELECT DISTINCT ON (fingerprint) 
               fingerprint, phash, phash_regions, upload_date, media_kind, 
-              original_filename, file_size, file_type
+              original_filename, file_size, file_type, width, height
             FROM verifications 
             WHERE phash_regions IS NOT NULL
               AND phash IS NOT NULL

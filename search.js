@@ -120,8 +120,8 @@ async function saveVerification(data) {
         file_size, file_type, media_kind, ip_address,
         polygon_block_number, polygon_tx_hash, polygon_timestamp,
         base_block_number, base_tx_hash, base_timestamp,
-        phash, phash_regions, account_id
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+        phash, phash_regions, account_id, width, height
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
       RETURNING id, upload_date
     `;
     
@@ -141,7 +141,9 @@ async function saveVerification(data) {
       data.base_timestamp || null,
       data.phash || null,
       data.phash_regions ? JSON.stringify(data.phash_regions) : null,
-      data.account_id || null
+      data.account_id || null,
+      data.width || null,
+      data.height || null
     ];
     
     const result = await db.query(query, values);

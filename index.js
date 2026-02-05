@@ -2183,7 +2183,9 @@ if (kind === 'video') {
         phash_regions: phashRegions || null,
         google_vision_labels: googleVisionResult?.results?.labels || [],
         audio_fingerprint: videoAudioFingerprint?.fingerprint || null,
-        account_id: req.account.id
+        account_id: req.account.id,
+        width: imgMeta?.width || null,
+        height: imgMeta?.height || null
       });
       console.log('💾 Verification saved to database');
     } catch (err) {
