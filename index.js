@@ -2322,7 +2322,7 @@ if (kind === 'video') {
     try {
       console.log('🔗 Checking content provenance...');
       const isScreenshot = screenshotDetection?.is_screenshot || false;
-      provenanceResult = await ProvenanceService.checkAndRecordProvenance(
+       ProvenanceService.checkAndRecordProvenance(
         fingerprint,
         phash,
         phashRegions,
@@ -3150,8 +3150,20 @@ app.post('/verify', upload.single('file'), authenticateApiKey, async (req, res) 
     try {
       provenanceResult = await ProvenanceService.checkAndRecordProvenance(
         fingerprint,
-        'file_upload',
-        req.file.originalname
+        phash || null,
+        phashRegions || null,
+        false,
+        {
+          width: null,
+          height: null,
+          format: req.file?.mimetype?.split('/')[1] || null,
+          file_size: req.file?.size || null,
+          file_type: req.file?.mimetype || null,
+          has_exif: false,
+          camera_make: null,
+          gps_present: false,
+          upload_date: new Date().toISOString()
+        }
       );
     } catch (err) {
       console.error('⚠️ Provenance check error:', err.message);
