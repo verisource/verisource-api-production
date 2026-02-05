@@ -449,7 +449,9 @@ class ProvenanceService {
     }
     
     // 5. CROP DETECTION (from region matching)
-    if (matchType === 'region_match' && matchedRegions) {
+    // Only report as cropped if similarity is below 98% — high similarity via region match
+    // likely means color filter/recompression rather than actual crop
+    if (matchType === 'region_match' && matchedRegions && similarity < 98) {
       const cropRegion = matchedRegions.region1 || matchedRegions.region2;
       const cropDescription = this._describeCropRegion(cropRegion);
       
@@ -461,6 +463,15 @@ class ProvenanceService {
         crop_description: cropDescription
       });
       changeFlags.cropped = true;
+    } else if (matchType === 'region_match' && similarity >= 98) {
+      // High similarity via region match = likely color adjustment, not crop
+      changes.push({
+        type: 'color_adjusted',
+        severity: 'minor',
+        detail: `Color or filter adjustment detected (${similarity}% match)`,
+        similarity: similarity
+      });
+      changeFlags.color_adjusted = true;
     }
     
     // 6. VISUAL SIMILARITY ASSESSMENT
