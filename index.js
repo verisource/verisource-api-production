@@ -2186,7 +2186,12 @@ if (kind === 'video') {
         audio_fingerprint: videoAudioFingerprint?.fingerprint || null,
         account_id: req.account.id,
         width: imgMeta?.width || null,
-        height: imgMeta?.height || null
+        height: imgMeta?.height || null,
+        has_camera_info: !!(exifData?.Make || exifData?.Model),
+        has_gps: !!(exifData?.GPSLatitude && exifData?.GPSLongitude),
+        exif_date: exifData?.DateTimeOriginal || exifData?.CreateDate || null,
+        camera_make: exifData?.Make || null,
+        camera_model: exifData?.Model || null
       });
       console.log('💾 Verification saved to database');
     } catch (err) {
@@ -2331,9 +2336,11 @@ if (kind === 'video') {
         format: imgMeta?.format || null,
         file_size: stats?.size || null,
         file_type: mockFile?.mimetype || null,
-        has_exif: !!(exifData?.Make || exifData?.Model),
+        has_camera_info: !!(exifData?.Make || exifData?.Model),
+        has_gps: !!(exifData?.GPSLatitude && exifData?.GPSLongitude),
+        exif_date: exifData?.DateTimeOriginal || exifData?.CreateDate || null,
         camera_make: exifData?.Make || null,
-        gps_present: !!(exifData?.GPSLatitude),
+        camera_model: exifData?.Model || null,
         upload_date: new Date().toISOString()
       };
        provenanceResult = await ProvenanceService.checkAndRecordProvenance(

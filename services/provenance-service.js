@@ -172,7 +172,8 @@ class ProvenanceService {
           let query = `
             SELECT DISTINCT ON (fingerprint) 
               fingerprint, phash, phash_regions, upload_date, media_kind, 
-              original_filename, file_size, file_type, width, height
+              original_filename, file_size, file_type, width, height,
+              has_camera_info, has_gps, exif_date, camera_make, camera_model
             FROM verifications 
             WHERE phash IS NOT NULL
               AND LEFT(phash, $1) = $2
@@ -203,7 +204,8 @@ class ProvenanceService {
           let regionQuery = `
             SELECT DISTINCT ON (fingerprint) 
               fingerprint, phash, phash_regions, upload_date, media_kind, 
-              original_filename, file_size, file_type, width, height
+              original_filename, file_size, file_type, width, height,
+              has_camera_info, has_gps, exif_date, camera_make, camera_model
             FROM verifications 
             WHERE phash_regions IS NOT NULL
               AND phash IS NOT NULL
@@ -266,6 +268,11 @@ class ProvenanceService {
               file_type: row.file_type,
               width: row.width || null,
               height: row.height || null,
+              has_camera_info: row.has_camera_info || false,
+              has_gps: row.has_gps || false,
+              exif_date: row.exif_date || null,
+              camera_make: row.camera_make || null,
+              camera_model: row.camera_model || null,
               match_type: matchDetails.region1 === 'full' && matchDetails.region2 === 'full' 
                 ? 'full_image' : 'region_match',
               matched_regions: matchDetails
@@ -480,7 +487,60 @@ class ProvenanceService {
       changeFlags.color_adjusted = true;
     }
     
-    // 6. VISUAL SIMILARITY ASSESSMENT
+    // 6. METADATA STRIPPING DETECTION
+    if (parentMeta.has_camera_info && !childMeta.has_camera_info) {
+      changes.push({
+        type: 'metadata_stripped',
+        severity: 'critical',
+        detail: parentMeta.camera_make && parentMeta.camera_model 
+          ? `Camera information removed (was: ${parentMeta.camera_make} ${parentMeta.camera_model})`
+          : 'Camera information was present in original but removed',
+        parent_had_camera: true,
+        child_has_camera: false
+      });
+      changeFlags.metadata_stripped = true;
+    }
+    
+    // 7. GPS STRIPPING DETECTION
+    if (parentMeta.has_gps && !childMeta.has_gps) {
+      changes.push({
+        type: 'gps_stripped',
+        severity: 'critical',
+        detail: 'GPS location data was present in original but removed',
+        parent_had_gps: true,
+        child_has_gps: false
+      });
+      changeFlags.gps_stripped = true;
+    }
+    
+    // 8. DATE MODIFICATION DETECTION
+    if (parentMeta.exif_date && childMeta.exif_date) {
+      const parentDate = new Date(parentMeta.exif_date);
+      const childDate = new Date(childMeta.exif_date);
+      const daysDiff = Math.abs((childDate - parentDate) / (1000 * 60 * 60 * 24));
+      
+      if (daysDiff > 1) {
+        changes.push({
+          type: 'date_modified',
+          severity: 'significant',
+          detail: `EXIF date changed from ${parentDate.toISOString().split('T')[0]} to ${childDate.toISOString().split('T')[0]}`,
+          parent_date: parentMeta.exif_date,
+          child_date: childMeta.exif_date,
+          days_difference: Math.round(daysDiff)
+        });
+        changeFlags.date_modified = true;
+      }
+    } else if (parentMeta.exif_date && !childMeta.exif_date) {
+      changes.push({
+        type: 'date_stripped',
+        severity: 'significant',
+        detail: `Original date (${new Date(parentMeta.exif_date).toISOString().split('T')[0]}) was removed`,
+        parent_date: parentMeta.exif_date
+      });
+      changeFlags.date_stripped = true;
+    }
+
+    // 9. VISUAL SIMILARITY ASSESSMENT
     if (similarity < 100 && similarity >= 85 && !changeFlags.cropped) {
       // Something visual changed but not a crop
       if (similarity >= 95 && !changeFlags.format_converted && !changeFlags.recompressed) {
@@ -796,12 +856,13 @@ class ProvenanceService {
           file_size: match.file_size,
           file_type: match.file_type,
           media_kind: match.media_kind,
-          // These will be populated if available from the match query
           width: match.width || null,
           height: match.height || null,
-          has_exif: match.has_exif || null,
+          has_camera_info: match.has_camera_info || false,
+          has_gps: match.has_gps || false,
+          exif_date: match.exif_date || null,
           camera_make: match.camera_make || null,
-          gps_present: match.gps_present || null
+          camera_model: match.camera_model || null
         };
         
         const newMeta = {
@@ -812,9 +873,11 @@ class ProvenanceService {
           file_size: fileMeta.file_size || null,
           format: fileMeta.format || null,
           file_type: fileMeta.file_type || null,
-          has_exif: fileMeta.has_exif || null,
+          has_camera_info: fileMeta.has_camera_info || false,
+          has_gps: fileMeta.has_gps || false,
+          exif_date: fileMeta.exif_date || null,
           camera_make: fileMeta.camera_make || null,
-          gps_present: fileMeta.gps_present || null
+          camera_model: fileMeta.camera_model || null
         };
         
         // Detect what changed
