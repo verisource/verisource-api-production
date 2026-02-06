@@ -2189,7 +2189,7 @@ if (kind === 'video') {
         height: imgMeta?.height || null,
         has_camera_info: !!(exifData?.Make || exifData?.Model),
         has_gps: !!(exifData?.GPSLatitude && exifData?.GPSLongitude),
-        exif_date: exifData?.DateTimeOriginal || exifData?.CreateDate || null,
+        exif_date: (exifData?.DateTimeOriginal || exifData?.CreateDate) ? new Date(exifData?.DateTimeOriginal || exifData?.CreateDate).toISOString() : null,
         camera_make: exifData?.Make || null,
         camera_model: exifData?.Model || null
       });
@@ -2338,7 +2338,7 @@ if (kind === 'video') {
         file_type: mockFile?.mimetype || null,
         has_camera_info: !!(exifData?.Make || exifData?.Model),
         has_gps: !!(exifData?.GPSLatitude && exifData?.GPSLongitude),
-        exif_date: exifData?.DateTimeOriginal || exifData?.CreateDate || null,
+        exif_date: (exifData?.DateTimeOriginal || exifData?.CreateDate) ? new Date(exifData?.DateTimeOriginal || exifData?.CreateDate).toISOString() : null,
         camera_make: exifData?.Make || null,
         camera_model: exifData?.Model || null,
         upload_date: new Date().toISOString()
