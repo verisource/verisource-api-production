@@ -2508,6 +2508,7 @@ if (kind === 'video') {
         ...(exifData && { metadata: { has_exif: true, exif: exifData } }),
         ...(softwareAnalysis && { software_analysis: softwareAnalysis }),
         ...(screenshotTextAnalysis && { screenshot_text_analysis: screenshotTextAnalysis }),
+        ...(elaResult && { ela_analysis: elaResult }),
       };
       console.log('📊 Calculating confidence score...');
       confidence = ConfidenceScoring.calculateConfidenceScore(confidenceData);

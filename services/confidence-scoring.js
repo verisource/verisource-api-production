@@ -12,6 +12,7 @@ function calculateConfidenceScore(verificationData) {
   metadata,
   platform_detection,
   screenshot_detection,
+  ela_analysis,
   kind
 } = verificationData;
 
@@ -309,6 +310,29 @@ const mediaType = verificationData.mediaType || kind || 'image';
         warnings
       });
     }
+  }
+
+  // ========================================
+  // ELA MANIPULATION DETECTION
+  // ========================================
+  if (ela_analysis?.success && ela_analysis?.verdict) {
+    if (ela_analysis.verdict === 'LIKELY_MANIPULATED') {
+      score -= 35;
+      warnings.push(`🚨 ELA: Likely manipulated (${ela_analysis.confidence}% confidence)`);
+      if (ela_analysis.clusters?.length > 0) {
+        warnings.push(`   Suspicious regions: ${ela_analysis.clusters.map(c => c.location).join(', ')}`);
+      }
+    } else if (ela_analysis.verdict === 'POSSIBLY_MANIPULATED') {
+      score -= 25;
+      warnings.push(`⚠️ ELA: Possibly manipulated (${ela_analysis.confidence}% confidence)`);
+    } else if (ela_analysis.verdict === 'MINOR_INCONSISTENCIES') {
+      score -= 15;
+      warnings.push(`⚠️ ELA: Minor inconsistencies detected (${ela_analysis.manipulation_score} score)`);
+      if (ela_analysis.clusters?.length > 0) {
+        warnings.push(`   Edited regions: ${ela_analysis.clusters.map(c => c.location).join(', ')}`);
+      }
+    }
+    // NO_MANIPULATION_DETECTED = no change to score
   }
 
   // ========================================
