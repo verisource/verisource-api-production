@@ -296,6 +296,7 @@ class ProvenanceService {
     const changeFlags = {};
     
     // 1. RESOLUTION CHANGE
+    console.log('📐 Resolution check:', { parent: { w: parentMeta.width, h: parentMeta.height }, child: { w: childMeta.width, h: childMeta.height } });
     if (parentMeta.width && childMeta.width && parentMeta.height && childMeta.height) {
       const parentPixels = parentMeta.width * parentMeta.height;
       const childPixels = childMeta.width * childMeta.height;
