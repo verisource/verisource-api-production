@@ -264,6 +264,8 @@ class ProvenanceService {
               filename: row.original_filename,
               file_size: row.file_size,
               file_type: row.file_type,
+              width: row.width || null,
+              height: row.height || null,
               match_type: matchDetails.region1 === 'full' && matchDetails.region2 === 'full' 
                 ? 'full_image' : 'region_match',
               matched_regions: matchDetails
