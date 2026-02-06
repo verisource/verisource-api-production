@@ -188,6 +188,9 @@ class ProvenanceService {
           
           const result = await db.query(query, params);
           candidates = result.rows;
+          if (candidates.length > 0) {
+            console.log('📊 First candidate from DB:', { fp: candidates[0].fingerprint?.substring(0,8), w: candidates[0].width, h: candidates[0].height });
+          }
           
           // If we got results with a long prefix, those are high-quality matches
           if (candidates.length > 0 && prefixLen >= 6) break;
