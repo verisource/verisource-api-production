@@ -184,7 +184,7 @@ class ProvenanceService {
             params.push(excludeFingerprint);
           }
           
-          query += ` ORDER BY fingerprint, upload_date ASC LIMIT 500`;
+          query += ` ORDER BY fingerprint, (width IS NULL) ASC, upload_date DESC LIMIT 500`;
           
           const result = await db.query(query, params);
           candidates = result.rows;
@@ -212,7 +212,7 @@ class ProvenanceService {
             regionQuery += ` AND fingerprint != $1`;
             regionParams.push(excludeFingerprint);
           }
-          regionQuery += ` ORDER BY fingerprint, upload_date ASC LIMIT 500`;
+          regionQuery += ` ORDER BY fingerprint, (width IS NULL) ASC, upload_date DESC LIMIT 500`;
           
           const regionResult = await db.query(regionQuery, regionParams);
           
