@@ -30,6 +30,7 @@ const sightengineDetector = require('./services/sightengine-ai-detection');
 const PlatformDetection = require('./services/platform-signature-detection');
 const FeatureLogger = require('./services/feature-logger');
 const ProvenanceService = require('./services/provenance-service');
+const ELAAnalysis = require('./services/ela-analysis');
 const VoiceEmbeddingService = require('./services/voice-embedding-service');
 const VideoThumbnailService = require('./services/video-thumbnail-service');
 const tvCorroboration = require('./services/tv-corroboration');
@@ -2324,7 +2325,28 @@ if (kind === 'video') {
     }
 
     // ============================================
-    // STEP 17C: Provenance Check
+    // STEP 17C: Error Level Analysis (Clone/Edit Detection)
+    // ============================================
+    let elaResult = null;
+    if (kind === 'image') {
+      try {
+        elaResult = await ELAAnalysis.analyze(tempFilePath);
+        if (elaResult.success) {
+          if (elaResult.verdict === 'LIKELY_MANIPULATED') {
+            console.log(`   🚨 ELA: ${elaResult.verdict} (${elaResult.confidence}% confidence)`);
+            elaResult.indicators.forEach(ind => console.log(`      - ${ind}`));
+          } else if (elaResult.verdict === 'POSSIBLY_MANIPULATED') {
+            console.log(`   ⚠️ ELA: ${elaResult.verdict} (${elaResult.confidence}% confidence)`);
+          } else {
+            console.log(`   ✅ ELA: ${elaResult.verdict}`);
+          }
+        }
+      } catch (err) {
+        console.error('⚠️ ELA analysis error:', err.message);
+      }
+    }
+    // ============================================
+    // STEP 17D: Provenance Check
     // ============================================
     
     try {
@@ -2556,6 +2578,19 @@ if (kind === 'video') {
       ...(screenshotDetection && { screenshot_detection: screenshotDetection }),
       ...(screenshotTextAnalysis && { screenshot_text_analysis: screenshotTextAnalysis }),
       ...(provenanceResult && { provenance: provenanceResult }),
+      ...(elaResult && elaResult.success && { 
+        ela_analysis: {
+          verdict: elaResult.verdict,
+          confidence: elaResult.confidence,
+          severity: elaResult.severity,
+          manipulation_score: elaResult.manipulation_score,
+          indicators: elaResult.indicators,
+          suspicious_regions: elaResult.regions?.suspicious_count || 0,
+          clusters: elaResult.clusters || [],
+          mean_error: elaResult.mean_error,
+          std_dev: elaResult.std_dev
+        }
+      }),
       ...(crossReference && { cross_reference: crossReference }),
       verification: {
         status: searchResults.found ? 'PREVIOUSLY_VERIFIED' : 'NEW_UPLOAD',
