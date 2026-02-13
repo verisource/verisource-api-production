@@ -2,7 +2,7 @@
  * VeriSource News Crawler Scheduler
  */
 
-const { crawl, getStats, initDatabase } = require('./news-crawler');
+const { crawl, getStats, initDatabase } = require('./news-crawler-v2');
 const http = require('http');
 
 const CRAWL_INTERVAL = parseInt(process.env.CRAWL_INTERVAL) || 60;
