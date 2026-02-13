@@ -1,1339 +1,723 @@
 /**
- * Provenance Service v3.2
- * Enhanced content lineage tracking with detailed change detection
+ * Provenance Timeline Builder (v1.2)
+ * Generates a unified chronological timeline from all verification signals
  *
- * v3.2 CHANGES (crop detection + cross-region matching fix):
- * 1) Cross-region region-hash comparison (full↔center70, center80↔full, etc.)
- *    - Fixes missed crop matches when child is a crop of parent.
- *    - compareRegionHashesCross() compares regionA vs regionB (not same-key only).
+ * Combines: EXIF, blockchain, news coverage, reverse search, platform detection
  *
- * 2) Match metadata upgraded
- *    - findSimilarContent now returns matched_regions with region1/region2 potentially different.
- *    - Adds crop_hint when full matches a center region (strong crop signal).
- *
- * 3) detectChanges uses crop_hint + region mismatch to improve crop classification
- *    - If matchType=region_match and crop_hint=true, it will classify as cropped/partial match
- *      even at high similarity.
- *
- * 4) Region fallback search remains targeted (JSONB region prefixes) and unchanged otherwise.
- *
- * NOTE:
- * - This file assumes verifications.phash_regions is JSONB (or JSON string) containing keys
- *   like "full", "center70", etc.
+ * Improvements vs v1.1:
+ * 1) More deterministic timestamp parsing (handles timezone-less ISO safely)
+ * 2) Avoid repeated timestamp normalization (normalize on insert)
+ * 3) Adds rank + evidence_id for stable UI ordering + evidence trail linkage
+ * 4) Dedupe keys prefer URL when available (avoids collapsing distinct evidence)
+ * 5) Exports calculateTimeSpan + generateTimelineSummary (optional but useful)
  */
 
-const db = require("../db-minimal");
-const sharp = require("sharp");
+function buildProvenanceTimeline(data) {
+  const timeline = [];
+  const verifiedAt = normalizeTimestamp(data.verified_at) || new Date().toISOString();
 
-class ProvenanceService {
-  constructor() {
-    // Pre-compute DCT cos table for 32x32 (used in pHash)
-    this._cos32 = this._buildCosTable(32);
-  }
+  const pushEvent = (evt) => {
+    if (!evt) return;
+    const ts = normalizeTimestamp(evt.timestamp);
+    if (!ts) return;
+    timeline.push({ ...evt, timestamp: ts });
+  };
 
-  // ============================================================================
-  // MULTI-REGION pHash GENERATION (true pHash, DCT-based)
-  // ============================================================================
-
-  getRegionDefinitions() {
-    return {
-      full: null,
-      center50: (w, h) => ({ left: w * 0.25, top: h * 0.25, width: w * 0.5, height: h * 0.5 }),
-      center60: (w, h) => ({ left: w * 0.2, top: h * 0.2, width: w * 0.6, height: h * 0.6 }),
-      center70: (w, h) => ({ left: w * 0.15, top: h * 0.15, width: w * 0.7, height: h * 0.7 }),
-      center80: (w, h) => ({ left: w * 0.1, top: h * 0.1, width: w * 0.8, height: h * 0.8 }),
-      topLeft: (w, h) => ({ left: 0, top: 0, width: w * 0.5, height: h * 0.5 }),
-      topRight: (w, h) => ({ left: w * 0.5, top: 0, width: w * 0.5, height: h * 0.5 }),
-      bottomLeft: (w, h) => ({ left: 0, top: h * 0.5, width: w * 0.5, height: h * 0.5 }),
-      bottomRight: (w, h) => ({ left: w * 0.5, top: h * 0.5, width: w * 0.5, height: h * 0.5 }),
-      topHalf: (w, h) => ({ left: 0, top: 0, width: w, height: h * 0.5 }),
-      bottomHalf: (w, h) => ({ left: 0, top: h * 0.5, width: w, height: h * 0.5 }),
-      leftHalf: (w, h) => ({ left: 0, top: 0, width: w * 0.5, height: h }),
-      rightHalf: (w, h) => ({ left: w * 0.5, top: 0, width: w * 0.5, height: h }),
-      topThird: (w, h) => ({ left: 0, top: 0, width: w, height: h * 0.33 }),
-      middleThird: (w, h) => ({ left: 0, top: h * 0.33, width: w, height: h * 0.34 }),
-      bottomThird: (w, h) => ({ left: 0, top: h * 0.66, width: w, height: h * 0.34 }),
-      top2Thirds: (w, h) => ({ left: 0, top: 0, width: w, height: h * 0.66 }),
-      bottom2Thirds: (w, h) => ({ left: 0, top: h * 0.34, width: w, height: h * 0.66 }),
-    };
-  }
-
-  // ---- DCT helpers (true pHash) ----
-
-  _alpha(u, N) {
-    return u === 0 ? Math.sqrt(1 / N) : Math.sqrt(2 / N);
-  }
-
-  _buildCosTable(N) {
-    const cosTable = Array.from({ length: N }, (_, u) =>
-      Array.from({ length: N }, (_, x) => Math.cos(((2 * x + 1) * u * Math.PI) / (2 * N)))
-    );
-    return cosTable;
-  }
-
-  _dct2D(pixels, N, cosTable) {
-    const out = new Array(N * N).fill(0);
-    for (let u = 0; u < N; u++) {
-      const au = this._alpha(u, N);
-      for (let v = 0; v < N; v++) {
-        const av = this._alpha(v, N);
-        let sum = 0;
-        for (let x = 0; x < N; x++) {
-          const cu = cosTable[u][x];
-          for (let y = 0; y < N; y++) {
-            const cv = cosTable[v][y];
-            sum += pixels[y * N + x] * cu * cv;
-          }
-        }
-        out[v * N + u] = au * av * sum;
-      }
-    }
-    return out;
-  }
-
-  _bitsToHex(bits) {
-    let hex = "";
-    for (let i = 0; i < bits.length; i += 4) {
-      hex += parseInt(bits.substr(i, 4), 2).toString(16);
-    }
-    return hex;
-  }
-
-  _computePHashFromGray32(raw32) {
-    const N = 32;
-    const pixels = new Array(N * N);
-    for (let i = 0; i < N * N; i++) pixels[i] = raw32[i] - 128;
-
-    const dct = this._dct2D(pixels, 32, this._cos32);
-
-    const coeffs = [];
-    for (let y = 0; y < 8; y++) {
-      for (let x = 0; x < 8; x++) {
-        if (x === 0 && y === 0) continue;
-        coeffs.push(dct[y * 32 + x]);
-      }
-    }
-    const sorted = [...coeffs].sort((a, b) => a - b);
-    const median = sorted[Math.floor(sorted.length / 2)] || 0;
-
-    let bits = "";
-    for (let y = 0; y < 8; y++) {
-      for (let x = 0; x < 8; x++) {
-        if (x === 0 && y === 0) {
-          bits += "0";
-          continue;
-        }
-        bits += dct[y * 32 + x] > median ? "1" : "0";
-      }
-    }
-    return this._bitsToHex(bits);
-  }
-
-  async generateRegionPHash(input, regionFn = null, meta = null) {
-    try {
-      const base = sharp(input);
-      const m = meta || (await base.metadata());
-      if (!m?.width || !m?.height) return null;
-
-      let img = base.clone();
-
-      if (regionFn) {
-        const bounds = regionFn(m.width, m.height);
-        img = img.extract({
-          left: Math.max(0, Math.floor(bounds.left)),
-          top: Math.max(0, Math.floor(bounds.top)),
-          width: Math.max(1, Math.floor(bounds.width)),
-          height: Math.max(1, Math.floor(bounds.height)),
-        });
-      }
-
-      const raw32 = await img.resize(32, 32, { fit: "fill" }).grayscale().raw().toBuffer();
-      return this._computePHashFromGray32(raw32);
-    } catch (err) {
-      console.error(`⚠️ Error generating region pHash: ${err.message}`);
-      return null;
-    }
-  }
-
-  async generateAllRegionHashes(input) {
-    const regions = this.getRegionDefinitions();
-    const hashes = {};
-
-    console.log("🔍 Generating multi-region pHashes (18 regions)...");
-    const startTime = Date.now();
-
-    let meta = null;
-    try {
-      meta = await sharp(input).metadata();
-    } catch {
-      meta = null;
-    }
-
-    for (const [name, regionFn] of Object.entries(regions)) {
-      const hash = await this.generateRegionPHash(input, regionFn, meta);
-      if (hash) hashes[name] = hash;
-    }
-
-    const elapsed = Date.now() - startTime;
-    console.log(`✅ Generated ${Object.keys(hashes).length} region pHashes in ${elapsed}ms`);
-
-    return hashes;
-  }
-
-  // ============================================================================
-  // HASH COMPARISON
-  // ============================================================================
-
-  hammingDistance(hash1, hash2) {
-    if (!hash1 || !hash2 || hash1.length !== hash2.length) return Infinity;
-
-    let distance = 0;
-    for (let i = 0; i < hash1.length; i++) {
-      const n1 = parseInt(hash1[i], 16);
-      const n2 = parseInt(hash2[i], 16);
-      let xor = n1 ^ n2;
-      while (xor) {
-        distance += xor & 1;
-        xor >>= 1;
-      }
-    }
-    return distance;
-  }
-
-  similarityScore(hash1, hash2) {
-    if (!hash1 || !hash2) return 0;
-    const distance = this.hammingDistance(hash1, hash2);
-    const maxBits = hash1.length * 4;
-    return Math.round(Math.max(0, 100 - (distance / maxBits) * 100));
-  }
-
-  /**
-   * v3.2: Cross-region comparison (fixes crop detection misses).
-   * Compares region hashes across region sets rather than same-key only.
-   */
-  compareRegionHashesCross(hashesA, hashesB, opts = {}) {
-    const {
-      minEarlyExit = 97,
-      maxRegionsPerSide = 10,
-      preferred = ["full", "center80", "center70", "center60", "center50", "topHalf", "bottomHalf", "leftHalf", "rightHalf"],
-    } = opts;
-
-    if (!hashesA || !hashesB) return { similarity: 0, region1: null, region2: null };
-
-    const orderRegions = (hashes) => {
-      const keys = Object.keys(hashes || {});
-      const preferredKeys = preferred.filter((k) => hashes[k]);
-      const rest = keys.filter((k) => !preferred.includes(k));
-      return [...preferredKeys, ...rest].slice(0, maxRegionsPerSide);
-    };
-
-    const regionsA = orderRegions(hashesA);
-    const regionsB = orderRegions(hashesB);
-
-    let best = { similarity: 0, region1: null, region2: null };
-
-    for (const rA of regionsA) {
-      const hA = hashesA[rA];
-      if (!hA) continue;
-
-      for (const rB of regionsB) {
-        const hB = hashesB[rB];
-        if (!hB) continue;
-
-        const sim = this.similarityScore(hA, hB);
-        if (sim > best.similarity) {
-          best = { similarity: sim, region1: rA, region2: rB };
-          if (sim >= minEarlyExit) return best;
-        }
-      }
-    }
-
-    return best;
-  }
-
-  // ============================================================================
-  // SCALABLE SEARCH (prefix filtering + targeted region prefix fallback)
-  // ============================================================================
-
-  /**
-   * Find similar content using prefix filtering in SQL.
-   *
-   * Important: prefix matching is a candidate-pruning heuristic (fast narrowing),
-   * not a guaranteed similarity bound. We still score precisely in JS.
-   */
-  async findSimilarContent(phash, regionHashes = null, excludeFingerprint = null, threshold = 85) {
-    console.log("🔍 findSimilarContent:", {
-      hasPhash: !!phash,
-      hasRegions: !!regionHashes,
-      exclude: typeof excludeFingerprint === "string" ? excludeFingerprint.substring(0, 8) : excludeFingerprint,
-      threshold,
+  // 1) EXIF / Camera date
+  if (data.exif?.date_taken) {
+    pushEvent({
+      type: "EXIF_CREATED",
+      timestamp: data.exif.date_taken,
+      icon: "📷",
+      label: "Photo/Video Created",
+      source:
+        data.exif.camera_make && data.exif.camera_model
+          ? `${data.exif.camera_make} ${data.exif.camera_model}`.trim()
+          : "Camera metadata",
+      details: data.exif.gps
+        ? `GPS: ${safeFixed(data.exif.gps.latitude, 4)}, ${safeFixed(data.exif.gps.longitude, 4)}`
+        : null,
+      url: null,
+      relevance: null,
+      confidence: 0.85,
+      precision: inferPrecision(data.exif.date_taken),
+      timestamp_source: "exif",
+      evidence_id: "exif:date_taken",
+      rank: 10,
     });
-
-    if (!phash && !regionHashes) return [];
-
-    try {
-      const similar = [];
-      let candidates = [];
-
-      const mergeCandidates = (rows) => {
-        const existing = new Set(candidates.map((c) => c.fingerprint));
-        for (const r of rows) {
-          if (!existing.has(r.fingerprint)) {
-            candidates.push(r);
-            existing.add(r.fingerprint);
-          }
-        }
-      };
-
-      // --------------------------
-      // TIER 1: full pHash prefix
-      // --------------------------
-      if (phash) {
-        const prefixLengths = [8, 6, 4];
-        for (const prefixLen of prefixLengths) {
-          const prefix = phash.substring(0, prefixLen);
-
-          let query = `
-            SELECT DISTINCT ON (fingerprint)
-              fingerprint, phash, phash_regions, upload_date, media_kind,
-              original_filename, file_size, file_type, width, height,
-              has_camera_info, has_gps, has_exif, exif_date, camera_make, camera_model
-            FROM verifications
-            WHERE phash IS NOT NULL
-              AND LEFT(phash, $1) = $2
-          `;
-          const params = [prefixLen, prefix];
-
-          if (excludeFingerprint) {
-            query += ` AND fingerprint != $3`;
-            params.push(excludeFingerprint);
-          }
-
-          query += ` ORDER BY fingerprint, (width IS NULL) ASC, upload_date ASC LIMIT 500`;
-
-          const result = await db.query(query, params);
-          if (result.rows?.length) {
-            console.log("📊 Prefix candidates:", { prefixLen, count: result.rows.length });
-            mergeCandidates(result.rows);
-            if (prefixLen >= 6 && candidates.length >= 50) break;
-          }
-        }
-      }
-
-      // --------------------------------------------
-      // TIER 2: targeted region prefix fallback (no broad scan)
-      // --------------------------------------------
-      if (regionHashes) {
-        const preferredRegions = ["center70", "center80", "full", "center60"];
-        const availableRegions = preferredRegions.filter((r) => regionHashes[r]);
-        const regionPrefixLens = [6, 4];
-
-        for (const region of availableRegions.slice(0, 3)) {
-          for (const prefixLen of regionPrefixLens) {
-            const prefix = regionHashes[region].substring(0, prefixLen);
-
-            let rQuery = `
-              SELECT DISTINCT ON (fingerprint)
-                fingerprint, phash, phash_regions, upload_date, media_kind,
-                original_filename, file_size, file_type, width, height,
-                has_camera_info, has_gps, has_exif, exif_date, camera_make, camera_model
-              FROM verifications
-              WHERE phash_regions IS NOT NULL
-                AND (phash_regions->>$1) IS NOT NULL
-                AND LEFT(phash_regions->>$1, $2) = $3
-            `;
-
-            const rParams = [region, prefixLen, prefix];
-
-            if (excludeFingerprint) {
-              rQuery += ` AND fingerprint != $4`;
-              rParams.push(excludeFingerprint);
-            }
-
-            rQuery += ` ORDER BY fingerprint, (width IS NULL) ASC, upload_date ASC LIMIT 300`;
-
-            const rRes = await db.query(rQuery, rParams);
-            if (rRes.rows?.length) {
-              console.log("📊 Region prefix candidates:", { region, prefixLen, count: rRes.rows.length });
-              mergeCandidates(rRes.rows);
-            }
-
-            if (candidates.length >= 600) break;
-          }
-          if (candidates.length >= 600) break;
-        }
-      }
-
-      if (candidates.length > 800) candidates = candidates.slice(0, 800);
-
-      console.log("🔍 Candidates to score:", candidates.length);
-
-      // --------------------------
-      // Score candidates
-      // --------------------------
-      for (const row of candidates) {
-        let bestSimilarity = 0;
-        let matchDetails = { region1: "full", region2: "full" };
-
-        if (phash && row.phash) {
-          bestSimilarity = this.similarityScore(phash, row.phash);
-          matchDetails = { region1: "full", region2: "full" };
-        }
-
-        // v3.2: cross-region region hash comparison
-        if (regionHashes && row.phash_regions) {
-          try {
-            const storedRegions = typeof row.phash_regions === "string" ? JSON.parse(row.phash_regions) : row.phash_regions;
-
-            const regionMatch = this.compareRegionHashesCross(regionHashes, storedRegions, {
-              // You can tune these:
-              minEarlyExit: 97,
-              maxRegionsPerSide: 10,
-            });
-
-            if (regionMatch.similarity > bestSimilarity) {
-              bestSimilarity = regionMatch.similarity;
-              matchDetails = { region1: regionMatch.region1, region2: regionMatch.region2 };
-            }
-          } catch {
-            // ignore parse errors
-          }
-        }
-
-        if (bestSimilarity >= threshold) {
-          const isFullToFull = matchDetails.region1 === "full" && matchDetails.region2 === "full";
-
-          // v3.2: crop hint (full matches a center region strongly suggests crop)
-          const cropHint =
-            (matchDetails.region1 === "full" && typeof matchDetails.region2 === "string" && matchDetails.region2.startsWith("center")) ||
-            (matchDetails.region2 === "full" && typeof matchDetails.region1 === "string" && matchDetails.region1.startsWith("center"));
-
-          similar.push({
-            fingerprint: row.fingerprint,
-            similarity: bestSimilarity,
-            first_seen: row.upload_date,
-            media_kind: row.media_kind,
-            filename: row.original_filename,
-            file_size: row.file_size,
-            file_type: row.file_type,
-            width: row.width || null,
-            height: row.height || null,
-            has_camera_info: row.has_camera_info || false,
-            has_gps: row.has_gps || false,
-            has_exif: row.has_exif || false,
-            exif_date: row.exif_date || null,
-            camera_make: row.camera_make || null,
-            camera_model: row.camera_model || null,
-            match_type: isFullToFull ? "full_image" : "region_match",
-            matched_regions: matchDetails,
-            crop_hint: cropHint,
-          });
-        }
-      }
-
-      similar.sort((a, b) => b.similarity - a.similarity);
-      return similar;
-    } catch (err) {
-      console.error("⚠️ Error finding similar content:", err.message);
-      return [];
-    }
   }
 
-  // ============================================================================
-  // CHANGE DETECTION
-  // ============================================================================
-
-  detectChanges(parentMeta, childMeta, similarity, matchType, matchedRegions, cropHint = false) {
-    const p = this._normalizeMeta(parentMeta);
-    const c = this._normalizeMeta(childMeta);
-
-    const changes = [];
-    const flags = {};
-
-    // 1) RESOLUTION CHANGE
-    if (p.width && p.height && c.width && c.height) {
-      const parentPixels = p.width * p.height;
-      const childPixels = c.width * c.height;
-
-      if (p.width !== c.width || p.height !== c.height) {
-        const scalePercent = Math.round((childPixels / parentPixels) * 100);
-
-        const parentAR = (p.width / p.height).toFixed(3);
-        const childAR = (c.width / c.height).toFixed(3);
-        const aspectChanged = parentAR !== childAR;
-
-        if (childPixels < parentPixels * 0.5) {
-          changes.push({
-            type: "resolution_downscaled",
-            severity: "significant",
-            detail: `Downscaled to ${scalePercent}% (${p.width}×${p.height} → ${c.width}×${c.height})`,
-            parent_value: `${p.width}×${p.height}`,
-            child_value: `${c.width}×${c.height}`,
-            scale_percent: scalePercent,
-          });
-          flags.resolution_downscaled = true;
-        } else if (childPixels > parentPixels * 1.5) {
-          changes.push({
-            type: "resolution_upscaled",
-            severity: "moderate",
-            detail: `Upscaled to ${scalePercent}% (${p.width}×${p.height} → ${c.width}×${c.height})`,
-            parent_value: `${p.width}×${p.height}`,
-            child_value: `${c.width}×${c.height}`,
-            scale_percent: scalePercent,
-          });
-          flags.resolution_upscaled = true;
-        } else {
-          changes.push({
-            type: "resolution_changed",
-            severity: "minor",
-            detail: `Resolution changed (${p.width}×${p.height} → ${c.width}×${c.height})`,
-            parent_value: `${p.width}×${p.height}`,
-            child_value: `${c.width}×${c.height}`,
-            scale_percent: scalePercent,
-          });
-          flags.resolution_changed = true;
-        }
-
-        if (aspectChanged) {
-          changes.push({
-            type: "aspect_ratio_changed",
-            severity: "significant",
-            detail: `Aspect ratio changed (${parentAR} → ${childAR})`,
-            parent_value: parentAR,
-            child_value: childAR,
-          });
-          flags.aspect_ratio_changed = true;
-        }
-      }
-    }
-
-    // 2) FORMAT CHANGE
-    if (p.format && c.format) {
-      const pFmt = String(p.format).toLowerCase();
-      const cFmt = String(c.format).toLowerCase();
-      if (pFmt !== cFmt) {
-        const lossy = ["jpeg", "jpg", "webp"];
-        const lossless = ["png", "tiff", "bmp"];
-        const lossyToLossy = lossy.includes(pFmt) && lossy.includes(cFmt);
-        const losslessToLossy = lossless.includes(pFmt) && lossy.includes(cFmt);
-
-        changes.push({
-          type: "format_converted",
-          severity: losslessToLossy ? "significant" : "minor",
-          detail: `Format converted (${pFmt} → ${cFmt})${losslessToLossy ? " — quality loss likely" : ""}`,
-          parent_value: pFmt,
-          child_value: cFmt,
-          quality_loss: losslessToLossy || lossyToLossy,
-        });
-        flags.format_converted = true;
-      }
-    }
-
-    // 3) FILE SIZE CHANGE
-    if (p.file_size && c.file_size) {
-      const sizeRatio = c.file_size / p.file_size;
-
-      if (sizeRatio < 0.5) {
-        changes.push({
-          type: "heavily_compressed",
-          severity: "significant",
-          detail: `File size reduced ${Math.round((1 - sizeRatio) * 100)}% (${this._formatBytes(p.file_size)} → ${this._formatBytes(c.file_size)})`,
-          parent_value: p.file_size,
-          child_value: c.file_size,
-          compression_ratio: sizeRatio.toFixed(3),
-        });
-        flags.heavily_compressed = true;
-      } else if (sizeRatio < 0.8 || sizeRatio > 1.2) {
-        changes.push({
-          type: "recompressed",
-          severity: "minor",
-          detail: `File size changed ${sizeRatio < 1 ? "reduced" : "increased"} (${this._formatBytes(p.file_size)} → ${this._formatBytes(c.file_size)})`,
-          parent_value: p.file_size,
-          child_value: c.file_size,
-          compression_ratio: sizeRatio.toFixed(3),
-        });
-        flags.recompressed = true;
-      }
-    }
-
-    // 4) METADATA PRESENCE CHANGES
-    if (p.has_exif && !c.has_exif) {
-      changes.push({
-        type: "metadata_stripped",
-        severity: "significant",
-        detail: "EXIF metadata removed",
-        parent_value: "EXIF present",
-        child_value: "EXIF absent",
+  // 2) Platform first posted
+  if (data.platform_detection?.detected) {
+    const platformDate = data.platform_detection.estimated_upload_date || data.platform_detection.detected_at;
+    if (platformDate) {
+      pushEvent({
+        type: "PLATFORM_POSTED",
+        timestamp: platformDate,
+        icon: "📱",
+        label: "Posted to Platform",
+        source: data.platform_detection.platform || "Social Media",
+        details: data.platform_detection.username ? `@${data.platform_detection.username}` : null,
+        url: data.platform_detection.url || null,
+        relevance: null,
+        confidence: data.platform_detection.estimated_upload_date ? 0.6 : 0.75,
+        precision: data.platform_detection.estimated_upload_date ? "estimated" : inferPrecision(platformDate),
+        timestamp_source: "platform",
+        evidence_id: data.platform_detection.url ? `platform:${data.platform_detection.url}` : "platform:detected",
+        rank: 30,
       });
-      flags.metadata_stripped = true;
-    } else if (!p.has_exif && c.has_exif) {
-      changes.push({
-        type: "metadata_added",
-        severity: "significant",
-        detail: "EXIF metadata added",
-        parent_value: "EXIF absent",
-        child_value: "EXIF present",
+    }
+  }
+
+  // 3) News coverage (top 5)
+  if (data.tv_corroboration?.clips?.length > 0) {
+    for (const clip of data.tv_corroboration.clips.slice(0, 5)) {
+      const ts = parseGDELTDate(clip.date);
+      if (!ts) continue;
+      pushEvent({
+        type: "NEWS_COVERAGE",
+        timestamp: ts,
+        icon: "📰",
+        label: "News Coverage",
+        source: clip.source || "Unknown",
+        details: clip.title || null,
+        url: clip.url || null,
+        relevance: clip.relevance ?? null,
+        confidence: 0.75,
+        precision: "day",
+        timestamp_source: "news",
+        evidence_id: clip.url ? `news:${clip.url}` : `news:${clip.source || "unknown"}`,
+        rank: 50,
       });
-      flags.metadata_added = true;
     }
+  }
 
-    if (p.has_camera_info && !c.has_camera_info) {
-      changes.push({
-        type: "camera_info_removed",
-        severity: "moderate",
-        detail: p.camera_make && p.camera_model ? `Camera info removed (was: ${p.camera_make} ${p.camera_model})` : "Camera info removed",
+  // 4) Reverse image search (earliest first seen)
+  if (data.reverse_image_search?.earliest_known_online?.date) {
+    const earliest = data.reverse_image_search.earliest_known_online;
+    pushEvent({
+      type: "ONLINE_FIRST_SEEN",
+      timestamp: earliest.date,
+      icon: "🔍",
+      label: "First Seen Online",
+      source: earliest.domain || "TinEye",
+      details: earliest.source === "persisted" ? "Earliest known appearance (verified)" : "Earliest indexed appearance",
+      url: earliest.url || null,
+      relevance: 1.0,
+      confidence: earliest.source === "persisted" ? 0.85 : 0.7,
+      precision: inferPrecision(earliest.date),
+      timestamp_source: "reverse_search",
+      evidence_id: earliest.url ? `reverse:${earliest.url}` : `reverse:${earliest.domain || "tineye"}`,
+      rank: 40,
+    });
+  } else if (data.reverse_image_search?.tineye?.oldest_result?.crawl_date) {
+    const oldest = data.reverse_image_search.tineye.oldest_result;
+    pushEvent({
+      type: "ONLINE_FIRST_SEEN",
+      timestamp: oldest.crawl_date,
+      icon: "🔍",
+      label: "First Seen Online",
+      source: oldest.domain || "TinEye",
+      details: "Earliest indexed appearance",
+      url: oldest.url || null,
+      relevance: 1.0,
+      confidence: 0.7,
+      precision: inferPrecision(oldest.crawl_date),
+      timestamp_source: "reverse_search",
+      evidence_id: oldest.url ? `reverse:${oldest.url}` : `reverse:${oldest.domain || "tineye"}`,
+      rank: 40,
+    });
+  }
+
+  // 4a) Combined analysis earliest (fallback if no ONLINE_FIRST_SEEN yet)
+  if (data.reverse_image_search?.combined_analysis?.age_analysis?.earliest_date) {
+    const earliestDate = data.reverse_image_search.combined_analysis.age_analysis.earliest_date;
+    const alreadyHasOldest = timeline.some((e) => e.type === "ONLINE_FIRST_SEEN");
+    if (!alreadyHasOldest) {
+      pushEvent({
+        type: "ONLINE_FIRST_SEEN",
+        timestamp: earliestDate,
+        icon: "🔍",
+        label: "First Seen Online",
+        source: "Reverse Image Search",
+        details: data.reverse_image_search.combined_analysis.age_analysis.age_readable || null,
+        url: null,
+        relevance: 0.9,
+        confidence: 0.6,
+        precision: "estimated",
+        timestamp_source: "reverse_search",
+        evidence_id: "reverse:combined_analysis",
+        rank: 40,
       });
-      flags.camera_info_removed = true;
-    } else if (!p.has_camera_info && c.has_camera_info) {
-      changes.push({
-        type: "camera_info_added",
-        severity: "moderate",
-        detail: c.camera_make && c.camera_model ? `Camera info added (${c.camera_make} ${c.camera_model})` : "Camera info added",
+    }
+  }
+
+  // 4b) Additional online matches (top 3 distinct)
+  if (data.reverse_image_search?.tineye?.results?.length > 0) {
+    const oldestUrl = data.reverse_image_search.tineye.oldest_result?.url;
+    const candidates = data.reverse_image_search.tineye.results
+      .filter((r) => {
+        const url = r.backlinks?.[0]?.url;
+        return (r.crawl_date || r.date) && url && url !== oldestUrl;
+      })
+      .slice(0, 10);
+    for (const result of candidates) {
+      const url = result.backlinks?.[0]?.url || null;
+      pushEvent({
+        type: "ONLINE_MATCH",
+        timestamp: result.crawl_date || result.date,
+        icon: "🌐",
+        label: "Found Online",
+        source: result.domain || extractDomain(url) || "Web",
+        details: null,
+        url,
+        relevance: null,
+        confidence: 0.6,
+        precision: inferPrecision(result.crawl_date || result.date),
+        timestamp_source: "reverse_search",
+        evidence_id: url ? `reverse:${url}` : `reverse:${result.domain || "web"}`,
+        rank: 45,
       });
-      flags.camera_info_added = true;
     }
+  }
 
-    if (p.has_gps && !c.has_gps) {
-      changes.push({
-        type: "gps_stripped",
-        severity: "moderate",
-        detail: "GPS location data removed",
-        parent_value: "GPS present",
-        child_value: "GPS absent",
+  // 4c) Generic reverse results fallback
+  if (data.reverse_image_search?.results?.length > 0 && !timeline.some((e) => e.type === "ONLINE_FIRST_SEEN")) {
+    for (const result of data.reverse_image_search.results.slice(0, 8)) {
+      const rawDate = result.crawl_date || result.date || result.backlinks?.[0]?.crawl_date;
+      if (!rawDate) continue;
+      pushEvent({
+        type: "ONLINE_MATCH",
+        timestamp: rawDate,
+        icon: "🔍",
+        label: "Found Online",
+        source: result.domain || extractDomain(result.url) || "Web",
+        details: result.title || null,
+        url: result.url || null,
+        relevance: null,
+        confidence: 0.5,
+        precision: inferPrecision(rawDate),
+        timestamp_source: "reverse_search",
+        evidence_id: result.url ? `reverse:${result.url}` : `reverse:${result.domain || "web"}`,
+        rank: 45,
       });
-      flags.gps_stripped = true;
-    } else if (!p.has_gps && c.has_gps) {
-      changes.push({
-        type: "gps_added",
-        severity: "moderate",
-        detail: "GPS location data added",
-        parent_value: "GPS absent",
-        child_value: "GPS present",
+    }
+  }
+
+  // 4d) Stock photo detection
+  if (
+    data.reverse_image_search?.tineye?.is_stock_photo ||
+    data.reverse_image_search?.combined_analysis?.content_type === "stock_photo"
+  ) {
+    const stockSites = data.reverse_image_search.tineye?.domain_breakdown?.stock_photo_sites || 0;
+    pushEvent({
+      type: "STOCK_PHOTO",
+      timestamp: verifiedAt,
+      icon: "📸",
+      label: "Stock Photo Detected",
+      source: "TinEye Analysis",
+      details: stockSites > 0 ? `Found on ${stockSites} stock photo sites` : "Matches stock photo databases",
+      url: null,
+      relevance: null,
+      confidence: 0.7,
+      precision: "exact",
+      timestamp_source: "analysis",
+      evidence_id: "analysis:stock_photo",
+      rank: 60,
+    });
+  }
+
+  // 4e) Landmark detections
+  if (data.reverse_search?.landmarks?.length > 0) {
+    const landmarkEvents = data.reverse_search.landmarks.map((landmark) => ({
+      type: "LANDMARK_DETECTED",
+      timestamp: verifiedAt,
+      icon: "📍",
+      label: "Landmark Detected",
+      source: landmark.name,
+      details:
+        landmark.location?.lat && landmark.location?.lng
+          ? `${landmark.location.lat.toFixed(3)}, ${landmark.location.lng.toFixed(3)} • ${Math.round((landmark.confidence || 0) * 100)}% match`
+          : `Frame ${landmark.frame} • ${Math.round((landmark.confidence || 0) * 100)}% match`,
+      url: null,
+      relevance: landmark.confidence ?? null,
+      confidence: landmark.confidence ?? 0.5,
+      precision: "exact",
+      timestamp_source: "analysis",
+      evidence_id: `analysis:landmark:${landmark.name}`,
+      rank: 60,
+    }));
+    const uniqueLandmarks = dedupeByKey(landmarkEvents, (e) => e.source, (a, b) => (b.confidence || 0) - (a.confidence || 0));
+    for (const e of uniqueLandmarks.slice(0, 5)) pushEvent(e);
+  }
+
+  // 4f) Fingerprint database matches
+  if (data.fingerprint_matches?.timeline_events?.length > 0) {
+    for (const event of data.fingerprint_matches.timeline_events) {
+      pushEvent({
+        type: event.type,
+        timestamp: event.timestamp,
+        icon: event.icon,
+        label: event.label,
+        source: event.source,
+        details: event.details,
+        url: event.url,
+        relevance: event.relevance,
+        confidence: event.confidence ?? 0.75,
+        precision: event.precision ?? inferPrecision(event.timestamp),
+        timestamp_source: "fingerprint_db",
+        is_earliest_fingerprint: event.is_earliest,
+        evidence_id: event.url ? `fp:${event.url}` : `fp:${event.source || "match"}`,
+        rank: 35,
       });
-      flags.gps_added = true;
-    }
-
-    // 5) METADATA TAMPERING
-    if (p.has_exif && c.has_exif && p.camera_make && c.camera_make && p.camera_make !== c.camera_make) {
-      changes.push({
-        type: "metadata_inconsistent",
-        severity: "high",
-        detail: `Camera make differs (${p.camera_make} → ${c.camera_make})`,
-        parent_value: p.camera_make,
-        child_value: c.camera_make,
-      });
-      flags.metadata_tampered = true;
-    }
-
-    // 6) DATE MODIFICATION
-    if (p.exif_date && c.exif_date) {
-      const parentDate = new Date(p.exif_date);
-      const childDate = new Date(c.exif_date);
-      const daysDiff = Math.abs((childDate - parentDate) / (1000 * 60 * 60 * 24));
-
-      if (daysDiff > 1) {
-        changes.push({
-          type: "date_modified",
-          severity: "significant",
-          detail: `EXIF date changed from ${parentDate.toISOString().split("T")[0]} to ${childDate.toISOString().split("T")[0]}`,
-          parent_date: p.exif_date,
-          child_date: c.exif_date,
-          days_difference: Math.round(daysDiff),
-        });
-        flags.date_modified = true;
-      }
-    } else if (p.exif_date && !c.exif_date) {
-      changes.push({
-        type: "date_stripped",
-        severity: "significant",
-        detail: `Original date (${new Date(p.exif_date).toISOString().split("T")[0]}) was removed`,
-        parent_date: p.exif_date,
-      });
-      flags.date_stripped = true;
-    }
-
-    // 7) CROP / REGION MATCH INTERPRETATION (v3.2 improved)
-    if (matchType === "region_match" && matchedRegions) {
-      const cropRegionA = matchedRegions.region1 || "unknown";
-      const cropRegionB = matchedRegions.region2 || "unknown";
-
-      const descA = this._describeCropRegion(cropRegionA);
-      const descB = this._describeCropRegion(cropRegionB);
-
-      // If crop_hint is true, treat as crop even if similarity is high
-      const likelyCrop =
-        cropHint ||
-        !!flags.aspect_ratio_changed ||
-        similarity < 96 ||
-        // If regions differ, it's a strong sign of partial overlap/crop
-        (cropRegionA && cropRegionB && cropRegionA !== cropRegionB);
-
-      if (likelyCrop) {
-        changes.push({
-          type: "cropped_or_partial_match",
-          severity: "significant",
-          detail: `Partial match suggests crop/overlay — best match is ${cropRegionA} ↔ ${cropRegionB} (${descA} ↔ ${descB})`,
-          matched_region_child: cropRegionA,
-          matched_region_parent: cropRegionB,
-          crop_description_child: descA,
-          crop_description_parent: descB,
-        });
-        flags.cropped = true;
-      } else {
-        changes.push({
-          type: "minor_visual_edit",
-          severity: "minor",
-          detail: `Minor global edits likely (region match at ${similarity}% similarity)`,
-          similarity,
-        });
-        flags.minor_visual_edit = true;
-      }
-    }
-
-    // 8) VISUAL SIMILARITY ASSESSMENT
-    if (similarity < 100 && similarity >= 85 && !flags.cropped) {
-      if (similarity >= 95 && !flags.format_converted && !flags.recompressed) {
-        changes.push({
-          type: "minor_visual_edit",
-          severity: "minor",
-          detail: `Minor visual changes detected (${similarity}% similar) — possible color/contrast, watermark, or small edit`,
-          similarity,
-        });
-        flags.minor_visual_edit = true;
-      } else if (similarity >= 85 && similarity < 95) {
-        changes.push({
-          type: "significant_visual_edit",
-          severity: "significant",
-          detail: `Significant visual changes detected (${similarity}% similar) — possible overlay/text, filter, or content modification`,
-          similarity,
-        });
-        flags.significant_visual_edit = true;
-      }
-    }
-
-    // 9) Deduplicate changes by type + rebuild flags
-    const deduped = this._dedupeChanges(changes);
-    const dedupFlags = this._rebuildFlagsFromChanges(deduped, flags);
-    const summary = this._generateChangeSummary(deduped, dedupFlags, similarity);
-
-    return {
-      changes: deduped,
-      change_flags: dedupFlags,
-      change_count: deduped.length,
-      summary,
-      severity: this._overallSeverity(deduped),
-      similarity,
-    };
-  }
-
-  _normalizeMeta(m) {
-    const meta = m || {};
-    return {
-      fingerprint: meta.fingerprint,
-      first_seen: meta.first_seen,
-      upload_date: meta.upload_date,
-      width: meta.width || null,
-      height: meta.height || null,
-      file_size: meta.file_size || null,
-      format: meta.format || meta.file_type || null,
-      file_type: meta.file_type || null,
-      has_exif: !!meta.has_exif,
-      has_camera_info: !!meta.has_camera_info,
-      has_gps: !!meta.has_gps,
-      exif_date: meta.exif_date || null,
-      camera_make: meta.camera_make || null,
-      camera_model: meta.camera_model || null,
-    };
-  }
-
-  _severityRank(sev) {
-    const rank = { critical: 5, high: 4, significant: 3, moderate: 2, minor: 1, none: 0 };
-    const r = rank[String(sev || "none")];
-    if (r === undefined) console.warn(`⚠️ Unknown severity: ${sev}`);
-    return r ?? 0;
-  }
-
-  _dedupeChanges(changes) {
-    const map = new Map();
-    for (const c of changes) {
-      const prev = map.get(c.type);
-      if (!prev) {
-        map.set(c.type, c);
-        continue;
-      }
-      const prevRank = this._severityRank(prev.severity);
-      const nextRank = this._severityRank(c.severity);
-      if (nextRank > prevRank) {
-        map.set(c.type, c);
-      } else if (nextRank === prevRank && String(c.detail || "").length > String(prev.detail || "").length) {
-        map.set(c.type, c);
-      }
-    }
-    return Array.from(map.values());
-  }
-
-  _rebuildFlagsFromChanges(changes, existingFlags = {}) {
-    const flags = { ...existingFlags };
-    const keysToDerive = [
-      "cropped",
-      "resolution_downscaled",
-      "resolution_upscaled",
-      "resolution_changed",
-      "aspect_ratio_changed",
-      "format_converted",
-      "heavily_compressed",
-      "recompressed",
-      "metadata_stripped",
-      "metadata_added",
-      "metadata_tampered",
-      "gps_stripped",
-      "gps_added",
-      "camera_info_removed",
-      "camera_info_added",
-      "significant_visual_edit",
-      "minor_visual_edit",
-    ];
-    for (const k of keysToDerive) flags[k] = false;
-
-    for (const c of changes) {
-      if (c.type === "cropped_or_partial_match") flags.cropped = true;
-      if (c.type === "resolution_downscaled") flags.resolution_downscaled = true;
-      if (c.type === "resolution_upscaled") flags.resolution_upscaled = true;
-      if (c.type === "resolution_changed") flags.resolution_changed = true;
-      if (c.type === "aspect_ratio_changed") flags.aspect_ratio_changed = true;
-      if (c.type === "format_converted") flags.format_converted = true;
-      if (c.type === "heavily_compressed") flags.heavily_compressed = true;
-      if (c.type === "recompressed") flags.recompressed = true;
-      if (c.type === "metadata_stripped") flags.metadata_stripped = true;
-      if (c.type === "metadata_added") flags.metadata_added = true;
-      if (c.type === "metadata_inconsistent") flags.metadata_tampered = true;
-      if (c.type === "gps_stripped") flags.gps_stripped = true;
-      if (c.type === "gps_added") flags.gps_added = true;
-      if (c.type === "camera_info_removed") flags.camera_info_removed = true;
-      if (c.type === "camera_info_added") flags.camera_info_added = true;
-      if (c.type === "significant_visual_edit") flags.significant_visual_edit = true;
-      if (c.type === "minor_visual_edit") flags.minor_visual_edit = true;
-    }
-
-    return flags;
-  }
-
-  _describeCropRegion(region) {
-    const descriptions = {
-      center50: "the center 50% of the original",
-      center60: "the center 60% of the original",
-      center70: "the center 70% of the original",
-      center80: "the center 80% of the original",
-      topLeft: "the top-left quadrant",
-      topRight: "the top-right quadrant",
-      bottomLeft: "the bottom-left quadrant",
-      bottomRight: "the bottom-right quadrant",
-      topHalf: "the top half",
-      bottomHalf: "the bottom half",
-      leftHalf: "the left half",
-      rightHalf: "the right half",
-      topThird: "the top third",
-      middleThird: "the middle third",
-      bottomThird: "the bottom third",
-      top2Thirds: "the top two-thirds",
-      bottom2Thirds: "the bottom two-thirds",
-      full: "the full image",
-    };
-    return descriptions[region] || region;
-  }
-
-  _generateChangeSummary(changes, flags, similarity) {
-    if (changes.length === 0) {
-      if (similarity === 100) return "Exact duplicate — no detectable changes";
-      return `Near-identical copy (${similarity}% match)`;
-    }
-
-    const parts = [];
-    if (flags.cropped) parts.push("cropped/partial match");
-    if (flags.resolution_downscaled) parts.push("downscaled");
-    if (flags.resolution_upscaled) parts.push("upscaled");
-    if (flags.resolution_changed) parts.push("resized");
-    if (flags.aspect_ratio_changed) parts.push("aspect ratio changed");
-    if (flags.format_converted) parts.push("format converted");
-    if (flags.heavily_compressed) parts.push("heavily compressed");
-    if (flags.recompressed) parts.push("recompressed");
-    if (flags.metadata_stripped) parts.push("metadata removed");
-    if (flags.metadata_added) parts.push("metadata added");
-    if (flags.metadata_tampered) parts.push("metadata inconsistent");
-    if (flags.gps_stripped) parts.push("GPS removed");
-    if (flags.gps_added) parts.push("GPS added");
-    if (flags.camera_info_removed) parts.push("camera info removed");
-    if (flags.camera_info_added) parts.push("camera info added");
-    if (flags.significant_visual_edit) parts.push("visually edited");
-    if (flags.minor_visual_edit) parts.push("minor edits");
-
-    if (parts.length === 0) return `Modified copy (${similarity}% match)`;
-    return `${parts.join(", ")} (${similarity}% match)`;
-  }
-
-  _overallSeverity(changes) {
-    if (changes.some((c) => c.severity === "critical")) return "critical";
-    if (changes.some((c) => c.severity === "high")) return "high";
-    if (changes.some((c) => c.severity === "significant")) return "significant";
-    if (changes.some((c) => c.severity === "moderate")) return "moderate";
-    if (changes.some((c) => c.severity === "minor")) return "minor";
-    return "none";
-  }
-
-  _formatBytes(bytes) {
-    if (!bytes) return "unknown";
-    if (bytes < 1024) return `${bytes} B`;
-    if (bytes < 1048576) return `${(bytes / 1024).toFixed(1)} KB`;
-    return `${(bytes / 1048576).toFixed(1)} MB`;
-  }
-
-  // ============================================================================
-  // SMART PARENT/CHILD DIRECTION
-  // ============================================================================
-
-  determineParentChild(existingMeta, newMeta) {
-    const existing = this._normalizeMeta(existingMeta);
-    const incoming = this._normalizeMeta(newMeta);
-
-    let existingScore = 0;
-    let newScore = 0;
-    const evidence = [];
-
-    const eDateRaw = existing.first_seen || existing.upload_date;
-    const nDateRaw = incoming.first_seen || incoming.upload_date;
-
-    if (eDateRaw && nDateRaw) {
-      const eDate = new Date(eDateRaw);
-      const nDate = new Date(nDateRaw);
-      if (eDate < nDate) {
-        existingScore += 3;
-        evidence.push("existing was submitted first");
-      } else if (nDate < eDate) {
-        newScore += 3;
-        evidence.push("new file was submitted first");
-      }
-    }
-
-    if (existing.width && existing.height && incoming.width && incoming.height) {
-      const ePix = existing.width * existing.height;
-      const nPix = incoming.width * incoming.height;
-      if (ePix > nPix * 1.1) {
-        existingScore += 2;
-        evidence.push("existing has higher resolution");
-      } else if (nPix > ePix * 1.1) {
-        newScore += 2;
-        evidence.push("new file has higher resolution");
-      }
-    }
-
-    if (existing.file_size && incoming.file_size) {
-      if (existing.file_size > incoming.file_size * 1.2) {
-        existingScore += 1;
-        evidence.push("existing has larger file size");
-      } else if (incoming.file_size > existing.file_size * 1.2) {
-        newScore += 1;
-        evidence.push("new file has larger file size");
-      }
-    }
-
-    if (existing.has_exif && !incoming.has_exif) {
-      existingScore += 2;
-      evidence.push("existing has EXIF metadata");
-    } else if (!existing.has_exif && incoming.has_exif) {
-      newScore += 2;
-      evidence.push("new file has EXIF metadata");
-    }
-
-    const existingIsParent = existingScore >= newScore;
-
-    return {
-      parent_fingerprint: existingIsParent ? existing.fingerprint : incoming.fingerprint,
-      child_fingerprint: existingIsParent ? incoming.fingerprint : existing.fingerprint,
-      confidence: Math.abs(existingScore - newScore),
-      direction: existingIsParent ? "existing_is_parent" : "new_is_parent",
-      evidence,
-    };
-  }
-
-  // ============================================================================
-  // RELATIONSHIP CLASSIFICATION
-  // ============================================================================
-
-  getRelationshipType(similarity, isScreenshot = false, matchType = "full_image", changeFlags = {}) {
-    if (similarity === 100) return "exact_match";
-    if (isScreenshot) return "screenshot";
-
-    if (changeFlags.metadata_tampered) return "metadata_inconsistent";
-    if (changeFlags.metadata_stripped && changeFlags.recompressed) return "sanitized";
-    if (changeFlags.cropped) return "cropped";
-    if (changeFlags.heavily_compressed) return "heavily_recompressed";
-    if (changeFlags.format_converted && similarity >= 95) return "format_converted";
-    if (changeFlags.resolution_downscaled) return "downscaled";
-    if (changeFlags.resolution_upscaled) return "upscaled";
-    if (changeFlags.metadata_stripped) return "metadata_stripped";
-
-    if (similarity >= 95) return "recompressed";
-    if (matchType === "region_match") return "cropped_or_partial";
-    if (similarity >= 85) return "derivative";
-    return "similar";
-  }
-
-  // ============================================================================
-  // RELATIONSHIP RECORDING (with diff storage)
-  // ============================================================================
-
-  async recordRelationship(parentFingerprint, childFingerprint, relationshipType, similarityScore, changeDiff = null) {
-    try {
-      await db.query(
-        `
-        INSERT INTO content_relationships
-          (parent_fingerprint, child_fingerprint, relationship_type, similarity_score, change_diff)
-        VALUES ($1, $2, $3, $4, $5)
-        ON CONFLICT (parent_fingerprint, child_fingerprint) DO UPDATE
-        SET relationship_type = $3, similarity_score = $4, change_diff = $5, detected_at = CURRENT_TIMESTAMP
-      `,
-        [parentFingerprint, childFingerprint, relationshipType, similarityScore, changeDiff ? JSON.stringify(changeDiff) : null]
-      );
-
-      await db.query(
-        `
-        UPDATE verifications
-        SET is_derivative = TRUE, parent_fingerprint = $1
-        WHERE fingerprint = $2 AND is_derivative = FALSE
-      `,
-        [parentFingerprint, childFingerprint]
-      );
-
-      return true;
-    } catch (err) {
-      if (err.message.includes("change_diff")) {
-        try {
-          await db.query(
-            `
-            INSERT INTO content_relationships
-              (parent_fingerprint, child_fingerprint, relationship_type, similarity_score)
-            VALUES ($1, $2, $3, $4)
-            ON CONFLICT (parent_fingerprint, child_fingerprint) DO UPDATE
-            SET relationship_type = $3, similarity_score = $4, detected_at = CURRENT_TIMESTAMP
-          `,
-            [parentFingerprint, childFingerprint, relationshipType, similarityScore]
-          );
-
-          await db.query(
-            `
-            UPDATE verifications
-            SET is_derivative = TRUE, parent_fingerprint = $1
-            WHERE fingerprint = $2 AND is_derivative = FALSE
-          `,
-            [parentFingerprint, childFingerprint]
-          );
-
-          console.log("⚠️ change_diff column not yet added — run migration");
-          return true;
-        } catch (fallbackErr) {
-          console.error("⚠️ Error recording relationship (fallback):", fallbackErr.message);
-          return false;
-        }
-      }
-
-      console.error("⚠️ Error recording relationship:", err.message);
-      return false;
     }
   }
 
-  // ============================================================================
-  // MAIN ENTRY POINT
-  // ============================================================================
-
-  async checkAndRecordProvenance(fingerprint, phash, regionHashes = null, isScreenshot = false, fileMeta = {}) {
-    try {
-      const similar = await this.findSimilarContent(phash, regionHashes, fingerprint, 75);
-
-      if (similar.length === 0) {
-        console.log("   ✅ Original content (no similar content found)");
-        return { is_original: true, similar_content: [], relationships_recorded: 0, changes_detected: [] };
-      }
-
-      console.log(`   ⚠️ Found ${similar.length} similar content matches`);
-
-      let recorded = 0;
-      const allChanges = [];
-
-      for (const match of similar.slice(0, 5)) {
-        const parentMeta = {
-          fingerprint: match.fingerprint,
-          first_seen: match.first_seen,
-          file_size: match.file_size,
-          file_type: match.file_type,
-          media_kind: match.media_kind,
-          width: match.width || null,
-          height: match.height || null,
-          has_camera_info: match.has_camera_info || false,
-          has_gps: match.has_gps || false,
-          has_exif: match.has_exif || false,
-          exif_date: match.exif_date || null,
-          camera_make: match.camera_make || null,
-          camera_model: match.camera_model || null,
-        };
-
-        const newMeta = {
-          fingerprint,
-          upload_date: fileMeta.upload_date || new Date().toISOString(),
-          width: fileMeta.width || null,
-          height: fileMeta.height || null,
-          file_size: fileMeta.file_size || null,
-          format: fileMeta.format || null,
-          file_type: fileMeta.file_type || null,
-          has_camera_info: !!fileMeta.has_camera_info,
-          has_gps: !!fileMeta.has_gps,
-          has_exif: !!fileMeta.has_exif,
-          exif_date: fileMeta.exif_date || null,
-          camera_make: fileMeta.camera_make || null,
-          camera_model: fileMeta.camera_model || null,
-        };
-
-        // v3.2: pass crop_hint into detectChanges for stronger crop classification
-        const changeDiff = this.detectChanges(
-          parentMeta,
-          newMeta,
-          match.similarity,
-          match.match_type,
-          match.matched_regions,
-          match.crop_hint || false
-        );
-
-        const direction = this.determineParentChild(parentMeta, newMeta);
-
-        const relType = this.getRelationshipType(match.similarity, isScreenshot, match.match_type, changeDiff.change_flags);
-
-        const success = await this.recordRelationship(direction.parent_fingerprint, direction.child_fingerprint, relType, match.similarity, changeDiff);
-
-        if (success) {
-          recorded++;
-          console.log(`   📎 ${relType}: ${match.fingerprint.substring(0, 8)}... (${match.similarity}%) [${changeDiff.summary}]`);
-        }
-
-        allChanges.push({
-          match_fingerprint: match.fingerprint.substring(0, 8),
-          similarity: match.similarity,
-          relationship_type: relType,
-          direction: direction.direction,
-          direction_evidence: direction.evidence,
-          changes: changeDiff,
-        });
-      }
-
-      const safeSimilarContent = similar.slice(0, 5).map((match, i) => ({
-        fingerprint_prefix: match.fingerprint.substring(0, 8),
-        similarity: match.similarity,
-        first_seen: match.first_seen,
-        media_kind: match.media_kind,
-        match_type: match.match_type,
-        relationship_type: allChanges[i]?.relationship_type || this.getRelationshipType(match.similarity, isScreenshot, match.match_type),
-        changes: allChanges[i]?.changes || null,
-        matched_regions: match.matched_regions,
-        crop_hint: match.crop_hint || false,
-      }));
-
-      const safeMostSimilar = similar[0]
-        ? {
-            fingerprint_prefix: similar[0].fingerprint.substring(0, 8),
-            similarity: similar[0].similarity,
-            first_seen: similar[0].first_seen,
-            match_type: similar[0].match_type,
-            relationship_type: allChanges[0]?.relationship_type || this.getRelationshipType(similar[0].similarity, isScreenshot, similar[0].match_type),
-            changes: allChanges[0]?.changes || null,
-            matched_regions: similar[0].matched_regions,
-            crop_hint: similar[0].crop_hint || false,
-          }
-        : null;
-
-      return {
-        is_original: false,
-        similar_content: safeSimilarContent,
-        relationships_recorded: recorded,
-        most_similar: safeMostSimilar,
-        changes_detected: allChanges,
-      };
-    } catch (err) {
-      console.error("⚠️ Error checking provenance:", err.message);
-      return { is_original: true, error: err.message, changes_detected: [] };
-    }
+  // 5) First verification
+  if (data.verification?.status === "PREVIOUSLY_VERIFIED" && data.verification?.first_seen) {
+    pushEvent({
+      type: "FIRST_VERIFIED",
+      timestamp: data.verification.first_seen,
+      icon: "✓",
+      label: "First Verified",
+      source: "VeriSource",
+      details: data.verification.times_verified ? `Verified ${data.verification.times_verified} times total` : null,
+      url: null,
+      relevance: null,
+      confidence: 0.9,
+      precision: inferPrecision(data.verification.first_seen),
+      timestamp_source: "verisource",
+      evidence_id: "verisource:first_seen",
+      rank: 70,
+    });
   }
 
-  // ============================================================================
-  // TIMELINE (enhanced with change details)
-  // ============================================================================
-
-  async getTimeline(fingerprint) {
-    try {
-      const timeline = [];
-
-      const verificationsResult = await db.query(
-        `
-        SELECT * FROM verifications
-        WHERE fingerprint = $1
-        ORDER BY upload_date ASC
-      `,
-        [fingerprint]
-      );
-
-      const verifications = verificationsResult.rows;
-      if (verifications.length === 0) {
-        return { found: false, timeline: [] };
-      }
-
-      const first = verifications[0];
-      timeline.push({
-        timestamp: first.upload_date,
-        event_type: "first_verified",
-        details: { media_kind: first.media_kind, filename: first.original_filename, file_size: first.file_size },
-      });
-
-      if (first.polygon_tx_hash) {
-        timeline.push({
-          timestamp: first.polygon_timestamp || first.upload_date,
-          event_type: "blockchain_confirmed",
-          details: { network: "polygon", block_number: first.polygon_block_number, transaction_hash: first.polygon_tx_hash },
-        });
-      }
-
-      if (first.bitcoin_proof_status === "confirmed") {
-        timeline.push({
-          timestamp: first.bitcoin_submitted_at,
-          event_type: "blockchain_confirmed",
-          details: { network: "bitcoin", status: "confirmed" },
-        });
-      }
-
-      for (let i = 1; i < verifications.length; i++) {
-        timeline.push({
-          timestamp: verifications[i].upload_date,
-          event_type: "re_verification",
-          details: { verification_number: i + 1 },
-        });
-      }
-
-      const derivativesResult = await db.query(
-        `
-        SELECT cr.*, v.upload_date, v.media_kind, v.original_filename
-        FROM content_relationships cr
-        JOIN verifications v ON v.fingerprint = cr.child_fingerprint
-        WHERE cr.parent_fingerprint = $1
-        ORDER BY cr.detected_at ASC
-      `,
-        [fingerprint]
-      );
-
-      for (const deriv of derivativesResult.rows) {
-        let changeDiff = null;
-        if (deriv.change_diff) {
-          try {
-            changeDiff = typeof deriv.change_diff === "string" ? JSON.parse(deriv.change_diff) : deriv.change_diff;
-          } catch {
-            /* ignore */
-          }
-        }
-
-        timeline.push({
-          timestamp: deriv.detected_at,
-          event_type: "derivative_detected",
-          details: {
-            child_fingerprint: deriv.child_fingerprint,
-            relationship_type: deriv.relationship_type,
-            similarity: deriv.similarity_score,
-            filename: deriv.original_filename,
-            changes: changeDiff,
-          },
-        });
-      }
-
-      const parentResult = await db.query(
-        `
-        SELECT cr.*, v.upload_date, v.original_filename
-        FROM content_relationships cr
-        JOIN verifications v ON v.fingerprint = cr.parent_fingerprint
-        WHERE cr.child_fingerprint = $1
-      `,
-        [fingerprint]
-      );
-
-      let parent = null;
-      if (parentResult.rows.length > 0) {
-        const p = parentResult.rows[0];
-        let changeDiff = null;
-        if (p.change_diff) {
-          try {
-            changeDiff = typeof p.change_diff === "string" ? JSON.parse(p.change_diff) : p.change_diff;
-          } catch {
-            /* ignore */
-          }
-        }
-
-        parent = {
-          fingerprint: p.parent_fingerprint,
-          relationship_type: p.relationship_type,
-          similarity: p.similarity_score,
-          first_seen: p.upload_date,
-          changes: changeDiff,
-        };
-      }
-
-      timeline.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
-
-      const countResult = await db.query("SELECT COUNT(*) as count FROM verifications WHERE fingerprint = $1", [fingerprint]);
-
-      return {
-        found: true,
-        fingerprint,
-        first_seen: first.upload_date,
-        verification_count: parseInt(countResult.rows[0].count, 10),
-        is_derivative: !!parent,
-        parent,
-        derivatives_count: derivativesResult.rows.length,
-        timeline,
-      };
-    } catch (err) {
-      console.error("⚠️ Error getting timeline:", err.message);
-      return { found: false, error: err.message };
-    }
+  // 6) Blockchain timestamps
+  if (data.blockchain_verification?.submitted_at || data.blockchain_verification?.timestamp) {
+    const btcTimestamp = data.blockchain_verification.submitted_at || data.blockchain_verification.timestamp;
+    pushEvent({
+      type: "BLOCKCHAIN_BITCOIN",
+      timestamp: btcTimestamp,
+      icon: "₿",
+      label: "Bitcoin Timestamp",
+      source: "OpenTimestamps",
+      details: data.blockchain_verification.status || "Anchored to Bitcoin blockchain",
+      url: null,
+      relevance: null,
+      confidence: 0.95,
+      precision: "exact",
+      timestamp_source: "blockchain",
+      evidence_id: data.blockchain_verification.txid ? `btc:${data.blockchain_verification.txid}` : "btc:opentimestamps",
+      rank: 65,
+    });
   }
 
-  // ============================================================================
-  // STATS
-  // ============================================================================
+  if (data.polygon_verification?.timestamp) {
+    const tx = data.polygon_verification.transaction_hash;
+    pushEvent({
+      type: "BLOCKCHAIN_POLYGON",
+      timestamp: data.polygon_verification.timestamp,
+      icon: "🔷",
+      label: "Polygon Timestamp",
+      source: "Polygon Network",
+      details: data.polygon_verification.block_number ? `Block #${data.polygon_verification.block_number}` : null,
+      url: tx ? `https://polygonscan.com/tx/${tx}` : null,
+      relevance: null,
+      confidence: 0.95,
+      precision: "exact",
+      timestamp_source: "blockchain",
+      evidence_id: tx ? `polygon:${tx}` : "polygon:timestamp",
+      rank: 65,
+    });
+  }
 
-  async getStats() {
-    try {
-      const relationshipsCount = await db.query("SELECT COUNT(*) as count FROM content_relationships");
-      const derivativesCount = await db.query("SELECT COUNT(*) as count FROM verifications WHERE is_derivative = TRUE");
-      const uniqueParents = await db.query("SELECT COUNT(DISTINCT parent_fingerprint) as count FROM content_relationships");
-      const withRegionHashes = await db.query("SELECT COUNT(*) as count FROM verifications WHERE phash_regions IS NOT NULL");
+  if (data.base_verification?.timestamp) {
+    const tx = data.base_verification.transaction_hash;
+    pushEvent({
+      type: "BLOCKCHAIN_BASE",
+      timestamp: data.base_verification.timestamp,
+      icon: "🔵",
+      label: "Base Timestamp",
+      source: "Base Network (L2)",
+      details: data.base_verification.block_number ? `Block #${data.base_verification.block_number}` : null,
+      url: tx ? `https://basescan.org/tx/${tx}` : null,
+      relevance: null,
+      confidence: 0.95,
+      precision: "exact",
+      timestamp_source: "blockchain",
+      evidence_id: tx ? `base:${tx}` : "base:timestamp",
+      rank: 65,
+    });
+  }
 
-      let typeBreakdown = {};
-      try {
-        const typeResult = await db.query(`
-          SELECT relationship_type, COUNT(*) as count
-          FROM content_relationships
-          GROUP BY relationship_type
-          ORDER BY count DESC
-        `);
-        typeBreakdown = Object.fromEntries(typeResult.rows.map((r) => [r.relationship_type, parseInt(r.count, 10)]));
-      } catch {
-        /* ignore */
-      }
+  if (data.ethereum_verification?.timestamp) {
+    const tx = data.ethereum_verification.transaction_hash;
+    pushEvent({
+      type: "BLOCKCHAIN_ETHEREUM",
+      timestamp: data.ethereum_verification.timestamp,
+      icon: "⟠",
+      label: "Ethereum Timestamp",
+      source: "Ethereum Mainnet (L1)",
+      details: data.ethereum_verification.block_number ? `Block #${data.ethereum_verification.block_number}` : null,
+      url: tx ? `https://etherscan.io/tx/${tx}` : null,
+      relevance: null,
+      confidence: 0.95,
+      precision: "exact",
+      timestamp_source: "blockchain",
+      evidence_id: tx ? `eth:${tx}` : "eth:timestamp",
+      rank: 65,
+    });
+  }
 
-      return {
-        total_relationships: parseInt(relationshipsCount.rows[0].count, 10),
-        total_derivatives: parseInt(derivativesCount.rows[0].count, 10),
-        unique_originals_with_derivatives: parseInt(uniqueParents.rows[0].count, 10),
-        verifications_with_region_hashes: parseInt(withRegionHashes.rows[0].count, 10),
-        relationship_types: typeBreakdown,
-      };
-    } catch (err) {
-      return { error: err.message };
+  // 7) Current submission
+  if (data.verified_at) {
+    pushEvent({
+      type: "SUBMISSION",
+      timestamp: verifiedAt,
+      icon: "📤",
+      label: "Submitted for Verification",
+      source: "VeriSource",
+      details: data.verification?.status === "PREVIOUSLY_VERIFIED" ? "Re-verification" : "First submission",
+      url: null,
+      relevance: null,
+      confidence: 0.95,
+      precision: "exact",
+      timestamp_source: "verisource",
+      evidence_id: "verisource:verified_at",
+      rank: 80,
+    });
+  }
+
+  const deduped = dedupeTimelineEvents(timeline);
+
+  deduped.sort((a, b) => {
+    const da = new Date(a.timestamp).getTime();
+    const db = new Date(b.timestamp).getTime();
+    if (da !== db) return da - db;
+    const ra = a.rank ?? 999;
+    const rb = b.rank ?? 999;
+    if (ra !== rb) return ra - rb;
+    return (b.confidence ?? 0) - (a.confidence ?? 0);
+  });
+
+  const anomalies = detectTimelineAnomalies(deduped, data);
+  const span = calculateTimeSpan(deduped);
+  const summary = generateTimelineSummary(deduped, anomalies, data);
+
+  return { events: deduped, span, anomalies, summary };
+}
+
+function parseGDELTDate(dateStr) {
+  if (!dateStr) return null;
+  if (typeof dateStr === "string" && (dateStr.includes("-") || dateStr.includes("T"))) {
+    return normalizeTimestamp(dateStr);
+  }
+  const match = String(dateStr).match(/(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})Z?/);
+  if (match) return `${match[1]}-${match[2]}-${match[3]}T${match[4]}:${match[5]}:${match[6]}Z`;
+  return null;
+}
+
+function normalizeTimestamp(timestamp) {
+  if (!timestamp) return null;
+  if (typeof timestamp === "number") {
+    if (timestamp < 4102444800) return new Date(timestamp * 1000).toISOString();
+    return new Date(timestamp).toISOString();
+  }
+  if (typeof timestamp === "string") {
+    const s = timestamp.trim();
+    if (!s) return null;
+    if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
+      const d = new Date(`${s}T00:00:00Z`);
+      return isNaN(d.getTime()) ? null : d.toISOString();
     }
+    if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(s) && !/[zZ]|[+-]\d{2}:\d{2}$/.test(s)) {
+      const d = new Date(`${s}Z`);
+      return isNaN(d.getTime()) ? null : d.toISOString();
+    }
+    const d = new Date(s);
+    return isNaN(d.getTime()) ? null : d.toISOString();
+  }
+  try {
+    const d = new Date(timestamp);
+    return isNaN(d.getTime()) ? null : d.toISOString();
+  } catch {
+    return null;
   }
 }
 
-module.exports = new ProvenanceService();
+function inferPrecision(raw) {
+  if (!raw) return "estimated";
+  const s = String(raw);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return "day";
+  if (s.includes("T")) return "exact";
+  return "estimated";
+}
+
+function safeFixed(n, digits) {
+  if (typeof n !== "number" || !isFinite(n)) return "unknown";
+  return n.toFixed(digits);
+}
+
+function extractDomain(url) {
+  if (!url) return null;
+  try {
+    const urlObj = new URL(url);
+    return urlObj.hostname.replace("www.", "");
+  } catch {
+    return null;
+  }
+}
+
+function dedupeTimelineEvents(events) {
+  const map = new Map();
+  for (const e of events) {
+    const dayKey = e.timestamp ? e.timestamp.slice(0, 10) : "no-day";
+    const urlKey = e.url ? String(e.url) : null;
+    const domain = extractDomain(e.url) || e.source || "unknown";
+    let key;
+    if (e.type === "ONLINE_MATCH" || e.type === "ONLINE_FIRST_SEEN" || e.type === "NEWS_COVERAGE") {
+      key = `${e.type}|${urlKey || domain}|${dayKey}`;
+    } else if (e.type === "LANDMARK_DETECTED") {
+      key = `${e.type}|${e.source}|${dayKey}`;
+    } else {
+      const minuteKey = e.timestamp ? e.timestamp.slice(0, 16) : "no-minute";
+      key = `${e.type}|${minuteKey}|${e.source || "unknown"}`;
+    }
+    const prev = map.get(key);
+    if (!prev) {
+      map.set(key, e);
+      continue;
+    }
+    const prevScore = (prev.confidence ?? 0) * 100 + (prev.relevance ?? 0);
+    const nextScore = (e.confidence ?? 0) * 100 + (e.relevance ?? 0);
+    if (nextScore > prevScore) map.set(key, e);
+  }
+  const out = Array.from(map.values());
+  const onlineMatches = out.filter((x) => x.type === "ONLINE_MATCH").sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+  const firstSeen = out.filter((x) => x.type !== "ONLINE_MATCH");
+  const trimmedOnline = onlineMatches.slice(0, 3);
+  return [...firstSeen, ...trimmedOnline];
+}
+
+function dedupeByKey(arr, keyFn, sortFn) {
+  const sorted = [...arr].sort(sortFn);
+  const out = [];
+  const seen = new Set();
+  for (const item of sorted) {
+    const k = keyFn(item);
+    if (!seen.has(k)) {
+      seen.add(k);
+      out.push(item);
+    }
+  }
+  return out;
+}
+
+function toDateOrNull(ts) {
+  const iso = normalizeTimestamp(ts);
+  if (!iso) return null;
+  const d = new Date(iso);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+function detectTimelineAnomalies(timeline, data) {
+  const anomalies = [];
+  const exifEvent = timeline.find((e) => e.type === "EXIF_CREATED");
+  const newsEvents = timeline.filter((e) => e.type === "NEWS_COVERAGE");
+  const submissionEvent = timeline.find((e) => e.type === "SUBMISSION");
+  const firstVerified = timeline.find((e) => e.type === "FIRST_VERIFIED");
+  const onlineFirstSeen = timeline.find((e) => e.type === "ONLINE_FIRST_SEEN");
+  const onlineMatches = timeline.filter((e) => e.type === "ONLINE_MATCH" || e.type === "ONLINE_FIRST_SEEN");
+
+  const diffDays = (a, b) => Math.floor((a.getTime() - b.getTime()) / (1000 * 60 * 60 * 24));
+  const diffHoursAbs = (a, b) => Math.abs((a.getTime() - b.getTime()) / (1000 * 60 * 60));
+
+  if (exifEvent && newsEvents.length > 0) {
+    const exifDate = toDateOrNull(exifEvent.timestamp);
+    if (exifDate) {
+      for (const news of newsEvents) {
+        const newsDate = toDateOrNull(news.timestamp);
+        if (!newsDate) continue;
+        const days = diffDays(exifDate, newsDate);
+        if (days > 30) {
+          anomalies.push({
+            type: "RECYCLED_CONTENT",
+            severity: "high",
+            message: `News reported similar event ${days} days before camera date — possible recycled content`,
+            events: [news.timestamp, exifEvent.timestamp],
+          });
+          break;
+        }
+      }
+    }
+  }
+
+  if (exifEvent && submissionEvent) {
+    const exifDate = toDateOrNull(exifEvent.timestamp);
+    const submitDate = toDateOrNull(submissionEvent.timestamp);
+    if (exifDate && submitDate && exifDate > submitDate) {
+      const hoursDiff = Math.floor((exifDate - submitDate) / (1000 * 60 * 60));
+      anomalies.push({
+        type: "FUTURE_DATED",
+        severity: "medium",
+        message: `Camera metadata shows date ${hoursDiff} hours after submission — device clock may be incorrect`,
+        events: [submissionEvent.timestamp, exifEvent.timestamp],
+      });
+    }
+  }
+
+  if (exifEvent && onlineFirstSeen) {
+    const exifDate = toDateOrNull(exifEvent.timestamp);
+    const onlineDate = toDateOrNull(onlineFirstSeen.timestamp);
+    if (exifDate && onlineDate) {
+      const days = diffDays(exifDate, onlineDate);
+      if (days > 7) {
+        anomalies.push({
+          type: "PREDATES_EXIF",
+          severity: "high",
+          message: `Image found online ${days} days before camera date — metadata may be manipulated`,
+          events: [onlineFirstSeen.timestamp, exifEvent.timestamp],
+        });
+      }
+    }
+  }
+
+  if (exifEvent && !onlineFirstSeen && onlineMatches.length > 0) {
+    const exifDate = toDateOrNull(exifEvent.timestamp);
+    if (exifDate) {
+      for (const match of onlineMatches) {
+        const matchDate = toDateOrNull(match.timestamp);
+        if (!matchDate) continue;
+        const days = diffDays(exifDate, matchDate);
+        if (days > 7) {
+          anomalies.push({
+            type: "PREDATES_EXIF",
+            severity: "high",
+            message: `Image found online ${days} days before camera date — metadata may be manipulated`,
+            events: [match.timestamp, exifEvent.timestamp],
+          });
+          break;
+        }
+      }
+    }
+  }
+
+  if (newsEvents.length > 0 && (submissionEvent || firstVerified)) {
+    const referenceEvent = firstVerified || submissionEvent;
+    const referenceDate = toDateOrNull(referenceEvent.timestamp);
+    const earliestNewsDate = newsEvents
+      .map((e) => toDateOrNull(e.timestamp))
+      .filter(Boolean)
+      .reduce((min, d) => (min === null || d < min ? d : min), null);
+    if (referenceDate && earliestNewsDate) {
+      const hoursDiff = diffHoursAbs(referenceDate, earliestNewsDate);
+      if (hoursDiff < 2) {
+        anomalies.push({
+          type: "RAPID_SPREAD",
+          severity: "info",
+          message: "Content verified within 2 hours of news coverage — likely breaking news",
+          events: [earliestNewsDate.toISOString(), referenceEvent.timestamp],
+        });
+      }
+    }
+  }
+
+  if (exifEvent && (firstVerified || submissionEvent)) {
+    const referenceEvent = firstVerified || submissionEvent;
+    const exifDate = toDateOrNull(exifEvent.timestamp);
+    const verifyDate = toDateOrNull(referenceEvent.timestamp);
+    if (exifDate && verifyDate) {
+      const days = diffDays(verifyDate, exifDate);
+      if (days > 365) {
+        anomalies.push({
+          type: "OLD_CONTENT",
+          severity: "info",
+          message: `Content is ${Math.floor(days / 30)} months old based on camera date`,
+          events: [exifEvent.timestamp, referenceEvent.timestamp],
+        });
+      }
+    }
+  }
+
+  if (onlineFirstSeen && firstVerified) {
+    const onlineDate = toDateOrNull(onlineFirstSeen.timestamp);
+    const verifiedDate = toDateOrNull(firstVerified.timestamp);
+    if (onlineDate && verifiedDate) {
+      const days = diffDays(verifiedDate, onlineDate);
+      if (days > 30) {
+        anomalies.push({
+          type: "LATE_VERIFICATION",
+          severity: "info",
+          message: `Content was online ${days} days before first VeriSource verification`,
+          events: [onlineFirstSeen.timestamp, firstVerified.timestamp],
+        });
+      }
+    }
+  }
+
+  return anomalies;
+}
+
+function calculateTimeSpan(timeline) {
+  if (timeline.length < 2) return null;
+  const timestamps = timeline.map((e) => toDateOrNull(e.timestamp)).filter(Boolean);
+  if (timestamps.length < 2) return null;
+  const earliest = new Date(Math.min(...timestamps.map((d) => d.getTime())));
+  const latest = new Date(Math.max(...timestamps.map((d) => d.getTime())));
+  const diffMs = latest - earliest;
+  const minutes = Math.floor(diffMs / (1000 * 60));
+  const hours = Math.floor(diffMs / (1000 * 60 * 60));
+  const days = Math.floor(hours / 24);
+  let label;
+  if (days > 0) label = `${days} day${days > 1 ? "s" : ""}`;
+  else if (hours > 0) label = `${hours} hour${hours > 1 ? "s" : ""}`;
+  else label = `${minutes} minute${minutes > 1 ? "s" : ""}`;
+  return { earliest: earliest.toISOString(), latest: latest.toISOString(), minutes, hours, days, label };
+}
+
+function generateTimelineSummary(timeline, anomalies, data) {
+  const parts = [];
+  const hasExif = timeline.some((e) => e.type === "EXIF_CREATED");
+  const hasBlockchain = timeline.some((e) => e.type.startsWith("BLOCKCHAIN_"));
+  const newsCount = timeline.filter((e) => e.type === "NEWS_COVERAGE").length;
+  const onlineFirstSeen = timeline.find((e) => e.type === "ONLINE_FIRST_SEEN");
+  const onlineCount = timeline.filter((e) => e.type === "ONLINE_MATCH" || e.type === "ONLINE_FIRST_SEEN").length;
+  const isPreviouslyVerified = timeline.some((e) => e.type === "FIRST_VERIFIED");
+  const isStockPhoto = timeline.some((e) => e.type === "STOCK_PHOTO");
+
+  if (hasExif) parts.push("Camera metadata present");
+  if (isPreviouslyVerified) {
+    const times = data.verification?.times_verified || 2;
+    parts.push(`Previously verified ${times}x`);
+  }
+  if (onlineFirstSeen) {
+    const firstSeenDate = toDateOrNull(onlineFirstSeen.timestamp);
+    if (firstSeenDate) {
+      const now = new Date();
+      const daysDiff = Math.floor((now - firstSeenDate) / (1000 * 60 * 60 * 24));
+      if (daysDiff > 30) parts.push(`First online ${Math.floor(daysDiff / 30)} months ago`);
+      else if (daysDiff > 0) parts.push(`First online ${daysDiff} days ago`);
+    }
+  }
+  if (newsCount > 0) parts.push(`${newsCount} news source${newsCount > 1 ? "s" : ""} corroborate`);
+  if (onlineCount > 0 && !onlineFirstSeen) parts.push(`${onlineCount} online match${onlineCount > 1 ? "es" : ""}`);
+  if (isStockPhoto) parts.push("Stock photo detected");
+  if (hasBlockchain) {
+    const blockchainCount = timeline.filter((e) => e.type.startsWith("BLOCKCHAIN_")).length;
+    parts.push(blockchainCount > 1 ? `Anchored on ${blockchainCount} blockchains` : "Blockchain anchored");
+  }
+  const highSeverity = anomalies.filter((a) => a.severity === "high");
+  if (highSeverity.length > 0) parts.push("⚠️ Issues detected");
+  return parts.join(" • ") || "Verification in progress";
+}
+
+module.exports = {
+  buildProvenanceTimeline,
+  parseGDELTDate,
+  normalizeTimestamp,
+  detectTimelineAnomalies,
+  toDateOrNull,
+  inferPrecision,
+  calculateTimeSpan,
+  generateTimelineSummary,
+};
