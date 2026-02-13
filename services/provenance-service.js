@@ -1188,11 +1188,11 @@ class ProvenanceService {
 
       const derivativesResult = await db.query(
         `
-        SELECT cr.*, v.upload_date, v.media_kind, v.original_filename
+        SELECT DISTINCT ON (cr.child_fingerprint) cr.*, v.upload_date, v.media_kind, v.original_filename
         FROM content_relationships cr
         JOIN verifications v ON v.fingerprint = cr.child_fingerprint
         WHERE cr.parent_fingerprint = $1
-        ORDER BY cr.detected_at ASC
+        ORDER BY cr.child_fingerprint, cr.detected_at ASC
       `,
         [fingerprint]
       );
