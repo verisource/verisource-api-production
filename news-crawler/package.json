@@ -5,7 +5,7 @@
   "main": "news-scheduler.js",
   "scripts": {
     "start": "node news-scheduler.js",
-    "crawl": "node news-crawler.js"
+    "crawl": "node news-crawler-v2.js"
   },
   "dependencies": {
     "axios": "^1.6.0",
