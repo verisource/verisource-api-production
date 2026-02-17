@@ -365,6 +365,7 @@ class ProvenanceService {
       // Only runs when pHash/region prefix search found ZERO candidates
       // Links images that share >=3 TinEye match URLs
       // --------------------------------------------
+      console.log("🔍 Pre-Tier3 check:", { candidateCount: candidates.length, hasExclude: !!excludeFingerprint, exclude: excludeFingerprint?.substring(0,8) });
       if (candidates.length === 0 && excludeFingerprint) {
         try {
           const sharedResult = await db.query(`
