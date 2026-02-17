@@ -384,7 +384,7 @@ class ProvenanceService {
             const fps = sharedResult.rows.map(r => r.fingerprint);
             console.log('🔗 TinEye cross-ref found:', fps.length, 'related fingerprints');
 
-            const placeholders = fps.map((_, i) => `${i + 1}`).join(',');
+            const placeholders = fps.map((_, i) => `$${i + 1}`).join(',');
             const verifResult = await db.query(`
               SELECT DISTINCT ON (fingerprint)
                 fingerprint, phash, phash_regions, upload_date, media_kind,
