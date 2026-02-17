@@ -396,6 +396,7 @@ class ProvenanceService {
             `, fps);
 
             console.log("🔗 Verif lookup result:", verifResult.rows?.length, "rows"); console.log("🔗 Verif lookup result:", verifResult.rows?.length, "rows"); if (verifResult.rows?.length) {
+              verifResult.rows.forEach(r => r._tineye_match = true);
               mergeCandidates(verifResult.rows);
             }
           }
@@ -431,7 +432,8 @@ class ProvenanceService {
           }
         }
 
-        if (bestSimilarity >= threshold) {
+        const effectiveThreshold = row._tineye_match ? Math.min(threshold, 50) : threshold;
+        if (bestSimilarity >= effectiveThreshold || row._tineye_match) {
           similar.push({
             fingerprint: row.fingerprint,
             similarity: bestSimilarity,
@@ -448,7 +450,7 @@ class ProvenanceService {
             exif_date: row.exif_date || null,
             camera_make: row.camera_make || null,
             camera_model: row.camera_model || null,
-            match_type: matchDetails.region1 === "full" && matchDetails.region2 === "full" ? "full_image" : "region_match",
+            match_type: row._tineye_match ? "tineye_cross_ref" : (matchDetails.region1 === "full" && matchDetails.region2 === "full" ? "full_image" : "region_match"),
             matched_regions: matchDetails,
           });
         }
