@@ -395,7 +395,7 @@ class ProvenanceService {
               ORDER BY fingerprint, (width IS NULL) ASC, upload_date ASC
             `, fps);
 
-            console.log("🔗 Verif lookup result:", verifResult.rows?.length, "rows"); if (verifResult.rows?.length) {
+            console.log("🔗 Verif lookup result:", verifResult.rows?.length, "rows"); console.log("🔗 Verif lookup result:", verifResult.rows?.length, "rows"); if (verifResult.rows?.length) {
               mergeCandidates(verifResult.rows);
             }
           }
