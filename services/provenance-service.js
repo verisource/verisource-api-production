@@ -382,7 +382,7 @@ class ProvenanceService {
 
           if (sharedResult.rows?.length) {
             const fps = sharedResult.rows.map(r => r.fingerprint);
-            console.log('🔗 TinEye cross-ref found:', fps.length, 'related fingerprints');
+            console.log('🔗 TinEye cross-ref found:', fps.length, 'related fingerprints', fps);
 
             const placeholders = fps.map((_, i) => `$${i + 1}`).join(',');
             const verifResult = await db.query(`
@@ -395,7 +395,7 @@ class ProvenanceService {
               ORDER BY fingerprint, (width IS NULL) ASC, upload_date ASC
             `, fps);
 
-            if (verifResult.rows?.length) {
+            console.log("🔗 Verif lookup result:", verifResult.rows?.length, "rows"); if (verifResult.rows?.length) {
               mergeCandidates(verifResult.rows);
             }
           }
@@ -404,7 +404,7 @@ class ProvenanceService {
         }
       }
 
-      console.log("🔍 Candidates to score:", candidates.length);
+      console.log("🔍 Candidates to score:", candidates.length, candidates.map(c => c.fingerprint?.substring(0,8)));
 
       // --------------------------
       // Score candidates
