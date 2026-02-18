@@ -233,7 +233,26 @@ class ProvenanceService {
     }
     return bestMatch;
   }
-
+  compareRegionHashesCross(hashes1, hashes2) {
+    let bestMatch = { similarity: 0, region1: null, region2: null, crop_hint: false };
+    const regions1 = Object.keys(hashes1);
+    const regions2 = Object.keys(hashes2);
+    for (const r1 of regions1) {
+      for (const r2 of regions2) {
+        const sim = this.similarityScore(hashes1[r1], hashes2[r2]);
+        if (sim > bestMatch.similarity) {
+          bestMatch = {
+            similarity: sim,
+            region1: r1,
+            region2: r2,
+            crop_hint: (r1 === 'full' && r2 !== 'full') || (r2 === 'full' && r1 !== 'full')
+          };
+        }
+        if (sim >= 97) return bestMatch;
+      }
+    }
+    return bestMatch;
+  }
   // ============================================================================
   // SCALABLE SEARCH (prefix filtering + targeted region prefix fallback)
   // ============================================================================
@@ -359,7 +378,61 @@ class ProvenanceService {
       if (candidates.length > 800) {
         candidates = candidates.slice(0, 800);
       }
+     // --------------------------------------------
+      // TIER 2.5: Broad region scan (when prefix matching fails)
+      // Scans all region-enabled entries with cheap gate + cross-region scoring
+      // --------------------------------------------
+      if (candidates.length === 0 && regionHashes && excludeFingerprint) {
+        console.log('🔍 Tier 2.5: Running broad region scan...');
+        try {
+          const broadResult = await db.query(`
+            SELECT DISTINCT ON (fingerprint)
+              fingerprint, phash, phash_regions, upload_date, media_kind,
+              original_filename, file_size, file_type, width, height,
+              has_camera_info, has_gps, has_exif, exif_date, camera_make, camera_model
+            FROM verifications
+            WHERE phash_regions IS NOT NULL
+              AND fingerprint != $1::text
+            ORDER BY fingerprint, upload_date ASC
+            LIMIT 2000
+          `, [excludeFingerprint]);
 
+          console.log('🔍 Tier 2.5: Scanning', broadResult.rows.length, 'entries with region hashes');
+
+          // Cheap gate: quick cross-region check on a few key pairs
+          const gated = [];
+          for (const row of broadResult.rows) {
+            try {
+              const stored = typeof row.phash_regions === 'string' ? JSON.parse(row.phash_regions) : row.phash_regions;
+              let quickMax = 0;
+              // Check crop-friendly pairs
+              const pairs = [
+                ['full', 'center70'], ['center70', 'full'],
+                ['full', 'center80'], ['center80', 'full'],
+                ['full', 'center60'], ['center60', 'full']
+              ];
+              for (const [r1, r2] of pairs) {
+                if (regionHashes[r1] && stored[r2]) {
+                  const sim = this.similarityScore(regionHashes[r1], stored[r2]);
+                  if (sim > quickMax) quickMax = sim;
+                }
+              }
+              if (quickMax >= 30) {
+                row._quickScore = quickMax;
+                gated.push(row);
+              }
+            } catch (e) { /* skip unparseable */ }
+          }
+
+          console.log('🔍 Tier 2.5: Passed cheap gate:', gated.length, 'of', broadResult.rows.length);
+
+          // Sort by quick score desc, take top 250
+          gated.sort((a, b) => b._quickScore - a._quickScore);
+          mergeCandidates(gated.slice(0, 250));
+        } catch (broadErr) {
+          console.log('⚠️ Tier 2.5 broad scan error:', broadErr.message);
+        }
+      }
       // --------------------------------------------
       // TIER 3: TinEye cross-reference fallback
       // Only runs when pHash/region prefix search found ZERO candidates
@@ -420,7 +493,7 @@ class ProvenanceService {
         if (regionHashes && row.phash_regions) {
           try {
             const storedRegions = typeof row.phash_regions === "string" ? JSON.parse(row.phash_regions) : row.phash_regions;
-            const regionMatch = this.compareRegionHashes(regionHashes, storedRegions);
+            const regionMatch = this.compareRegionHashesCross(regionHashes, storedRegions);
 
             if (regionMatch.similarity > bestSimilarity) {
               bestSimilarity = regionMatch.similarity;
