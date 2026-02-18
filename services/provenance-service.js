@@ -393,7 +393,7 @@ class ProvenanceService {
               WHERE fingerprint IN (${placeholders})
               ORDER BY fingerprint, (width IS NULL) ASC, upload_date ASC
             `, fps);
-
+            if (verifResult.rows?.length) {
               verifResult.rows.forEach(r => r._tineye_match = true);
               mergeCandidates(verifResult.rows);
             }
