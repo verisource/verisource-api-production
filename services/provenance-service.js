@@ -365,7 +365,6 @@ class ProvenanceService {
       // Only runs when pHash/region prefix search found ZERO candidates
       // Links images that share >=3 TinEye match URLs
       // --------------------------------------------
-      console.log("🔍 Pre-Tier3 check:", { candidateCount: candidates.length, hasExclude: !!excludeFingerprint, exclude: excludeFingerprint?.substring(0,8) });
       if (candidates.length === 0 && excludeFingerprint) {
         try {
           const sharedResult = await db.query(`
@@ -382,7 +381,7 @@ class ProvenanceService {
 
           if (sharedResult.rows?.length) {
             const fps = sharedResult.rows.map(r => r.fingerprint);
-            console.log('🔗 TinEye cross-ref found:', fps.length, 'related fingerprints', fps);
+            console.log('🔗 TinEye cross-ref found:', fps.length, 'related fingerprints');
 
             const placeholders = fps.map((_, i) => `$${i + 1}`).join(',');
             const verifResult = await db.query(`
@@ -395,7 +394,6 @@ class ProvenanceService {
               ORDER BY fingerprint, (width IS NULL) ASC, upload_date ASC
             `, fps);
 
-            console.log("🔗 Verif lookup result:", verifResult.rows?.length, "rows"); console.log("🔗 Verif lookup result:", verifResult.rows?.length, "rows"); if (verifResult.rows?.length) {
               verifResult.rows.forEach(r => r._tineye_match = true);
               mergeCandidates(verifResult.rows);
             }
@@ -405,7 +403,7 @@ class ProvenanceService {
         }
       }
 
-      console.log("🔍 Candidates to score:", candidates.length, candidates.map(c => c.fingerprint?.substring(0,8)));
+      console.log("🔍 Candidates to score:", candidates.length);
 
       // --------------------------
       // Score candidates
