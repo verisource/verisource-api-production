@@ -40,23 +40,29 @@ class ProvenanceService {
   getRegionDefinitions() {
     return {
       full: null,
-      center50: (w, h) => ({ left: w * 0.25, top: h * 0.25, width: w * 0.5, height: h * 0.5 }),
-      center60: (w, h) => ({ left: w * 0.20, top: h * 0.20, width: w * 0.6, height: h * 0.6 }),
-      center70: (w, h) => ({ left: w * 0.15, top: h * 0.15, width: w * 0.7, height: h * 0.7 }),
-      center80: (w, h) => ({ left: w * 0.10, top: h * 0.10, width: w * 0.8, height: h * 0.8 }),
-      topLeft: (w, h) => ({ left: 0, top: 0, width: w * 0.5, height: h * 0.5 }),
-      topRight: (w, h) => ({ left: w * 0.5, top: 0, width: w * 0.5, height: h * 0.5 }),
-      bottomLeft: (w, h) => ({ left: 0, top: h * 0.5, width: w * 0.5, height: h * 0.5 }),
-      bottomRight: (w, h) => ({ left: w * 0.5, top: h * 0.5, width: w * 0.5, height: h * 0.5 }),
-      topHalf: (w, h) => ({ left: 0, top: 0, width: w, height: h * 0.5 }),
-      bottomHalf: (w, h) => ({ left: 0, top: h * 0.5, width: w, height: h * 0.5 }),
-      leftHalf: (w, h) => ({ left: 0, top: 0, width: w * 0.5, height: h }),
-      rightHalf: (w, h) => ({ left: w * 0.5, top: 0, width: w * 0.5, height: h }),
-      topThird: (w, h) => ({ left: 0, top: 0, width: w, height: h * 0.33 }),
-      middleThird: (w, h) => ({ left: 0, top: h * 0.33, width: w, height: h * 0.34 }),
-      bottomThird: (w, h) => ({ left: 0, top: h * 0.66, width: w, height: h * 0.34 }),
-      top2Thirds: (w, h) => ({ left: 0, top: 0, width: w, height: h * 0.66 }),
-      bottom2Thirds: (w, h) => ({ left: 0, top: h * 0.34, width: w, height: h * 0.66 }),
+      // Bullseye rings — concentric center crops at 10% increments
+      ring90: (w, h) => ({ left: w * 0.05, top: h * 0.05, width: w * 0.9, height: h * 0.9 }),
+      ring80: (w, h) => ({ left: w * 0.10, top: h * 0.10, width: w * 0.8, height: h * 0.8 }),
+      ring70: (w, h) => ({ left: w * 0.15, top: h * 0.15, width: w * 0.7, height: h * 0.7 }),
+      ring60: (w, h) => ({ left: w * 0.20, top: h * 0.20, width: w * 0.6, height: h * 0.6 }),
+      ring50: (w, h) => ({ left: w * 0.25, top: h * 0.25, width: w * 0.5, height: h * 0.5 }),
+      ring40: (w, h) => ({ left: w * 0.30, top: h * 0.30, width: w * 0.4, height: h * 0.4 }),
+      ring30: (w, h) => ({ left: w * 0.35, top: h * 0.35, width: w * 0.3, height: h * 0.3 }),
+      // Corner quadrants at 70% scale (loose corner crops)
+      corner70_TL: (w, h) => ({ left: 0,       top: 0,       width: w * 0.7, height: h * 0.7 }),
+      corner70_TR: (w, h) => ({ left: w * 0.3, top: 0,       width: w * 0.7, height: h * 0.7 }),
+      corner70_BL: (w, h) => ({ left: 0,       top: h * 0.3, width: w * 0.7, height: h * 0.7 }),
+      corner70_BR: (w, h) => ({ left: w * 0.3, top: h * 0.3, width: w * 0.7, height: h * 0.7 }),
+      // Corner quadrants at 50% scale (tight corner crops)
+      corner50_TL: (w, h) => ({ left: 0,       top: 0,       width: w * 0.5, height: h * 0.5 }),
+      corner50_TR: (w, h) => ({ left: w * 0.5, top: 0,       width: w * 0.5, height: h * 0.5 }),
+      corner50_BL: (w, h) => ({ left: 0,       top: h * 0.5, width: w * 0.5, height: h * 0.5 }),
+      corner50_BR: (w, h) => ({ left: w * 0.5, top: h * 0.5, width: w * 0.5, height: h * 0.5 }),
+      // Edge strips (catches single-edge removal crops)
+      wideCenter:  (w, h) => ({ left: 0,       top: h * 0.2, width: w,       height: h * 0.6 }),
+      tallCenter:  (w, h) => ({ left: w * 0.2, top: 0,       width: w * 0.6, height: h }),
+      topWide:     (w, h) => ({ left: 0,       top: 0,       width: w,       height: h * 0.6 }),
+      bottomWide:  (w, h) => ({ left: 0,       top: h * 0.4, width: w,       height: h * 0.6 }),
     };
   }
 
@@ -168,7 +174,7 @@ class ProvenanceService {
     const regions = this.getRegionDefinitions();
     const hashes = {};
 
-    console.log("🔍 Generating multi-region pHashes (18 regions)...");
+    console.log("🔍 Generating multi-region pHashes (21 regions)...");
     const startTime = Date.now();
 
     // read metadata once
@@ -406,11 +412,14 @@ class ProvenanceService {
               const stored = typeof row.phash_regions === 'string' ? JSON.parse(row.phash_regions) : row.phash_regions;
               let quickMax = 0;
               // Check crop-friendly pairs
-              const pairs = [
-                ['full', 'center70'], ['center70', 'full'],
-                ['full', 'center80'], ['center80', 'full'],
-                ['full', 'center60'], ['center60', 'full']
-              ];
+             const pairs = [
+                ['full', 'ring70'], ['ring70', 'full'],
+                ['full', 'ring80'], ['ring80', 'full'],
+                ['full', 'ring60'], ['ring60', 'full'],
+                ['full', 'ring50'], ['ring50', 'full'],
+                ['full', 'corner70_TL'], ['full', 'corner70_TR'],
+                ['full', 'corner70_BL'], ['full', 'corner70_BR']
+              ]; 
               for (const [r1, r2] of pairs) {
                 if (regionHashes[r1] && stored[r2]) {
                   const sim = this.similarityScore(regionHashes[r1], stored[r2]);
