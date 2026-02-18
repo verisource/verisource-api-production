@@ -494,7 +494,9 @@ class ProvenanceService {
           try {
             const storedRegions = typeof row.phash_regions === "string" ? JSON.parse(row.phash_regions) : row.phash_regions;
             const regionMatch = this.compareRegionHashesCross(regionHashes, storedRegions);
-
+            if (regionMatch.similarity > 50) {
+              console.log(`🔍 DEBUG score: ${regionMatch.similarity}% [${regionMatch.region1}↔${regionMatch.region2}] fp:${row.fingerprint.substring(0,8)}`);
+            }
             if (regionMatch.similarity > bestSimilarity) {
               bestSimilarity = regionMatch.similarity;
               matchDetails = { region1: regionMatch.region1, region2: regionMatch.region2 };
