@@ -79,7 +79,20 @@ class PolygonTimestampService {
 
       console.log(`📤 Transaction sent: ${tx.hash}`);
 
-      const receipt = await tx.wait(1);
+      let receipt;
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+          receipt = await tx.wait(1);
+          break;
+        } catch (waitErr) {
+          if (attempt < 2 && waitErr.code === 'SERVER_ERROR') {
+            console.log(`⏳ Polygon RPC rate limited, retrying in ${(attempt + 1) * 12}s...`);
+            await new Promise(r => setTimeout(r, (attempt + 1) * 12000));
+          } else {
+            throw waitErr;
+          }
+        }
+      }
       
       console.log(`✅ Confirmed in block ${receipt.blockNumber}`);
 
