@@ -3145,6 +3145,7 @@ if (download.platform && download.platform !== 'Direct URL') {
     // 4. Blockchain timestamping (tier-based)
     let polygonVerification = null;
     let baseVerification = null;
+    let ethereumVerification = null;
     
     if (!searchResults.found) {
       console.log('⛓️ Submitting to blockchain...');
@@ -3324,6 +3325,7 @@ app.post('/verify', upload.single('file'), authenticateApiKey, async (req, res) 
     // Only timestamp if NEW (not previously verified)
     let polygonVerification = null;
     let baseVerification = null;
+    let ethereumVerification = null;
     let blockchainResults = null;
     
     if (!searchResults.found) {
