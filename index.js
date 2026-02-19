@@ -12,6 +12,9 @@ const https = require('https');
 const http = require('http');
 const db = require('./db-minimal');
 const { searchByFingerprint, saveVerification } = require('./search');
+const gpsEncryption = require('./services/gps-encryption');
+const { reverseGeocode } = require('./services/reverse-geocode');
+const gpsCrossRef = require('./services/gps-cross-reference');
 const c2paVerification = require('./services/c2pa-verification');
 const shadowPhysics = require('./services/shadow-physics-verification');
 const reverseImageSearch = require('./services/reverse-image-search');
@@ -647,7 +650,13 @@ app.get('/test/weather', async (req, res) => {
   } catch (err) {
     console.warn("⚠️ Face model preload failed:", err.message);
   }
-
+  // Auto-purge expired GPS coordinates every 24 hours
+setInterval(async () => {
+  try {
+    const count = await purgeExpiredGPS();
+    if (count > 0) console.log(`🧹 Auto-purged GPS from ${count} records`);
+  } catch (err) { console.error('⚠️ GPS auto-purge error:', err.message); }
+}, 24 * 60 * 60 * 1000);
   // Start server
   app.listen(PORT, () => {
     console.log(`✅ VeriSource API running on port ${PORT}`);
@@ -1723,7 +1732,61 @@ if (kind === 'video') {
         console.error('⚠️ Landmark verification error:', err.message);
       }
     }
+    // ── GPS Processing for Storage ──
+    let gpsData = {
+      latitude_enc: null,
+      longitude_enc: null,
+      location_general: null,
+      expires_at: null,
+      source: null,
+      raw_lat: null,
+      raw_lon: null,
+    };
 
+    if (exifData?.GPSLatitude && exifData?.GPSLongitude) {
+      const lat = exifData.GPSLatitude;
+      const lon = exifData.GPSLongitude;
+      console.log('📍 GPS coordinates found — encrypting for storage');
+      gpsData.latitude_enc = gpsEncryption.encrypt(lat);
+      gpsData.longitude_enc = gpsEncryption.encrypt(lon);
+      gpsData.expires_at = gpsEncryption.getExpiryDate();
+      gpsData.source = 'exif';
+      gpsData.raw_lat = lat;
+      gpsData.raw_lon = lon;
+      try {
+        gpsData.location_general = await reverseGeocode(lat, lon);
+        if (gpsData.location_general) {
+          console.log(`📍 Location: ${gpsData.location_general}`);
+        }
+      } catch (e) {
+        console.warn('⚠️ Reverse geocode failed:', e.message);
+      }
+    }
+
+    // ── GPS Cross-Reference ──
+    let gpsCrossRefResults = null;
+    if (gpsData.raw_lat && gpsData.raw_lon && req.account?.id) {
+      try {
+        const nearby = await gpsCrossRef.findNearby(
+          gpsData.raw_lat,
+          gpsData.raw_lon,
+          req.account.id,
+          fingerprint,
+          100,
+          gpsData.location_general
+        );
+        if (nearby.length > 0) {
+          console.log(`📍 GPS cross-reference: ${nearby.length} nearby verifications`);
+          gpsCrossRefResults = {
+            matches_found: nearby.length,
+            nearest_distance: nearby[0].distance_formatted,
+            matches: nearby.slice(0, 10)
+          };
+        }
+      } catch (e) {
+        console.warn('⚠️ GPS cross-reference failed:', e.message);
+      }
+    }
     // ============================================
     // STEP 12: Reverse Image Search (await async result)
     // ============================================
@@ -2190,9 +2253,15 @@ if (kind === 'video') {
         height: imgMeta?.height || null,
         has_camera_info: !!(exifData?.Make || exifData?.Model),
         has_gps: !!(exifData?.GPSLatitude && exifData?.GPSLongitude),
+        has_exif: !!(exifData?.Make || exifData?.Model || exifData?.DateTimeOriginal),
         exif_date: (exifData?.DateTimeOriginal || exifData?.CreateDate) ? new Date(exifData?.DateTimeOriginal || exifData?.CreateDate).toISOString() : null,
         camera_make: exifData?.Make || null,
-        camera_model: exifData?.Model || null
+        camera_model: exifData?.Model || null,
+        gps_latitude_enc: gpsData.latitude_enc,
+        gps_longitude_enc: gpsData.longitude_enc,
+        location_general: gpsData.location_general,
+        gps_expires_at: gpsData.expires_at,
+        gps_source: gpsData.source,
       });
       console.log('💾 Verification saved to database');
     } catch (err) {
@@ -2360,9 +2429,15 @@ if (kind === 'video') {
         file_type: mockFile?.mimetype || null,
         has_camera_info: !!(exifData?.Make || exifData?.Model),
         has_gps: !!(exifData?.GPSLatitude && exifData?.GPSLongitude),
+        has_exif: !!(exifData?.Make || exifData?.Model || exifData?.DateTimeOriginal),
         exif_date: (exifData?.DateTimeOriginal || exifData?.CreateDate) ? new Date(exifData?.DateTimeOriginal || exifData?.CreateDate).toISOString() : null,
         camera_make: exifData?.Make || null,
         camera_model: exifData?.Model || null,
+        gps_latitude_enc: gpsData.latitude_enc,
+        gps_longitude_enc: gpsData.longitude_enc,
+        location_general: gpsData.location_general,
+        gps_expires_at: gpsData.expires_at,
+        gps_source: gpsData.source, 
         upload_date: new Date().toISOString()
       };
        provenanceResult = await ProvenanceService.checkAndRecordProvenance(
@@ -2646,6 +2721,12 @@ if (kind === 'video') {
           } : null
         }
       }),
+      gps_verification: gpsData.raw_lat ? {
+        has_gps: true,
+        location_general: gpsData.location_general,
+        gps_source: gpsData.source,
+        cross_reference: gpsCrossRefResults,
+      } : { has_gps: false },
       ...(shadowPhysicsResult && { shadow_physics: shadowPhysicsResult }),
       ...(platformDetection && { platform_detection: platformDetection }),
       ...(deepfakeAnalysis && { deepfake_detection: deepfakeAnalysis }),
@@ -4888,6 +4969,33 @@ app.get('/admin/migrate-region-phash', async (req, res) => {
   } catch (err) {
     console.error('❌ Migration failed:', err);
     res.status(500).json({ success: false, error: err.message });
+  }
+});
+// ── GPS Expired Coordinate Purge ──
+async function purgeExpiredGPS() {
+  try {
+    const result = await db.query(`
+      UPDATE verifications 
+      SET gps_latitude_enc = NULL, 
+          gps_longitude_enc = NULL
+      WHERE gps_expires_at IS NOT NULL 
+        AND gps_expires_at < NOW()
+        AND gps_latitude_enc IS NOT NULL
+    `);
+    console.log(`🧹 Purged GPS from ${result.rowCount} expired records`);
+    return result.rowCount;
+  } catch (err) {
+    console.error('❌ GPS purge error:', err.message);
+    return 0;
+  }
+}
+
+app.get('/admin/purge-expired-gps', async (req, res) => {
+  try {
+    const count = await purgeExpiredGPS();
+    res.json({ success: true, purged: count });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 // Force redeploy to pick up new API key

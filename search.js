@@ -121,8 +121,9 @@ async function saveVerification(data) {
         polygon_block_number, polygon_tx_hash, polygon_timestamp,
         base_block_number, base_tx_hash, base_timestamp,
         phash, phash_regions, account_id, width, height,
-        has_camera_info, has_gps, exif_date, camera_make, camera_model
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23)
+        has_camera_info, has_gps, exif_date, camera_make, camera_model,
+        has_exif, gps_latitude_enc, gps_longitude_enc, location_general, gps_expires_at, gps_source
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29)
       RETURNING id, upload_date
     `;
     
@@ -149,7 +150,13 @@ async function saveVerification(data) {
       data.has_gps || false,
       data.exif_date || null,
       data.camera_make || null,
-      data.camera_model || null
+      data.camera_model || null,
+      data.has_exif || false,               // $24
+      data.gps_latitude_enc || null,        // $25
+      data.gps_longitude_enc || null,       // $26
+      data.location_general || null,        // $27
+      data.gps_expires_at || null,          // $28
+      data.gps_source || null,              // $29
     ];
     
     const result = await db.query(query, values);
