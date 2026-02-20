@@ -3269,6 +3269,11 @@ app.post('/verify', upload.single('file'), authenticateApiKey, async (req, res) 
   let voiceEmbedding = null;
   let voiceMatches = null;
   let generatorDetection = null;
+  let gpsData = {
+    latitude_enc: null, longitude_enc: null, location_general: null,
+    expires_at: null, source: null, raw_lat: null, raw_lon: null,
+  };
+  let gpsCrossRefResults = null;
   let internalSearchResults = null;
 
   try {
@@ -4190,6 +4195,45 @@ module.exports = { applyHybridCameraRescue, calculateCameraAuthenticityScore };
           console.error('⚠️ Landmark verification error:', landmarkErr.message);
         }
       }
+      // ── GPS Processing for Storage ──
+    if (exifData?.GPSLatitude && exifData?.GPSLongitude && !isNaN(exifData.GPSLatitude)) {
+      const lat = exifData.GPSLatitude;
+      const lon = exifData.GPSLongitude;
+      console.log('📍 GPS coordinates found — encrypting for storage');
+      gpsData.latitude_enc = gpsEncryption.encrypt(lat);
+      gpsData.longitude_enc = gpsEncryption.encrypt(lon);
+      gpsData.expires_at = gpsEncryption.getExpiryDate();
+      gpsData.source = 'exif';
+      gpsData.raw_lat = lat;
+      gpsData.raw_lon = lon;
+      try {
+        gpsData.location_general = await reverseGeocode(lat, lon);
+        if (gpsData.location_general) {
+          console.log(`📍 Location: ${gpsData.location_general}`);
+        }
+      } catch (e) {
+        console.warn('⚠️ Reverse geocode failed:', e.message);
+      }
+    }
+
+    if (gpsData.raw_lat && gpsData.raw_lon && req.account?.id) {
+      try {
+        const nearby = await gpsCrossRef.findNearby(
+          gpsData.raw_lat, gpsData.raw_lon, req.account.id,
+          fingerprint, 100, gpsData.location_general
+        );
+        if (nearby.length > 0) {
+          console.log(`📍 GPS cross-reference: ${nearby.length} nearby verifications`);
+          gpsCrossRefResults = {
+            matches_found: nearby.length,
+            nearest_distance: nearby[0].distance_formatted,
+            matches: nearby.slice(0, 10)
+          };
+        }
+      } catch (e) {
+        console.warn('⚠️ GPS cross-reference failed:', e.message);
+      }
+    }
             // ========== ADD REVERSE IMAGE SEARCH HERE ==========
       let reverseSearchResults = null;
       if (kind === 'image') {
@@ -4716,6 +4760,12 @@ module.exports = { applyHybridCameraRescue, calculateCameraAuthenticityScore };
           } : null
         }
       }),
+      gps_verification: gpsData.raw_lat ? {
+        has_gps: true,
+        location_general: gpsData.location_general,
+        gps_source: gpsData.source,
+        cross_reference: gpsCrossRefResults,
+      } : { has_gps: false },
       ...((() => {
         const editingSoftware = ConfidenceScoring.checkForEditingSoftwareInExif({ exif: exifData });
         return editingSoftware ? { editing_software: editingSoftware } : {};
