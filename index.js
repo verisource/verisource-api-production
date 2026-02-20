@@ -3275,6 +3275,7 @@ app.post('/verify', upload.single('file'), authenticateApiKey, async (req, res) 
   };
   let gpsCrossRefResults = null;
   let internalSearchResults = null;
+  let newsSourceMatch = null;
 
   try {
     const buf = fs.readFileSync(req.file.path);
