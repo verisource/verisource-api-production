@@ -3269,6 +3269,7 @@ app.post('/verify', upload.single('file'), authenticateApiKey, async (req, res) 
   let voiceEmbedding = null;
   let voiceMatches = null;
   let generatorDetection = null;
+  let internalSearchResults = null;
 
   try {
     const buf = fs.readFileSync(req.file.path);
