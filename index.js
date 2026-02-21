@@ -3276,6 +3276,7 @@ app.post('/verify', upload.single('file'), authenticateApiKey, async (req, res) 
   let gpsCrossRefResults = null;
   let internalSearchResults = null;
   let newsSourceMatch = null;
+  let phashRegions = null;
 
   try {
     const buf = fs.readFileSync(req.file.path);
@@ -3441,6 +3442,7 @@ app.post('/verify', upload.single('file'), authenticateApiKey, async (req, res) 
     
     // Generate pHash for images
     let phash = null;
+    let phashRegions = null;
     let similarImages = null;
     if (kind === 'image') {
       try {
