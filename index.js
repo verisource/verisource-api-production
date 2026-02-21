@@ -4556,10 +4556,16 @@ module.exports = { applyHybridCameraRescue, calculateCameraAuthenticityScore };
        polygon_tx_hash: polygonVerification?.transaction_hash || null,
        polygon_timestamp: polygonVerification?.timestamp || null,
        phash: phash || null,
-        phash_regions: phashRegions || null,
        phash_regions: phashRegions || null,
-       google_vision_labels: googleVisionResult?.results?.labels || []
-   });
+       google_vision_labels: googleVisionResult?.results?.labels || [],
+       account_id: req.account?.id || null,
+       has_exif: !!(exifData?.Make || exifData?.Model || exifData?.DateTimeOriginal),
+       gps_latitude_enc: gpsData.latitude_enc,
+       gps_longitude_enc: gpsData.longitude_enc,
+       location_general: gpsData.location_general,
+       gps_expires_at: gpsData.expires_at,
+       gps_source: gpsData.source,
+      });
     } catch (err) {
       console.error('⚠️ Database save error:', err.message);
     }
