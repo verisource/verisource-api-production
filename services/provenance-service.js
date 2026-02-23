@@ -618,10 +618,10 @@ class ProvenanceService {
 
     // 2) FORMAT CHANGE
     if (p.format && c.format) {
-      const pFmt = String(p.format).toLowerCase();
-      const cFmt = String(c.format).toLowerCase();
+      const pFmt = String(p.format).toLowerCase().replace(/^image\//, '');
+      const cFmt = String(c.format).toLowerCase().replace(/^image\//, '');
       if (pFmt !== cFmt) {
-        const lossy = ["jpeg", "jpg", "webp"];
+        const lossy = ["jpeg", "jpg", "webp", "avif", "heic", "heif"];
         const lossless = ["png", "tiff", "bmp"];
         const lossyToLossy = lossy.includes(pFmt) && lossy.includes(cFmt);
         const losslessToLossy = lossless.includes(pFmt) && lossy.includes(cFmt);
@@ -834,7 +834,7 @@ class ProvenanceService {
       width: meta.width || null,
       height: meta.height || null,
       file_size: meta.file_size || null,
-      format: meta.format || meta.file_type || null,
+      format: (meta.format || meta.file_type || '').replace(/^image\//, '').toLowerCase() || null,
       file_type: meta.file_type || null,
       has_exif: !!meta.has_exif,
       has_camera_info: !!meta.has_camera_info,
