@@ -338,7 +338,7 @@ async function analyzeVideo(videoPath) {
           const frameTime = `${i}s`;
           
           // Generate region pHashes for this frame
-          const regionHashes = await provenance.generateAllRegionHashes(framePath);
+          const regionHashes = await ProvenanceService.generateAllRegionHashes(framePath);
           if (!regionHashes || Object.keys(regionHashes).length === 0) continue;
           
           // Generate full pHash
@@ -347,7 +347,7 @@ async function analyzeVideo(videoPath) {
           const framePHash = phashResult?.hash || null;
           
           // Search database for matches
-          const matches = await provenance.findSimilarContent(
+          const matches = await ProvenanceService.findSimilarContent(
             framePHash,
             regionHashes,
             null, // no fingerprint to exclude
