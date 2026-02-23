@@ -1156,7 +1156,7 @@ class ProvenanceService {
 
   async checkAndRecordProvenance(fingerprint, phash, regionHashes = null, isScreenshot = false, fileMeta = {}) {
     try {
-      const similar = await this.findSimilarContent(phash, regionHashes, fingerprint, 75);
+      const similar = await this.findSimilarContent(phash, regionHashes, fingerprint, 85);
 
       if (similar.length === 0) {
         console.log("   ✅ Original content (no similar content found)");
