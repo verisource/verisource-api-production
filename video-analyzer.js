@@ -324,19 +324,18 @@ async function analyzeVideo(videoPath) {
     console.log(`   Suspicious Frames: ${suspiciousFrames}/${frameResults.length} (${Math.round(suspiciousPercentage)}%)`);
     console.log(`   Weighted Score: ${weighted.score.toFixed(1)}% (confidence-weighted)`);
     
-    // ============================================
+   // ============================================
     // FRAME PROVENANCE MATCHING (region pHash)
     // ============================================
     let frameProvenanceMatches = [];
     try {
-      const provenance = new ProvenanceService();
-      const framesToMatch = framesToAnalyze.slice(0, 5); // Limit to 5 frames for performance
+      const framesToMatch = framesToAnalyze.slice(0, 5);
       console.log(`\n🔍 Running frame provenance matching on ${framesToMatch.length} frames...`);
       
       for (let i = 0; i < framesToMatch.length; i++) {
         try {
           const framePath = framesToMatch[i];
-          const frameTime = `${Math.floor(i / 1)}s`; // Approximate timestamp
+          const frameTime = `${i}s`;
           
           // Generate region pHashes for this frame
           const regionHashes = await provenance.generateAllRegionHashes(framePath);
