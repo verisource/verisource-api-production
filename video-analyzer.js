@@ -13,7 +13,7 @@ const path = require('path');
 const fs = require('fs');
 const { detectAIGeneration } = require('./ai-image-detector');
 const sharp = require('sharp');
-
+const ProvenanceService = require('./services/provenance-service');
 const NodeCache = require('node-cache');
 const crypto = require('crypto');
 
@@ -324,6 +324,65 @@ async function analyzeVideo(videoPath) {
     console.log(`   Suspicious Frames: ${suspiciousFrames}/${frameResults.length} (${Math.round(suspiciousPercentage)}%)`);
     console.log(`   Weighted Score: ${weighted.score.toFixed(1)}% (confidence-weighted)`);
     
+    // ============================================
+    // FRAME PROVENANCE MATCHING (region pHash)
+    // ============================================
+    let frameProvenanceMatches = [];
+    try {
+      const provenance = new ProvenanceService();
+      const framesToMatch = framesToAnalyze.slice(0, 5); // Limit to 5 frames for performance
+      console.log(`\n🔍 Running frame provenance matching on ${framesToMatch.length} frames...`);
+      
+      for (let i = 0; i < framesToMatch.length; i++) {
+        try {
+          const framePath = framesToMatch[i];
+          const frameTime = `${Math.floor(i / 1)}s`; // Approximate timestamp
+          
+          // Generate region pHashes for this frame
+          const regionHashes = await provenance.generateAllRegionHashes(framePath);
+          if (!regionHashes || Object.keys(regionHashes).length === 0) continue;
+          
+          // Generate full pHash
+          const { generatePHash } = require('./phash-module');
+          const phashResult = await generatePHash(framePath);
+          const framePHash = phashResult?.hash || null;
+          
+          // Search database for matches
+          const matches = await provenance.findSimilarContent(
+            framePHash,
+            regionHashes,
+            null, // no fingerprint to exclude
+            85    // threshold
+          );
+          
+          if (matches && matches.length > 0) {
+            for (const match of matches) {
+              frameProvenanceMatches.push({
+                frame_index: i,
+                frame_time: frameTime,
+                matched_fingerprint: match.fingerprint,
+                similarity: match.similarity,
+                match_type: match.match_type,
+                matched_regions: match.matched_regions || null,
+                first_seen: match.first_seen,
+                location_general: match.location_general || null,
+                camera: match.camera_make ? `${match.camera_make} ${match.camera_model || ''}`.trim() : null,
+              });
+            }
+          }
+        } catch (frameErr) {
+          console.error(`⚠️ Frame ${i} provenance error: ${frameErr.message}`);
+        }
+      }
+      
+      if (frameProvenanceMatches.length > 0) {
+        console.log(`📍 Found ${frameProvenanceMatches.length} frame-to-image matches!`);
+      } else {
+        console.log(`   No frame matches found in database`);
+      }
+    } catch (provErr) {
+      console.error(`⚠️ Frame provenance matching error: ${provErr.message}`);
+    }
     return {
       success: true,
       analysis: {
@@ -351,7 +410,11 @@ async function analyzeVideo(videoPath) {
           aiFacePercentage: deepfakeAnalysis.aiFacePercentage,
           indicators: deepfakeAnalysis.indicators
         },
-        frameResults: frameResults
+       frameResults: frameResults,
+        frameProvenanceMatches: frameProvenanceMatches.length > 0 ? {
+          matches_found: frameProvenanceMatches.length,
+          matches: frameProvenanceMatches,
+        } : null,
       },
       metadata: null
     };
