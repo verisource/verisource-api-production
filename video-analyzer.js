@@ -351,7 +351,7 @@ async function analyzeVideo(videoPath) {
             framePHash,
             regionHashes,
             null, // no fingerprint to exclude
-            85    // threshold
+            80    // threshold
           );
           
           if (matches && matches.length > 0) {
