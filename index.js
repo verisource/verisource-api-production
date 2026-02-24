@@ -2629,14 +2629,14 @@ if (kind === 'video') {
             })() : 0;
             const utcDate = new Date(localDate.getTime() - offsetMinutes * 60000);
             return utcDate.toISOString();
-          } catch { return null; }
+          } catch (tzErr) { console.error("⚠️ Timezone UTC error:", tzErr.message); return null; }
         })(),
         timezone: (() => {
           if (!exifData.GPSLatitude || !exifData.GPSLongitude) return null;
           try {
             const tzResults = findTimezone(exifData.GPSLatitude, exifData.GPSLongitude);
             return tzResults?.[0] || null;
-          } catch { return null; }
+          } catch (tzErr) { console.error("⚠️ Timezone lookup error:", tzErr.message); return null; }
         })(),
         utc_offset: (() => {
           if (!exifData.GPSLatitude || !exifData.GPSLongitude) return null;
@@ -2650,7 +2650,7 @@ if (kind === 'video') {
             const offsetPart = parts.find(p => p.type === 'timeZoneName');
             const match = offsetPart?.value?.match(/GMT([+-]\d{2}:\d{2})/);
             return match ? match[1] : null;
-          } catch { return null; }
+          } catch (tzErr) { console.error("⚠️ Timezone offset error:", tzErr.message); return null; }
         })(),
         camera_make: exifData.Make || null,
         camera_model: exifData.Model || null,
@@ -4829,14 +4829,14 @@ module.exports = { applyHybridCameraRescue, calculateCameraAuthenticityScore };
             })() : 0;
             const utcDate = new Date(localDate.getTime() - offsetMinutes * 60000);
             return utcDate.toISOString();
-          } catch { return null; }
+          } catch (tzErr) { console.error("⚠️ Timezone UTC error:", tzErr.message); return null; }
         })(),
         timezone: (() => {
           if (!exifData.GPSLatitude || !exifData.GPSLongitude) return null;
           try {
             const tzResults = findTimezone(exifData.GPSLatitude, exifData.GPSLongitude);
             return tzResults?.[0] || null;
-          } catch { return null; }
+          } catch (tzErr) { console.error("⚠️ Timezone lookup error:", tzErr.message); return null; }
         })(),
         utc_offset: (() => {
           if (!exifData.GPSLatitude || !exifData.GPSLongitude) return null;
@@ -4850,7 +4850,7 @@ module.exports = { applyHybridCameraRescue, calculateCameraAuthenticityScore };
             const offsetPart = parts.find(p => p.type === 'timeZoneName');
             const match = offsetPart?.value?.match(/GMT([+-]\d{2}:\d{2})/);
             return match ? match[1] : null;
-          } catch { return null; }
+          } catch (tzErr) { console.error("⚠️ Timezone offset error:", tzErr.message); return null; }
         })(),
         camera_make: exifData.Make || null,
         camera_model: exifData.Model || null,
