@@ -388,21 +388,24 @@ class ProvenanceService {
       // TIER 2.5: Broad region scan (when prefix matching fails)
       // Scans all region-enabled entries with cheap gate + cross-region scoring
       // --------------------------------------------
-      if (candidates.length === 0 && regionHashes && excludeFingerprint) {
+     if (candidates.length === 0 && regionHashes) {
         console.log('🔍 Tier 2.5: Running broad region scan...');
         try {
-          const broadResult = await db.query(`
+          let broadQuery = `
             SELECT DISTINCT ON (fingerprint)
               fingerprint, phash, phash_regions, upload_date, media_kind,
               original_filename, file_size, file_type, width, height,
               has_camera_info, has_gps, has_exif, exif_date, camera_make, camera_model
             FROM verifications
             WHERE phash_regions IS NOT NULL
-              AND fingerprint != $1::text
-            ORDER BY fingerprint, upload_date ASC
-            LIMIT 2000
-          `, [excludeFingerprint]);
-
+          `;
+          const broadParams = [];
+          if (excludeFingerprint) {
+            broadQuery += ` AND fingerprint != $1::text`;
+            broadParams.push(excludeFingerprint);
+          }
+          broadQuery += ` ORDER BY fingerprint, upload_date ASC LIMIT 2000`;
+          const broadResult = await db.query(broadQuery, broadParams);
           console.log('🔍 Tier 2.5: Scanning', broadResult.rows.length, 'entries with region hashes');
 
           // Cheap gate: quick cross-region check on a few key pairs
