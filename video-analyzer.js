@@ -344,7 +344,7 @@ async function analyzeVideo(videoPath) {
           // Generate full pHash
           const { generatePHash } = require('./phash-module');
           const phashResult = await generatePHash(framePath);
-          const framePHash = phashResult?.hash || null;
+          const framePHash = phashResult?.phash || null;
           
           // Search database for matches
           const matches = await ProvenanceService.findSimilarContent(
