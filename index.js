@@ -8,6 +8,7 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const crypto = require('crypto');
+const { find: findTimezone } = require('geo-tz');
 const https = require('https');
 const http = require('http');
 const db = require('./db-minimal');
@@ -2603,18 +2604,60 @@ if (kind === 'video') {
     // Build provenance timeline
     const provenanceTimeline = buildProvenanceTimeline({
       exif: exifData ? {
-        date_taken: (() => {
+      date_taken: (() => {
           const ts = exifData.DateTimeOriginal || exifData.CreateDate || exifData.DateTime;
           if (!ts) return null;
           if (typeof ts === "number") return new Date(ts * 1000).toISOString();
           return ts;
+        })(),
+        date_taken_utc: (() => {
+          const ts = exifData.DateTimeOriginal || exifData.CreateDate || exifData.DateTime;
+          if (!ts || !exifData.GPSLatitude || !exifData.GPSLongitude) return null;
+          try {
+            const localDate = typeof ts === 'number' ? new Date(ts * 1000) : new Date(ts);
+            const tzResults = findTimezone(exifData.GPSLatitude, exifData.GPSLongitude);
+            if (!tzResults || !tzResults.length) return null;
+            const tz = tzResults[0];
+            const formatter = new Intl.DateTimeFormat('en-US', { timeZone: tz, timeZoneName: 'longOffset' });
+            const parts = formatter.formatToParts(localDate);
+            const offsetPart = parts.find(p => p.type === 'timeZoneName');
+            const offsetStr = offsetPart?.value || '';
+            const match = offsetStr.match(/GMT([+-]\d{2}:\d{2})/);
+            const offsetMinutes = match ? (() => {
+              const [h, m] = match[1].split(':').map(Number);
+              return h * 60 + (h < 0 ? -m : m);
+            })() : 0;
+            const utcDate = new Date(localDate.getTime() - offsetMinutes * 60000);
+            return utcDate.toISOString();
+          } catch { return null; }
+        })(),
+        timezone: (() => {
+          if (!exifData.GPSLatitude || !exifData.GPSLongitude) return null;
+          try {
+            const tzResults = findTimezone(exifData.GPSLatitude, exifData.GPSLongitude);
+            return tzResults?.[0] || null;
+          } catch { return null; }
+        })(),
+        utc_offset: (() => {
+          if (!exifData.GPSLatitude || !exifData.GPSLongitude) return null;
+          try {
+            const ts = exifData.DateTimeOriginal || exifData.CreateDate || exifData.DateTime;
+            const localDate = ts ? (typeof ts === 'number' ? new Date(ts * 1000) : new Date(ts)) : new Date();
+            const tzResults = findTimezone(exifData.GPSLatitude, exifData.GPSLongitude);
+            if (!tzResults?.length) return null;
+            const formatter = new Intl.DateTimeFormat('en-US', { timeZone: tzResults[0], timeZoneName: 'longOffset' });
+            const parts = formatter.formatToParts(localDate);
+            const offsetPart = parts.find(p => p.type === 'timeZoneName');
+            const match = offsetPart?.value?.match(/GMT([+-]\d{2}:\d{2})/);
+            return match ? match[1] : null;
+          } catch { return null; }
         })(),
         camera_make: exifData.Make || null,
         camera_model: exifData.Model || null,
         gps: (exifData.GPSLatitude && exifData.GPSLongitude) ? {
           latitude: exifData.GPSLatitude,
           longitude: exifData.GPSLongitude
-        } : null
+        } : null  
       } : null,
       platform_detection: platformDetection,
       tv_corroboration: tvCorroborationResult,
@@ -4762,18 +4805,59 @@ module.exports = { applyHybridCameraRescue, calculateCameraAuthenticityScore };
       ...(exifData && {
         exif: {
           date_taken: (() => {
+          const ts = exifData.DateTimeOriginal || exifData.CreateDate || exifData.DateTime;
+          if (!ts) return null;
+          if (typeof ts === "number") return new Date(ts * 1000).toISOString();
+          return ts;
+        })(),
+        date_taken_utc: (() => {
+          const ts = exifData.DateTimeOriginal || exifData.CreateDate || exifData.DateTime;
+          if (!ts || !exifData.GPSLatitude || !exifData.GPSLongitude) return null;
+          try {
+            const localDate = typeof ts === 'number' ? new Date(ts * 1000) : new Date(ts);
+            const tzResults = findTimezone(exifData.GPSLatitude, exifData.GPSLongitude);
+            if (!tzResults || !tzResults.length) return null;
+            const tz = tzResults[0];
+            const formatter = new Intl.DateTimeFormat('en-US', { timeZone: tz, timeZoneName: 'longOffset' });
+            const parts = formatter.formatToParts(localDate);
+            const offsetPart = parts.find(p => p.type === 'timeZoneName');
+            const offsetStr = offsetPart?.value || '';
+            const match = offsetStr.match(/GMT([+-]\d{2}:\d{2})/);
+            const offsetMinutes = match ? (() => {
+              const [h, m] = match[1].split(':').map(Number);
+              return h * 60 + (h < 0 ? -m : m);
+            })() : 0;
+            const utcDate = new Date(localDate.getTime() - offsetMinutes * 60000);
+            return utcDate.toISOString();
+          } catch { return null; }
+        })(),
+        timezone: (() => {
+          if (!exifData.GPSLatitude || !exifData.GPSLongitude) return null;
+          try {
+            const tzResults = findTimezone(exifData.GPSLatitude, exifData.GPSLongitude);
+            return tzResults?.[0] || null;
+          } catch { return null; }
+        })(),
+        utc_offset: (() => {
+          if (!exifData.GPSLatitude || !exifData.GPSLongitude) return null;
+          try {
             const ts = exifData.DateTimeOriginal || exifData.CreateDate || exifData.DateTime;
-            if (!ts) return null;
-            if (typeof ts === 'number') return new Date(ts * 1000).toISOString();
-            return ts;
-          })(),
-          camera_make: exifData.Make || null,
-          camera_model: exifData.Model || null,
-          software: exifData.Software || null,
-          gps: (exifData.GPSLatitude && exifData.GPSLongitude) ? {
-            latitude: exifData.GPSLatitude,
-            longitude: exifData.GPSLongitude
-          } : null
+            const localDate = ts ? (typeof ts === 'number' ? new Date(ts * 1000) : new Date(ts)) : new Date();
+            const tzResults = findTimezone(exifData.GPSLatitude, exifData.GPSLongitude);
+            if (!tzResults?.length) return null;
+            const formatter = new Intl.DateTimeFormat('en-US', { timeZone: tzResults[0], timeZoneName: 'longOffset' });
+            const parts = formatter.formatToParts(localDate);
+            const offsetPart = parts.find(p => p.type === 'timeZoneName');
+            const match = offsetPart?.value?.match(/GMT([+-]\d{2}:\d{2})/);
+            return match ? match[1] : null;
+          } catch { return null; }
+        })(),
+        camera_make: exifData.Make || null,
+        camera_model: exifData.Model || null,
+        gps: (exifData.GPSLatitude && exifData.GPSLongitude) ? {
+          latitude: exifData.GPSLatitude,
+          longitude: exifData.GPSLongitude
+        } : null
         }
       }),
       gps_verification: gpsData.raw_lat ? {
