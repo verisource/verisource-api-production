@@ -322,13 +322,25 @@ class PolygonTimestampService {
         gasLimit: gasLimit
       };
 
-      if (feeData.maxFeePerGas && feeData.maxPriorityFeePerGas) {
-        txParams.maxFeePerGas = feeData.maxFeePerGas;
-        txParams.maxPriorityFeePerGas = feeData.maxPriorityFeePerGas;
-        txParams.type = 2;
-      } else if (feeData.gasPrice) {
-        txParams.gasPrice = feeData.gasPrice;
-      }
+      // Polygon requires minimum 25 gwei priority fee
+// Some RPCs return stale/low estimates, so enforce a floor
+const MIN_PRIORITY_FEE = BigInt('25000000000'); // 25 gwei
+const MIN_MAX_FEE = BigInt('50000000000');      // 50 gwei
+
+if (feeData.maxFeePerGas && feeData.maxPriorityFeePerGas) {
+  const priorityFee = BigInt(feeData.maxPriorityFeePerGas.toString());
+  const maxFee = BigInt(feeData.maxFeePerGas.toString());
+  
+  const safePriorityFee = priorityFee < MIN_PRIORITY_FEE ? MIN_PRIORITY_FEE : priorityFee;
+  const safeMaxFee = maxFee < MIN_MAX_FEE ? MIN_MAX_FEE : maxFee;
+  
+  txParams.maxPriorityFeePerGas = safePriorityFee;
+  txParams.maxFeePerGas = safeMaxFee;
+  txParams.type = 2;
+} else if (feeData.gasPrice) {
+  const gasPrice = BigInt(feeData.gasPrice.toString());
+  txParams.gasPrice = gasPrice < MIN_MAX_FEE ? MIN_MAX_FEE : gasPrice;
+}
 
       // Send transaction with fallback
       const tx = await this._withFallback(
