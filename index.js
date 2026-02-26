@@ -279,18 +279,26 @@ async function searchVirusTotal(sha256) {
 app.get("/health", async (req, res) => {
   let polygonStatus = { enabled: false };
   
+  
   try {
     const PolygonService = require('./services/polygon-timestamp');
     if (PolygonService.enabled) {
       const balance = await PolygonService.getBalance();
       const balanceNum = parseFloat(balance) || 0;
+      const isLow = balanceNum < 0.1 && balanceNum >= 0;
+      const isUnknown = balance === null;
+
       polygonStatus = {
         enabled: true,
         wallet: PolygonService.wallet?.address || 'unknown',
-        balance_matic: balanceNum.toFixed(4),
-        balance_usd: (balanceNum * 0.45).toFixed(2),
-        status: balanceNum < 0.1 ? 'LOW_BALANCE' : 'ok',
-        warning: balanceNum < 0.1 ? 'Polygon wallet balance is low. Please add MATIC.' : null
+        balance_pol: balanceNum.toFixed(4),
+        status: isUnknown ? 'BALANCE_READ_FAILED' : isLow ? 'LOW_BALANCE' : 'ok',
+        warning: isUnknown
+          ? 'Could not read balance from any RPC. Timestamps will still be attempted.'
+          : isLow
+            ? 'Polygon wallet balance is low. Please add POL. Timestamps will still be attempted.'
+            : null,
+        rpc_count: PolygonService.rpcUrls?.length || 0
       };
     }
   } catch (error) {
@@ -1265,14 +1273,7 @@ if (kind === 'video') {
           ensemble_results: finalResult.individual_results || null,
           ensemble_agreement: finalResult.agreement || null,
           detector_count: finalResult.detector_count || 1,
-          forensic_analysis: {
-            manipulation_detected: finalResult.ai_confidence >= 50,
-            manipulation_confidence: finalResult.ai_confidence,
-            ela_performed: finalResult.forensic_signals?.ela_performed || false,
-            compression_quality: finalResult.forensic_signals?.compression_quality || finalResult.individual_results?.jpeg?.details?.quality || 0,
-            double_compressed: finalResult.forensic_signals?.double_compressed || finalResult.individual_results?.jpeg?.details?.doubleCompressed || false,
-            noise_level: finalResult.forensic_signals?.noise_level || finalResult.individual_results?.jpeg?.details?.noise || 'unknown'
-          },
+         
           forensic_signals: finalResult.forensic_signals || null,
           verdict: finalResult.likely_ai_generated ? 'AI-GENERATED IMAGE' : 'LIKELY REAL IMAGE',
           analysis_time_ms: 0,
@@ -3681,15 +3682,6 @@ if (kind === 'image') {
       ensemble_results: finalResult.individual_results || null,
       ensemble_agreement: finalResult.agreement || null,
       detector_count: finalResult.detector_count || 1,
-      
-      forensic_analysis: {
-            manipulation_detected: finalResult.ai_confidence >= 50,
-            manipulation_confidence: finalResult.ai_confidence,
-            ela_performed: finalResult.forensic_signals?.ela_performed || false,
-            compression_quality: finalResult.forensic_signals?.compression_quality || finalResult.individual_results?.jpeg?.details?.quality || 0,
-            double_compressed: finalResult.forensic_signals?.double_compressed || finalResult.individual_results?.jpeg?.details?.doubleCompressed || false,
-            noise_level: finalResult.forensic_signals?.noise_level || finalResult.individual_results?.jpeg?.details?.noise || 'unknown'
-          },
       
  verdict: finalResult.likely_ai_generated ? 'AI-GENERATED IMAGE' : 'LIKELY REAL IMAGE',
       analysis_time_ms: 0,
