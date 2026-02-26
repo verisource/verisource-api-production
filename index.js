@@ -35,6 +35,7 @@ const FeatureLogger = require('./services/feature-logger');
 const ProvenanceService = require('./services/provenance-service');
 const ELAAnalysis = require('./services/ela-analysis');
 const JPEGGhostAnalysis = require('./services/jpeg-ghost-analysis');
+const CopyMoveDetection = require('./services/copy-move-detection');
 const VoiceEmbeddingService = require('./services/voice-embedding-service');
 const VideoThumbnailService = require('./services/video-thumbnail-service');
 const tvCorroboration = require('./services/tv-corroboration');
@@ -2434,7 +2435,21 @@ if (kind === 'video') {
         console.error('⚠️ Ghost analysis error:', ghostErr.message);
       }
     }
-
+    // STEP 17C3: Copy-Move Detection
+    let copyMoveResult = null;
+    if (kind === 'image' && tempFilePath) {
+      try {
+       const copyMoveDetector = new CopyMoveDetection();
+       copyMoveResult = await copyMoveDetector.analyze(tempFilePath);
+      if (copyMoveResult.clone_detected) {
+       console.log(`   🔍 Copy-move: ${copyMoveResult.verdict} (${copyMoveResult.analysis_time_ms}ms)`);
+      } else {
+        console.log(`   🔍 Copy-move: ${copyMoveResult.verdict} (${copyMoveResult.analysis_time_ms}ms)`);
+      }
+    } catch (cmErr) {
+      console.error('⚠️ Copy-move detection error:', cmErr.message);
+    }
+  }   
     // ============================================
     // STEP 17D: Provenance Check
     // ============================================
@@ -2605,7 +2620,8 @@ if (kind === 'video') {
         ...(softwareAnalysis && { software_analysis: softwareAnalysis }),
         ...(screenshotTextAnalysis && { screenshot_text_analysis: screenshotTextAnalysis }),
         ...(elaResult && { ela_analysis: elaResult }),
-         ...(jpegGhostResult && { jpeg_ghost_analysis: jpegGhostResult }),
+        ...(jpegGhostResult && { jpeg_ghost_analysis: jpegGhostResult }),
+        ...(copyMoveResult && { copy_move_detection: copyMoveResult }), 
       };
       console.log('📊 Calculating confidence score...');
       confidence = ConfidenceScoring.calculateConfidenceScore(confidenceData);
@@ -2718,6 +2734,7 @@ if (kind === 'video') {
       ...(screenshotDetection && { screenshot_detection: screenshotDetection }),
       ...(screenshotTextAnalysis && { screenshot_text_analysis: screenshotTextAnalysis }),
       ...(provenanceResult && { provenance: provenanceResult }),
+      ...(copyMoveResult && { copy_move_detection: copyMoveResult }),
       ...(elaResult && elaResult.success && { 
         ela_analysis: {
           verdict: elaResult.verdict,
