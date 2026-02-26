@@ -2730,9 +2730,8 @@ if (kind === 'video') {
           mean_error: elaResult.mean_error,
           std_dev: elaResult.std_dev
         }
-
-      ...(jpegGhostResult && { jpeg_ghost_analysis: jpegGhostResult }),
       }),
+      ...(jpegGhostResult && { jpeg_ghost_analysis: jpegGhostResult }),
       ...(crossReference && { cross_reference: crossReference }),
       verification: {
         status: searchResults.found ? 'PREVIOUSLY_VERIFIED' : 'NEW_UPLOAD',
