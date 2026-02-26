@@ -26,7 +26,6 @@ const CameraValidation = require('./services/camera-validation');
 const AudioSpectralAnalysis = require('./services/audio-spectral-analysis');
 const EnhancedAIDetector = require('./services/enhanced-ai-detector');
 const JPEGForensics = require('./services/jpeg-forensics');
-// REMOVED: const BlockchainService = require('./services/opentimestamps-service');
 const PolygonService = require('./services/polygon-timestamp');
 const BaseService = require('./services/base-timestamp');
 const EthereumService = require('./services/ethereum-timestamp');
@@ -35,6 +34,7 @@ const PlatformDetection = require('./services/platform-signature-detection');
 const FeatureLogger = require('./services/feature-logger');
 const ProvenanceService = require('./services/provenance-service');
 const ELAAnalysis = require('./services/ela-analysis');
+const JPEGGhostAnalysis = require('./services/jpeg-ghost-analysis');
 const VoiceEmbeddingService = require('./services/voice-embedding-service');
 const VideoThumbnailService = require('./services/video-thumbnail-service');
 const tvCorroboration = require('./services/tv-corroboration');
@@ -2416,6 +2416,25 @@ if (kind === 'video') {
         console.error('⚠️ ELA analysis error:', err.message);
       }
     }
+
+    // ============================================
+    // STEP 17C2: JPEG Ghost Analysis (Splice Detection)
+    // ============================================
+    let jpegGhostResult = null;
+    if (kind === 'image' && tempFilePath) {
+      try {
+        const ghostAnalyzer = new JPEGGhostAnalysis();
+        jpegGhostResult = await ghostAnalyzer.analyze(tempFilePath);
+        if (jpegGhostResult.applicable) {
+          console.log(`   👻 Ghost analysis: ${jpegGhostResult.verdict} (${jpegGhostResult.analysis_time_ms}ms)`);
+        } else {
+          console.log(`   👻 Ghost analysis: skipped (${jpegGhostResult.source_format} format)`);
+        }
+      } catch (ghostErr) {
+        console.error('⚠️ Ghost analysis error:', ghostErr.message);
+      }
+    }
+
     // ============================================
     // STEP 17D: Provenance Check
     // ============================================
@@ -2463,7 +2482,7 @@ if (kind === 'video') {
     }
 
     // ============================================
-    // STEP 17D: Fingerprint Database Check
+    // STEP 17E: Fingerprint Database Check
     // ============================================
     let fingerprintMatches = null;
     try {
@@ -2586,6 +2605,7 @@ if (kind === 'video') {
         ...(softwareAnalysis && { software_analysis: softwareAnalysis }),
         ...(screenshotTextAnalysis && { screenshot_text_analysis: screenshotTextAnalysis }),
         ...(elaResult && { ela_analysis: elaResult }),
+         ...(jpegGhostResult && { jpeg_ghost_analysis: jpegGhostResult }),
       };
       console.log('📊 Calculating confidence score...');
       confidence = ConfidenceScoring.calculateConfidenceScore(confidenceData);
@@ -2710,6 +2730,7 @@ if (kind === 'video') {
           mean_error: elaResult.mean_error,
           std_dev: elaResult.std_dev
         }
+
       }),
       ...(crossReference && { cross_reference: crossReference }),
       verification: {
