@@ -2731,6 +2731,7 @@ if (kind === 'video') {
           std_dev: elaResult.std_dev
         }
 
+      ...(jpegGhostResult && { jpeg_ghost_analysis: jpegGhostResult }),
       }),
       ...(crossReference && { cross_reference: crossReference }),
       verification: {
