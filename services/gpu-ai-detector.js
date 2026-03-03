@@ -92,13 +92,13 @@ class GPUAIDetector {
 
     try {
       // Build multipart form using built-in Node fetch (18+)
-      const { FormData, File } = await import('undici');
+      const { Blob } = require('buffer');
       const fileBuffer = await fs.promises.readFile(filePath);
       const fileName = path.basename(filePath);
-      const file = new File([fileBuffer], fileName);
+      const file = new Blob([fileBuffer]);
 
       const form = new FormData();
-      form.append('file', file);
+      form.append('file', file, fileName);
 
       const headers = {};
       if (this.gpuApiKey) {
