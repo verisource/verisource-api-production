@@ -1,0 +1,17 @@
+{
+  "name": "verisource-midjourney-crawler",
+  "version": "1.0.0",
+  "description": "Crawls Midjourney Showcase to build AI image hash database for VeriSource",
+  "main": "midjourney-crawler.js",
+  "scripts": {
+    "crawl": "node midjourney-crawler.js --once",
+    "start": "node midjourney-crawler.js"
+  },
+  "dependencies": {
+    "pg": "^8.11.3",
+    "sharp": "^0.33.2"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
