@@ -314,48 +314,26 @@ async function fetchChatGPTImages(limit) {
 // Schema: id, phash_hex, width, height, metadata (JSONB with final_url)
 
 async function fetchRealImages(limit) {
-  console.log(`\n📥 Fetching up to ${limit} authentic images from news_images...`);
+  console.log(`\n📥 Fetching up to ${limit} authentic images from news_images_v1...`);
   const images = [];
 
   try {
-    const params = [];
-    let p = 1;
-    const where = [
-      `metadata->>'final_url' IS NOT NULL`,
-      `phash_hex IS NOT NULL`,
-    ];
-
-    if (Number.isFinite(CONFIG.minWidth) && CONFIG.minWidth > 0) {
-      where.push(`(width IS NULL OR width >= $${p})`);
-      params.push(CONFIG.minWidth);
-      p++;
-    }
-    if (Number.isFinite(CONFIG.minHeight) && CONFIG.minHeight > 0) {
-      where.push(`(height IS NULL OR height >= $${p})`);
-      params.push(CONFIG.minHeight);
-      p++;
-    }
-
-    params.push(limit);
     const sql = `
-      SELECT id, phash_hex, width, height, content_type,
-             metadata->>'final_url' as image_url,
-             metadata->>'source' as source_name,
-             metadata->>'title' as title,
-             metadata->>'article_url' as article_url,
-             first_seen_at
-      FROM news_images
-      WHERE ${where.join(' AND ')}
+      SELECT id, image_url, source, source_name, article_url,
+             article_title, phash, published_at
+      FROM news_images_v1
+      WHERE image_url IS NOT NULL
+        AND phash IS NOT NULL
       ORDER BY RANDOM()
-      LIMIT $${p}
+      LIMIT $1
     `;
 
-    const result = await pool.query(sql, params);
+    const result = await pool.query(sql, [limit]);
     console.log(`  News images: ${result.rows.length}`);
 
     const sourceCounts = {};
     result.rows.forEach(r => {
-      const src = r.source_name || 'unknown';
+      const src = r.source_name || r.source || 'unknown';
       sourceCounts[src] = (sourceCounts[src] || 0) + 1;
     });
     console.log('  News source distribution (top 10):');
@@ -372,25 +350,21 @@ async function fetchRealImages(limit) {
         source: 'news',
         downloadable: true,
         metadata: {
-          news_source: r.source_name,
-          title: r.title,
+          news_source: r.source_name || r.source,
+          title: r.article_title,
           article_url: r.article_url,
-          first_seen_at: r.first_seen_at,
-          width: r.width,
-          height: r.height,
-          phash: r.phash_hex,
-          content_type: r.content_type,
+          published_at: r.published_at,
+          phash: r.phash,
         },
       });
     });
   } catch (err) {
-    console.log(`  ⚠️ News images query failed: ${err.message}`);
+    console.log(`  ⚠️ News query failed: ${err.message}`);
   }
 
   console.log(`  Total real images: ${images.length}`);
   return images;
 }
-
 // ─── Verification History ────────────────────────────────────
 
 async function fetchVerificationHistory(limit) {
