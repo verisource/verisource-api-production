@@ -137,7 +137,7 @@ async def lifespan(app):
     logger.info("Starting VeriSource GPU service on " + DEVICE)
     if torch.cuda.is_available():
         logger.info("GPU: " + torch.cuda.get_device_name(0))
-        logger.info("VRAM: " + str(round(torch.cuda.get_device_properties(0).total_mem / 1e9, 1)) + " GB")
+        logger.info("VRAM: " + str(round(torch.cuda.get_device_properties(0).total_memory / 1e9, 1)) + " GB")
     models["clip_detector"] = load_clip_detector()
     models["freq_classifier"] = load_frequency_model()
     clip_trained = bool(models["clip_detector"] and models["clip_detector"].get("ready"))
