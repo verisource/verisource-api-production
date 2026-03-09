@@ -90,12 +90,15 @@ def load_clip_detector():
         clip_model, clip_preprocess = clip.load("ViT-L/14", device=DEVICE)
         clip_model.eval()
         classifier_path = os.path.join(MODEL_DIR, "ufd_classifier.pth")
-        classifier = nn.Sequential(
-            nn.Linear(768, 256),
-            nn.ReLU(),
-            nn.Dropout(0.2),
-            nn.Linear(256, 2)
-        ).to(DEVICE)
+
+        class CLIPClassifier(nn.Module):
+            def __init__(self):
+                super().__init__()
+                self.layers = nn.Sequential(nn.Linear(768, 256), nn.ReLU(), nn.Dropout(0.2), nn.Linear(256, 2))
+            def forward(self, x):
+                return self.layers(x)
+
+        classifier = CLIPClassifier().to(DEVICE)
         if os.path.exists(classifier_path):
             logger.info("Loading UFD classifier from " + classifier_path)
             state = torch.load(classifier_path, map_location=DEVICE, weights_only=True)
