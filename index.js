@@ -3694,7 +3694,19 @@ app.post('/verify', upload.single('file'), authenticateApiKey, async (req, res) 
     if (kind === 'image') {
       try {
         console.log('🔍 Generating pHash for image...');
-        const phashResult = await generatePHash(req.file.path);
+        // Convert unsupported formats to JPEG before hashing
+        const sharp = require('sharp');
+        const phashExt = path.extname(req.file.path).toLowerCase();
+        const unsupportedFormats = ['.avif', '.heif', '.heic', '.webp'];
+        let phashPath = req.file.path;
+        let phashTempFile = null;
+        if (unsupportedFormats.includes(phashExt)) {
+          phashTempFile = req.file.path + '_converted.jpg';
+          await sharp(req.file.path).jpeg({ quality: 95 }).toFile(phashTempFile);
+          phashPath = phashTempFile;
+        }
+        const phashResult = await generatePHash(phashPath);
+        if (phashTempFile) { try { fs.unlinkSync(phashTempFile); } catch(e) {} }
         if (phashResult.success) {
           phash = phashResult.phash;
           console.log('✅ pHash generated:', phash);
