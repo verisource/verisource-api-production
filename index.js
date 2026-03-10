@@ -3512,12 +3512,23 @@ app.post('/verify', upload.single('file'), authenticateApiKey, async (req, res) 
   let gpsCrossRefResults = null;
   let internalSearchResults = null;
   let newsSourceMatch = null;
+  let phash = null;
   let phashRegions = null;
 
   try {
     const buf = fs.readFileSync(req.file.path);
     const crypto = require('crypto');
     const fingerprint = crypto.createHash('sha256').update(buf).digest('hex');
+    // Generate pHash for similarity search
+    try {
+      const phashResult = await generatePHash(req.file.path);
+      if (phashResult.success) {
+        phash = phashResult.phash;
+        console.log(`✅ pHash generated: ${phash}`);
+      }
+    } catch (phashErr) {
+      console.warn(`⚠️ pHash generation failed: ${phashErr.message}`);
+    }
 
     // Search database FIRST for existing verifications
     let searchResults = { found: false, is_first_verification: true };
