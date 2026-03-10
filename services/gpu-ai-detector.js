@@ -93,10 +93,23 @@ class GPUAIDetector {
     try {
       // Build multipart form using built-in Node fetch (18+)
       const { Blob } = require('buffer');
-      const fileBuffer = await fs.promises.readFile(filePath);
-      const fileName = path.basename(filePath);
-      const file = new Blob([fileBuffer]);
+      const sharp = require('sharp');
+      const ext = path.extname(filePath).toLowerCase();
+      const needsConversion = ['.avif', '.heif', '.heic', '.webp'].includes(ext);
 
+      let fileBuffer;
+      let fileName;
+
+      if (needsConversion) {
+        // Convert to JPEG for GPU service compatibility
+        fileBuffer = await sharp(filePath).jpeg({ quality: 95 }).toBuffer();
+        fileName = path.basename(filePath, ext) + '.jpg';
+      } else {
+        fileBuffer = await fs.promises.readFile(filePath);
+        fileName = path.basename(filePath);
+      }
+
+      const file = new Blob([fileBuffer]);
       const form = new FormData();
       form.append('file', file, fileName);
 
