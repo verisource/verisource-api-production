@@ -1181,7 +1181,19 @@ if (kind === 'video') {
     if (kind === 'image') {
       try {
         console.log('🔍 Generating pHash for image...');
-        const phashResult = await generatePHash(tempFilePath);
+        // Convert unsupported formats to JPEG before hashing
+        const sharp = require('sharp');
+        const phashExt = path.extname(tempFilePath).toLowerCase();
+        const unsupportedFormats = ['.avif', '.heif', '.heic', '.webp'];
+        let phashPath = tempFilePath;
+        let phashTempFile = null;
+        if (unsupportedFormats.includes(phashExt)) {
+          phashTempFile = tempFilePath + '_converted.jpg';
+          await sharp(tempFilePath).jpeg({ quality: 95 }).toFile(phashTempFile);
+          phashPath = phashTempFile;
+        }
+        const phashResult = await generatePHash(phashPath);
+        if (phashTempFile) { try { fs.unlinkSync(phashTempFile); } catch(e) {} }
         if (phashResult.success) {
           phash = phashResult.phash;
           console.log('✅ pHash generated:', phash);
@@ -2647,7 +2659,7 @@ if (kind === 'video') {
     let virusTotalResult = null;
     try {
       console.log('🔍 Checking VirusTotal...');
-      const { searchVirusTotal } = require('./services/virustotal');
+
       virusTotalResult = await searchVirusTotal(fingerprint);
       console.log('✅ VirusTotal check complete:', virusTotalResult.found ? 'FOUND' : 'NOT FOUND');
     } catch (err) {
