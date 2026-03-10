@@ -278,5 +278,9 @@ async def analyze(file: UploadFile = File(...)):
                 "trained": freq_result.get("trained")
             }
         },
-        "total_ms": total_ms
+        "total_ms": total_ms,
+        "ensemble": {
+            "all_trained": clip_result.get("trained", False) and freq_result.get("trained", False),
+            "any_trained": clip_result.get("trained", False) or freq_result.get("trained", False)
+        }
     }
