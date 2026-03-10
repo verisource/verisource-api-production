@@ -390,12 +390,16 @@ const mediaType = verificationData.mediaType || kind || 'image';
       preVetoScore: aiVetoApplied ? preVetoScore : null
     });
   } else if (score >= 40) {
+    const _aiCat = categorizeAIContent(metadata, aiConfidence, camera_verification);
+    const _isEdited = _aiCat?.software != null;
     return buildResponse({
       score,
       level: 'uncertain',
-      label: mediaType === 'video' ? 'EDITED VIDEO' : 'EDITED IMAGE',
+      label: mediaType === 'video'
+        ? (_isEdited ? 'EDITED VIDEO' : 'UNCERTAIN VIDEO')
+        : (_isEdited ? 'EDITED IMAGE' : 'UNCERTAIN IMAGE'),
       color: '#F59E0B',
-      icon: 'edit',
+      icon: _isEdited ? 'edit' : 'help-circle',
       message: messages.join(', '),
       messages,
       warnings,
