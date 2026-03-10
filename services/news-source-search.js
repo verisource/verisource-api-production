@@ -52,7 +52,7 @@ async function searchNewsDatabase({ phash, dhash, md5 }) {
           image_url, 
           published_at, 
           crawled_at
-        FROM news_images
+        FROM news_images_v1
         WHERE md5 = $1
         ORDER BY published_at ASC NULLS LAST
         LIMIT 20
@@ -132,7 +132,7 @@ async function searchByPerceptualHash(phash, threshold) {
         source, source_name, article_url, article_title,
         image_url, published_at, crawled_at, phash,
         0 as hamming_distance
-      FROM news_images
+      FROM news_images_v1
       WHERE phash = $1
       ORDER BY published_at ASC NULLS LAST
       LIMIT 20
@@ -149,7 +149,7 @@ async function searchByPerceptualHash(phash, threshold) {
       SELECT 
         source, source_name, article_url, article_title,
         image_url, published_at, crawled_at, phash
-      FROM news_images
+      FROM news_images_v1
       WHERE phash IS NOT NULL
         AND LENGTH(phash) = LENGTH($1)
         AND crawled_at > NOW() - INTERVAL '30 days'
@@ -186,7 +186,7 @@ async function searchByDHash(dhash, threshold) {
         source, source_name, article_url, article_title,
         image_url, published_at, crawled_at, dhash,
         0 as hamming_distance
-      FROM news_images
+      FROM news_images_v1
       WHERE dhash = $1
       ORDER BY published_at ASC NULLS LAST
       LIMIT 20
@@ -201,7 +201,7 @@ async function searchByDHash(dhash, threshold) {
       SELECT 
         source, source_name, article_url, article_title,
         image_url, published_at, crawled_at, dhash
-      FROM news_images
+      FROM news_images_v1
       WHERE dhash IS NOT NULL
         AND LENGTH(dhash) = LENGTH($1)
         AND crawled_at > NOW() - INTERVAL '30 days'
@@ -328,12 +328,12 @@ async function getNewsStats() {
         MIN(published_at) as oldest_image,
         MAX(published_at) as newest_image,
         MAX(crawled_at) as last_crawl
-      FROM news_images
+      FROM news_images_v1
     `);
     
     const bySource = await db.query(`
       SELECT source_name, COUNT(*) as count
-      FROM news_images
+      FROM news_images_v1
       GROUP BY source_name
       ORDER BY count DESC
       LIMIT 20
