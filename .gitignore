@@ -50,3 +50,5 @@ quick-test-images/
 faceforensics-testing/
 *.backup*
 debug-*/
+training-data/
+*.png
