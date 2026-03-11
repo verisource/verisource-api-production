@@ -1171,7 +1171,7 @@ if (kind === 'video') {
         audioSpectralAnalysis = { error: err.message };
       }
     }
-
+    
     // ============================================
     // STEP 6: Generate pHash for images
     // ============================================
@@ -1197,13 +1197,11 @@ if (kind === 'video') {
         if (phashResult.success) {
           phash = phashResult.phash;
           console.log('✅ pHash generated:', phash);
-    // Generate multi-region pHashes for crop-resistant matching
     try {
-    phashRegions = await ProvenanceService.generateAllRegionHashes(tempFilePath);
+    phashRegions = await ProvenanceService.generateAllRegionHashes(phashPath);
     } catch (regionErr) {
     console.log(`⚠️ Region pHash generation failed: ${regionErr.message}`);
     }
-          // Search for similar images
           if (db) {
             const similar = await searchSimilarImages(phash, db);
             if (similar.length > 0) {
@@ -1216,6 +1214,7 @@ if (kind === 'video') {
             }
           }
         }
+         if (phashTempFile) { try { fs.unlinkSync(phashTempFile); } catch(e) {} }
       } catch (err) {
         console.error('⚠️ pHash error:', err.message);
       }

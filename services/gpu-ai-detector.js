@@ -159,7 +159,7 @@ class GPUAIDetector {
 
         // Meta
         device: result.device,
-        gpu_inference_ms: result.total_inference_ms,
+        gpu_inference_ms: result.total_ms,
         total_round_trip_ms: elapsed,
       };
     } catch (error) {
