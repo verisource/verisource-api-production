@@ -1193,7 +1193,6 @@ if (kind === 'video') {
           phashPath = phashTempFile;
         }
         const phashResult = await generatePHash(phashPath);
-        if (phashTempFile) { try { fs.unlinkSync(phashTempFile); } catch(e) {} }
         if (phashResult.success) {
           phash = phashResult.phash;
           console.log('✅ pHash generated:', phash);
@@ -3717,7 +3716,6 @@ app.post('/verify', upload.single('file'), authenticateApiKey, async (req, res) 
           phashPath = phashTempFile;
         }
         const phashResult = await generatePHash(phashPath);
-        if (phashTempFile) { try { fs.unlinkSync(phashTempFile); } catch(e) {} }
         if (phashResult.success) {
           phash = phashResult.phash;
           console.log('✅ pHash generated:', phash);
