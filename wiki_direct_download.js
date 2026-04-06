@@ -4,14 +4,6 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 
-// ─── Wikimedia OAuth 1.0a Credentials ───────────────────────
-const OAUTH = {
-  consumerKey:    '3c5ed3af67c074751644d9deaa5dfb25',
-  consumerSecret: '6a781262d0e26478d6cf20596f08d3834099c6c1',
-  accessToken:    'bbbbdb857ce0c32da617472ab4685df1',
-  accessSecret:   '0457285dadbd5d6ea1960e4490bfd78612e5c697',
-};
-
 const pool = new Pool({
   connectionString: 'postgresql://postgres:rEjPheNZGZsLHxSdQlflcYTPiQeMcFwB@shinkansen.proxy.rlwy.net:33448/railway',
   ssl: { rejectUnauthorized: false }
@@ -20,43 +12,9 @@ const pool = new Pool({
 const outDir = '/mnt/verisource/training-data/real';
 fs.mkdirSync(outDir, { recursive: true });
 
-let done = 0, fail = 0;
+let done = 0, fail = 0, rateLimit = 0;
+let currentDelay = 1000; // start at 1s, adjust dynamically
 
-// ─── OAuth 1.0a Header Builder ───────────────────────────────
-function buildOAuthHeader(url) {
-  const nonce = crypto.randomBytes(16).toString('hex');
-  const timestamp = Math.floor(Date.now() / 1000).toString();
-
-  const params = {
-    oauth_consumer_key:     OAUTH.consumerKey,
-    oauth_nonce:            nonce,
-    oauth_signature_method: 'HMAC-SHA1',
-    oauth_timestamp:        timestamp,
-    oauth_token:            OAUTH.accessToken,
-    oauth_version:          '1.0',
-  };
-
-  const sortedParams = Object.keys(params).sort()
-    .map(k => `${encodeURIComponent(k)}=${encodeURIComponent(params[k])}`)
-    .join('&');
-
-  const baseString = [
-    'GET',
-    encodeURIComponent(url),
-    encodeURIComponent(sortedParams),
-  ].join('&');
-
-  const signingKey = `${encodeURIComponent(OAUTH.consumerSecret)}&${encodeURIComponent(OAUTH.accessSecret)}`;
-  const signature = crypto.createHmac('sha1', signingKey).update(baseString).digest('base64');
-
-  params.oauth_signature = signature;
-
-  return 'OAuth ' + Object.keys(params).sort()
-    .map(k => `${encodeURIComponent(k)}="${encodeURIComponent(params[k])}"`)
-    .join(', ');
-}
-
-// ─── Wikimedia URL Builder ────────────────────────────────────
 function buildImageUrl(pageUrl) {
   try {
     const decoded = decodeURIComponent(pageUrl);
@@ -70,32 +28,40 @@ function buildImageUrl(pageUrl) {
   } catch(e) { return null; }
 }
 
-// ─── Authenticated Download ───────────────────────────────────
+// Returns { status, size } — does NOT follow -f so we can see 429s
 async function download(url, dest) {
   return new Promise(res => {
-    const oauthHeader = buildOAuthHeader(url);
+    const tmp = dest + '.tmp';
     const curl = spawn('curl', [
-      '--http2', '-L', '-s', '-f',
-      '--max-time', '15',
+      '--http2', '-L', '-s',
+      '--max-time', '20',
       '-A', 'VeriSourceBot/1.0 (https://verisource.io; Brian@verisource.io)',
-      '-H', `Authorization: ${oauthHeader}`,
-      '-o', dest,
+      '-H', 'Accept: image/jpeg,image/*',
+      '-o', tmp,
+      '-w', '%{http_code}|%{size_download}',
       url
     ]);
+    let stdout = '';
+    curl.stdout.on('data', d => { stdout += d.toString(); });
     curl.on('close', code => {
-      if (code === 0 && fs.existsSync(dest) && fs.statSync(dest).size > 1000) done++;
-      else { fail++; try { fs.unlinkSync(dest); } catch {} }
-      res();
+      const parts = stdout.trim().split('|');
+      const status = parseInt(parts[0]) || 0;
+      const size = parseInt(parts[1]) || 0;
+      res({ status, size, tmp });
     });
   });
 }
 
-// ─── Main ─────────────────────────────────────────────────────
+async function sleep(ms) {
+  return new Promise(r => setTimeout(r, ms));
+}
+
 async function run() {
   const r = await pool.query(
     "SELECT source_id, source_url FROM media_hashes WHERE source='wikimedia' AND source_url IS NOT NULL LIMIT 100000"
   );
   console.log('Found:', r.rows.length, 'Wikimedia entries');
+  console.log('Starting download with adaptive rate limiting...\n');
 
   for (const row of r.rows) {
     const imageUrl = buildImageUrl(row.source_url);
@@ -104,12 +70,48 @@ async function run() {
     const dest = path.join(outDir, 'wiki_' + row.source_id.replace(/[^a-z0-9]/gi, '_').substring(0, 80) + '.jpg');
     if (fs.existsSync(dest)) { done++; continue; }
 
-    await download(imageUrl, dest);
-    await new Promise(r => setTimeout(r, 400));
-    if ((done + fail) % 100 === 0) process.stdout.write('\r✅ ' + done + ' ❌ ' + fail);
+    let attempts = 0;
+    while (attempts < 5) {
+      const { status, size, tmp } = await download(imageUrl, dest);
+
+      if (status === 429) {
+        // Rate limited — back off hard
+        rateLimit++;
+        const backoff = Math.min(currentDelay * 3, 30000); // max 30s backoff
+        currentDelay = Math.min(currentDelay * 1.5, 5000); // slow down future requests, max 5s
+        process.stdout.write(`\n⚠️  429 rate limit hit #${rateLimit} — backing off ${backoff/1000}s (delay now ${currentDelay}ms)\n`);
+        try { fs.unlinkSync(tmp); } catch {}
+        await sleep(backoff);
+        attempts++;
+        continue;
+      }
+
+      if (status === 200 && size > 1000) {
+        try {
+          fs.renameSync(tmp, dest);
+          done++;
+          // Success — gradually speed back up
+          currentDelay = Math.max(currentDelay * 0.95, 500);
+        } catch {
+          fail++;
+          try { fs.unlinkSync(tmp); } catch {}
+        }
+      } else {
+        fail++;
+        try { fs.unlinkSync(tmp); } catch {}
+      }
+      break;
+    }
+
+    await sleep(currentDelay);
+
+    if ((done + fail) % 100 === 0) {
+      process.stdout.write(`\r✅ ${done} ❌ ${fail} ⚠️  ${rateLimit} rate limits | delay: ${Math.round(currentDelay)}ms`);
+    }
   }
 
-  console.log('\nComplete. Done:', done, 'Fail:', fail);
+  console.log('\n\nComplete.');
+  console.log('Done:', done, '| Fail:', fail, '| Rate limit hits:', rateLimit);
   pool.end();
 }
 
