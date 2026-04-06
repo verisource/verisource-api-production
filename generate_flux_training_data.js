@@ -1,0 +1,220 @@
+/**
+ * VeriSource — Flux 2 Training Data Generator
+ * Generates photorealistic face/portrait images via Black Forest Labs API.
+ * Saves directly to /mnt/verisource/training-data/ai/flux2/
+ * Run on RunPod: FLUX_API_KEY=your_key node generate_flux_training_data.js
+ * Get API key at: api.bfl.ml
+ */
+
+const https = require('https');
+const fs = require('fs');
+const path = require('path');
+const crypto = require('crypto');
+
+const FLUX_API_KEY = process.env.FLUX_API_KEY || 'YOUR_FLUX_API_KEY_HERE';
+const OUT_DIR = process.env.OUTPUT_DIR || '/mnt/verisource/training-data/ai/flux2';
+const TARGET = parseInt(process.env.BATCH_SIZE || '2000', 10);
+const CONCURRENCY = 3;
+const DELAY_MS = 3000; // Flux uses async polling, needs slightly more time
+
+fs.mkdirSync(OUT_DIR, { recursive: true });
+
+const PROMPTS = [
+  'Photorealistic professional headshot of a white man in his 40s, suit and tie, neutral background, studio lighting',
+  'Photorealistic professional headshot of a Black woman in her 30s, business attire, grey background, studio lighting',
+  'Photorealistic professional headshot of an Asian man in his 50s, collared shirt, white background, soft lighting',
+  'Photorealistic professional headshot of a Latina woman in his 20s, blazer, professional smile, studio portrait',
+  'Photorealistic professional headshot of a Middle Eastern man in his 30s, business casual, neutral background',
+  'Photorealistic professional headshot of a South Asian woman in her 40s, formal attire, corporate portrait style',
+  'Photorealistic LinkedIn profile photo of a white woman in her 50s, confident expression, blurred office background',
+  'Photorealistic corporate headshot of a Black man in his 20s, suit jacket, warm studio lighting',
+  'Photorealistic headshot of an Asian woman in her 30s, blazer, clean white background, professional smile',
+  'Photorealistic professional portrait of a Hispanic man in his 40s, dress shirt, neutral grey background',
+  'Photorealistic candid portrait of a young Asian woman smiling outdoors, natural daylight, bokeh background',
+  'Photorealistic casual selfie-style photo of a white man in his 30s, outdoor setting, natural light',
+  'Photorealistic portrait of an elderly Black woman, warm smile, indoor natural lighting, close-up',
+  'Photorealistic photo of a teenage Hispanic boy, casual clothes, school hallway background',
+  'Photorealistic candid photo of a Middle Eastern woman in her 40s, outdoor cafe setting',
+  'Photorealistic portrait of an elderly white man with beard and glasses, reading indoors',
+  'Photorealistic photo of a young South Asian man laughing, casual setting, natural light',
+  'Photorealistic candid portrait of a mixed-race woman in her 30s, park setting, afternoon light',
+  'Photorealistic Instagram-style selfie of a young white woman, ring light, bedroom background',
+  'Photorealistic social media profile photo of a Black man in his 20s, casual outdoor setting',
+  'Photorealistic Facebook profile photo of a middle-aged Hispanic woman, family gathering background',
+  'Photorealistic selfie of an Asian teenage girl, natural light, neutral expression',
+  'Photorealistic social media photo of a young white man at a gym, athletic wear, confident pose',
+  'Photorealistic Instagram portrait of a South Asian woman in her 20s, coffee shop setting',
+  'Photorealistic passport-style photo of a white woman in her 30s, neutral expression, white background',
+  'Photorealistic ID card photo of a Black man in his 40s, plain background, direct gaze',
+  'Photorealistic driver license style photo of a Hispanic woman in her 20s, neutral background',
+  'Photorealistic visa application photo of an Asian man in his 50s, formal attire, white background',
+  'Photorealistic government ID style portrait of a Middle Eastern woman in her 30s, neutral expression',
+  'Photorealistic passport photo of an elderly South Asian man, plain light background',
+  'Photorealistic photo of a Black child around 8 years old, school photo style, blue background',
+  'Photorealistic portrait of an Asian teenage boy around 16, casual clothes, natural light',
+  'Photorealistic photo of a Hispanic man in his 60s, outdoor setting, candid expression',
+  'Photorealistic portrait of a white woman in her 70s, warm smile, indoor natural lighting',
+  'Photorealistic candid photo of a South Asian man in his 80s, outdoor park setting',
+  'Photorealistic portrait of a white man in dramatic side lighting, artistic portrait style',
+  'Photorealistic photo of a Black woman in golden hour sunlight, outdoor portrait',
+  'Photorealistic portrait of an Asian woman under soft indoor lamp light, evening setting',
+  'Photorealistic photo of a Middle Eastern man in overcast outdoor lighting, candid style',
+  'Photorealistic portrait of a Hispanic woman in window light, natural indoor setting',
+  'Photorealistic photo of a South Asian woman in fluorescent office lighting, candid work photo',
+  'Realistic headshot photo of a woman in her 30s, professional attire, slight smile, blurred office background',
+  'Photorealistic candid photo of an elderly man sitting on a park bench, natural light, genuine expression',
+  'Realistic photo of a young woman in casual clothing at an outdoor cafe, candid style, natural lighting',
+];
+
+const VARIATIONS = [
+  '',
+  ' Shot on Canon EOS R5, 85mm lens, f/2.8.',
+  ' Shot on Sony A7IV, 35mm lens, photojournalism style.',
+  ' High resolution, sharp details, natural lighting.',
+  ' Documentary photography style, candid moment.',
+  ' Professional photography, news wire quality.',
+];
+
+let done = 0, fail = 0;
+
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+// Flux uses a 2-step async API: submit task, then poll for result
+function submitFluxTask(prompt) {
+  return new Promise((resolve, reject) => {
+    const body = JSON.stringify({
+      prompt: prompt,
+      width: 1024,
+      height: 1024,
+    });
+
+    const options = {
+      hostname: 'api.bfl.ml',
+      path: '/v1/flux-pro-1.1',
+      method: 'POST',
+      headers: {
+        'x-key': FLUX_API_KEY,
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(body),
+      },
+    };
+
+    const req = https.request(options, res => {
+      let data = '';
+      res.on('data', chunk => { data += chunk; });
+      res.on('end', () => {
+        try {
+          const json = JSON.parse(data);
+          if (json.id) return resolve(json.id);
+          reject(new Error(json.message || JSON.stringify(json)));
+        } catch (e) { reject(e); }
+      });
+    });
+
+    req.on('error', reject);
+    req.write(body);
+    req.end();
+  });
+}
+
+function pollFluxResult(taskId) {
+  return new Promise((resolve, reject) => {
+    const options = {
+      hostname: 'api.bfl.ml',
+      path: `/v1/get_result?id=${taskId}`,
+      method: 'GET',
+      headers: { 'x-key': FLUX_API_KEY },
+    };
+
+    const req = https.request(options, res => {
+      let data = '';
+      res.on('data', chunk => { data += chunk; });
+      res.on('end', () => {
+        try {
+          const json = JSON.parse(data);
+          resolve(json);
+        } catch (e) { reject(e); }
+      });
+    });
+
+    req.on('error', reject);
+    req.end();
+  });
+}
+
+function downloadBuffer(url) {
+  return new Promise((resolve, reject) => {
+    https.get(url, res => {
+      const chunks = [];
+      res.on('data', chunk => chunks.push(chunk));
+      res.on('end', () => resolve(Buffer.concat(chunks)));
+      res.on('error', reject);
+    }).on('error', reject);
+  });
+}
+
+async function generateImage(prompt) {
+  const taskId = await submitFluxTask(prompt);
+
+  // Poll until ready (max 60s)
+  for (let i = 0; i < 20; i++) {
+    await sleep(3000);
+    const result = await pollFluxResult(taskId);
+    if (result.status === 'Ready') {
+      const imageUrl = result.result?.sample;
+      if (!imageUrl) throw new Error('No image URL in result');
+      return await downloadBuffer(imageUrl);
+    }
+    if (result.status === 'Error') throw new Error(result.result?.error || 'Flux task failed');
+  }
+  throw new Error('Flux task timed out');
+}
+
+async function worker(id) {
+  while ((done + fail) < TARGET) {
+    const promptIdx = Math.floor(Math.random() * PROMPTS.length);
+    const variationIdx = Math.floor((done + fail) / PROMPTS.length) % VARIATIONS.length;
+    const prompt = PROMPTS[promptIdx] + VARIATIONS[variationIdx];
+    const imageId = crypto.randomBytes(8).toString('hex');
+    const dest = path.join(OUT_DIR, `flux2_${imageId}.jpg`);
+
+    try {
+      const buffer = await generateImage(prompt);
+      fs.writeFileSync(dest, buffer);
+      done++;
+      process.stdout.write(`\r✅ ${done} ❌ ${fail} | ${done + fail}/${TARGET} | ${prompt.substring(0, 55)}...`);
+    } catch (err) {
+      fail++;
+      process.stdout.write(`\r✅ ${done} ❌ ${fail} | Error: ${err.message.substring(0, 55)}`);
+    }
+
+    await sleep(DELAY_MS * CONCURRENCY);
+  }
+}
+
+async function main() {
+  if (FLUX_API_KEY === 'YOUR_FLUX_API_KEY_HERE') {
+    console.error('❌ Set your Flux API key: FLUX_API_KEY=your_key node generate_flux_training_data.js');
+    console.error('   Get a key at: api.bfl.ml');
+    process.exit(1);
+  }
+
+  const existing = fs.existsSync(OUT_DIR)
+    ? fs.readdirSync(OUT_DIR).filter(f => f.endsWith('.jpg')).length : 0;
+  done = existing;
+
+  console.log(`Flux 2 Portrait Generator`);
+  console.log(`Target: ${TARGET} images | Already have: ${existing}`);
+  console.log(`Output: ${OUT_DIR}`);
+  console.log(`Estimated cost: ~$${((TARGET - existing) * 0.05).toFixed(2)}`);
+  console.log(`Estimated time: ~${Math.ceil((TARGET - existing) / CONCURRENCY * DELAY_MS / 60000)} minutes\n`);
+
+  if (done >= TARGET) { console.log('Already at target!'); return; }
+
+  await Promise.all(Array.from({ length: CONCURRENCY }, (_, i) => worker(i)));
+
+  console.log(`\n\nComplete! Generated: ${done} | Failed: ${fail}`);
+  console.log(`Saved to: ${OUT_DIR}`);
+}
+
+main().catch(console.error);
