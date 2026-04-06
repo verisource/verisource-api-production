@@ -13,7 +13,7 @@ const outDir = '/mnt/verisource/training-data/real';
 fs.mkdirSync(outDir, { recursive: true });
 
 let done = 0, fail = 0, rateLimit = 0;
-let currentDelay = 1000; // start at 1s, adjust dynamically
+let currentDelay = 2000; // start conservative to avoid immediate re-ban // start at 1s, adjust dynamically
 
 function buildImageUrl(pageUrl) {
   try {
