@@ -12,22 +12,11 @@
  *   5. Batch insert into media_hashes table
  *   6. Checkpoint/resume — safe to interrupt and restart
  *
- * Expected output: 5-10 million images in 48-72 hours
- *
  * Usage:
- *   # Step 1: Download dump (run once, takes 2-3 hours)
  *   node wikimedia_bulk_ingest.js --step download-dump
- *
- *   # Step 2: Parse dump and build URL list
  *   node wikimedia_bulk_ingest.js --step parse-dump
- *
- *   # Step 3: Download images and ingest to DB
  *   node wikimedia_bulk_ingest.js --step ingest
- *
- *   # Run all steps sequentially
  *   node wikimedia_bulk_ingest.js --step all
- *
- *   # Resume interrupted ingest
  *   node wikimedia_bulk_ingest.js --step ingest --resume
  *
  * Options:
@@ -39,7 +28,7 @@
  *   --pre-2022      Only include pre-2022 uploads (default: true)
  *   --min-width     Minimum image width (default: 800)
  *   --min-height    Minimum image height (default: 600)
- *   --output-dir    Directory for downloaded images (default: /mnt/verisource/wikimedia-images)
+ *   --output-dir    Directory for downloaded images
  *
  * Requirements:
  *   npm install pg sharp axios p-limit piscina
@@ -48,50 +37,40 @@
 require('dotenv').config();
 const fs = require('fs');
 const path = require('path');
-const https = require('https');
-const http = require('http');
 const crypto = require('crypto');
 const readline = require('readline');
 const { Pool } = require('pg');
 const { execSync, spawn } = require('child_process');
-const os = require('os');
 
 // ─── Configuration ───────────────────────────────────────────
 
 const CONFIG = {
-  // Paths
   baseDir:          '/mnt/verisource/wikimedia-ingest',
   imageDir:         '/mnt/verisource/wikimedia-images',
-  dumpDir:          '/mnt/verisource/wikimedia-dump',
+  dumpDir:          '/workspace/wikimedia-dump',
   checkpointFile:   '/mnt/verisource/wikimedia-ingest/checkpoint.json',
   urlListFile:      '/mnt/verisource/wikimedia-ingest/image_urls.jsonl',
   progressFile:     '/mnt/verisource/wikimedia-ingest/progress.json',
   logFile:          '/mnt/verisource/wikimedia-ingest/ingest.log',
 
-  // Dump URL (updated monthly by Wikimedia)
   dumpUrl:          'https://dumps.wikimedia.org/commonswiki/latest/commonswiki-latest-image.sql.gz',
 
-  // Filtering
   pre2022Only:      true,
-  cutoffDate:       '20220601000000',  // Wikimedia timestamp format
+  cutoffDate:       '20220601000000',
   minWidth:         800,
   minHeight:        600,
   allowedMimeTypes: ['jpeg', 'jpg'],
 
-  // Download settings
-  concurrent:       50,
+  concurrent:       5,
   downloadTimeout:  20000,
   maxRetries:       3,
   retryDelay:       2000,
-  maxDownloadBytes: 50 * 1024 * 1024,  // 50MB max per image
-  userAgent:        'VeriSourceBot/1.0 (https://verisource.io; training-data@verisource.io)',
+  maxDownloadBytes: 50 * 1024 * 1024,
+  userAgent:        'VeriSourceBot/1.0 (https://verisource.io; training-data@verisource.io) Node.js',
 
-  // Database
   batchSize:        500,
   maxImages:        Infinity,
-
-  // Safety
-  skipExisting:     true,  // Skip images already in media_hashes
+  skipExisting:     true,
 };
 
 // Parse CLI args
@@ -114,7 +93,6 @@ for (let i = 0; i < args.length; i++) {
 
 const STEP = args.find(a => !a.startsWith('--')) || 'all';
 
-// Create directories
 for (const dir of [CONFIG.baseDir, CONFIG.imageDir, CONFIG.dumpDir]) {
   fs.mkdirSync(dir, { recursive: true });
 }
@@ -148,7 +126,6 @@ const pool = new Pool({
 });
 
 async function ensureTable() {
-  // Ensure media_hashes has all needed columns
   await pool.query(`
     CREATE TABLE IF NOT EXISTS media_hashes (
       id SERIAL PRIMARY KEY,
@@ -170,7 +147,6 @@ async function ensureTable() {
     )
   `);
 
-  // Add width/height/file_size columns if they don't exist
   for (const col of [
     'ALTER TABLE media_hashes ADD COLUMN IF NOT EXISTS width INTEGER',
     'ALTER TABLE media_hashes ADD COLUMN IF NOT EXISTS height INTEGER',
@@ -179,9 +155,8 @@ async function ensureTable() {
     await pool.query(col).catch(() => {});
   }
 
-  // Indexes
   await pool.query('CREATE INDEX IF NOT EXISTS idx_mh_phash ON media_hashes(phash)').catch(() => {});
-  await pool.query('CREATE INDEX IF NOT EXISTS idx_mh_source ON media_hashes(source, source_id)').catch(() => {});
+  await pool.query('CREATE INDEX IF NOT EXISTS idx_mh_source ON media_hashes(source,source_id)').catch(() => {});
   await pool.query('CREATE INDEX IF NOT EXISTS idx_mh_sha256 ON media_hashes(sha256)').catch(() => {});
 }
 
@@ -235,8 +210,6 @@ async function getExistingSourceIds() {
 // ─── Wikimedia URL Builder ────────────────────────────────────
 
 function buildWikimediaUrl(filename) {
-  // Wikimedia uses content-addressed URLs based on MD5 of filename
-  // Format: /wikipedia/commons/A/AB/filename
   const encoded = filename.replace(/ /g, '_');
   const md5 = crypto.createHash('md5').update(encoded).digest('hex');
   const a = md5[0];
@@ -251,7 +224,6 @@ function buildWikiPageUrl(filename) {
 }
 
 function parseWikimediaTimestamp(ts) {
-  // Format: 20220601123456 → 2022-06-01 12:34:56
   if (!ts || ts.length < 14) return null;
   try {
     const y = ts.substring(0, 4);
@@ -274,7 +246,7 @@ async function downloadDump() {
 
   if (fs.existsSync(sqlFile)) {
     const stats = fs.statSync(sqlFile);
-    if (stats.size > 1e9) { // > 1GB means it's probably complete
+    if (stats.size > 1e9) {
       log(`SQL dump already exists (${(stats.size / 1e9).toFixed(1)}GB), skipping download`);
       return sqlFile;
     }
@@ -284,26 +256,17 @@ async function downloadDump() {
   log('║   Step 1: Downloading Wikimedia Dump            ║');
   log('╚══════════════════════════════════════════════════╝');
   log(`URL: ${CONFIG.dumpUrl}`);
-  log('Expected size: ~15GB compressed, ~80GB uncompressed');
-  log('Estimated time: 2-3 hours on RunPod bandwidth');
 
-  // Download with wget (more reliable for large files)
   if (!fs.existsSync(gzFile) || fs.statSync(gzFile).size < 1e9) {
     log('Downloading compressed dump...');
     await new Promise((resolve, reject) => {
-      const wget = spawn('wget', [
-        '-c',  // Continue partial downloads
-        '--progress=dot:giga',
-        '-O', gzFile,
-        CONFIG.dumpUrl
-      ], { stdio: 'inherit' });
+      const wget = spawn('wget', ['-c', '--progress=dot:giga', '-O', gzFile, CONFIG.dumpUrl], { stdio: 'inherit' });
       wget.on('close', code => code === 0 ? resolve() : reject(new Error(`wget failed: ${code}`)));
     });
     log('✅ Download complete');
   }
 
-  // Decompress
-  log('Decompressing dump (~80GB, takes 20-30 minutes)...');
+  log('Decompressing dump...');
   await new Promise((resolve, reject) => {
     const gunzip = spawn('gunzip', ['-k', '-v', gzFile], { stdio: 'inherit' });
     gunzip.on('close', code => code === 0 ? resolve() : reject(new Error(`gunzip failed: ${code}`)));
@@ -320,43 +283,28 @@ async function parseDump() {
   log('║   Step 2: Parsing Wikimedia Dump                ║');
   log('╚══════════════════════════════════════════════════╝');
 
-  const sqlFile = path.join(CONFIG.dumpDir, 'commonswiki-latest-image.sql');
-  if (!fs.existsSync(sqlFile)) {
-    throw new Error(`SQL dump not found at ${sqlFile}. Run --step download-dump first`);
-  }
-
+  const gzFile = path.join(CONFIG.dumpDir, 'commonswiki-latest-image.sql.gz');
+  const zlib = require('zlib');
   const urlListPath = CONFIG.urlListFile;
   const writeStream = fs.createWriteStream(urlListPath);
-
-  const rl = readline.createInterface({
-    input: fs.createReadStream(sqlFile, { encoding: 'utf8' }),
-    crlfDelay: Infinity,
-  });
+  const gunzipStream = fs.createReadStream(gzFile).pipe(zlib.createGunzip());
+  const rl = readline.createInterface({ input: gunzipStream, crlfDelay: Infinity });
 
   let linesProcessed = 0;
   let imagesFound = 0;
   let imagesFiltered = 0;
-  let startTime = Date.now();
+  const startTime = Date.now();
 
-  log('Parsing SQL dump... (this takes ~60 minutes)');
-  log(`Filters: JPEG only, min ${CONFIG.minWidth}x${CONFIG.minHeight}px${CONFIG.pre2022Only ? ', pre-2022 uploads' : ''}`);
+  log('Parsing SQL dump...');
 
   for await (const line of rl) {
     linesProcessed++;
-
     if (!line.startsWith('INSERT INTO `image`')) continue;
 
-    // Extract VALUES clause
     const valuesMatch = line.match(/VALUES\s*(.+)$/s);
     if (!valuesMatch) continue;
 
-    // Parse individual records from VALUES clause
-    // Each record: ('filename',size,width,height,bits,'mediatype','major','minor','metadata','sha1','timestamp',actor)
-    const valuesStr = valuesMatch[1];
-
-    // Split on record boundaries — tricky because values contain commas
-    // Use a simple state machine
-    const records = splitSQLValues(valuesStr);
+    const records = splitSQLValues(valuesMatch[1]);
 
     for (const record of records) {
       try {
@@ -365,13 +313,11 @@ async function parseDump() {
 
         imagesFound++;
 
-        // Apply filters
-        if (!CONFIG.allowedMimeTypes.includes(parsed.minorMime)) continue;
+        if (!["jpg","jpeg"].includes(parsed.name.toLowerCase().split(".").pop())) continue;
         if (parsed.width < CONFIG.minWidth) continue;
         if (parsed.height < CONFIG.minHeight) continue;
         if (CONFIG.pre2022Only && parsed.timestamp > CONFIG.cutoffDate) continue;
 
-        // Build URLs
         const imageUrl = buildWikimediaUrl(parsed.name);
         const pageUrl = buildWikiPageUrl(parsed.name);
 
@@ -388,6 +334,7 @@ async function parseDump() {
           upload_date: parseWikimediaTimestamp(parsed.timestamp),
         };
 
+        if (imagesFiltered % 10 !== 0) { imagesFiltered++; continue; }
         writeStream.write(JSON.stringify(entry) + '\n');
         imagesFiltered++;
 
@@ -396,7 +343,6 @@ async function parseDump() {
       }
     }
 
-    // Progress update every 100K lines
     if (linesProcessed % 100000 === 0) {
       const elapsed = (Date.now() - startTime) / 1000;
       const rate = Math.round(linesProcessed / elapsed);
@@ -410,60 +356,35 @@ async function parseDump() {
   }
 
   writeStream.end();
-
   console.log('');
-  log(`\n✅ Parse complete:`);
-  log(`   Lines processed: ${linesProcessed.toLocaleString()}`);
-  log(`   Total images found: ${imagesFound.toLocaleString()}`);
-  log(`   Images passing filters: ${imagesFiltered.toLocaleString()}`);
+  log(`\n✅ Parse complete: ${imagesFiltered.toLocaleString()} images passing filters`);
   log(`   URL list saved to: ${urlListPath}`);
 
-  // Save parse stats
   fs.writeFileSync(path.join(CONFIG.baseDir, 'parse_stats.json'), JSON.stringify({
     parsed_at: new Date().toISOString(),
     lines_processed: linesProcessed,
     images_found: imagesFound,
     images_filtered: imagesFiltered,
-    filters: {
-      pre2022Only: CONFIG.pre2022Only,
-      minWidth: CONFIG.minWidth,
-      minHeight: CONFIG.minHeight,
-    }
+    filters: { pre2022Only: CONFIG.pre2022Only, minWidth: CONFIG.minWidth, minHeight: CONFIG.minHeight }
   }, null, 2));
 
   return imagesFiltered;
 }
 
-// Parse a single SQL VALUES record
 function parseSQLRecord(record) {
-  // Remove outer parentheses
   const inner = record.trim().replace(/^\(/, '').replace(/\)$/, '');
-
-  // State machine to split by comma, respecting quoted strings
   const fields = [];
   let current = '';
   let inString = false;
   let escape = false;
 
   for (const char of inner) {
-    if (escape) {
-      current += char;
-      escape = false;
-    } else if (char === '\\') {
-      escape = true;
-      current += char;
-    } else if (char === "'" && !inString) {
-      inString = true;
-      current += char;
-    } else if (char === "'" && inString) {
-      inString = false;
-      current += char;
-    } else if (char === ',' && !inString) {
-      fields.push(current.trim());
-      current = '';
-    } else {
-      current += char;
-    }
+    if (escape) { current += char; escape = false; }
+    else if (char === '\\') { escape = true; current += char; }
+    else if (char === "'" && !inString) { inString = true; current += char; }
+    else if (char === "'" && inString) { inString = false; current += char; }
+    else if (char === ',' && !inString) { fields.push(current.trim()); current = ''; }
+    else { current += char; }
   }
   if (current) fields.push(current.trim());
 
@@ -472,18 +393,15 @@ function parseSQLRecord(record) {
   const unquote = s => s.replace(/^'/, '').replace(/'$/, '').replace(/\\'/g, "'");
 
   return {
-    name:       unquote(fields[0]),
-    size:       parseInt(fields[1]) || 0,
-    width:      parseInt(fields[2]) || 0,
-    height:     parseInt(fields[3]) || 0,
-    majorMime:  unquote(fields[5]),
-    minorMime:  unquote(fields[6]),
-    sha1:       unquote(fields[9]),
-    timestamp:  unquote(fields[10]),
+    name:      unquote(fields[0]),
+    size:      parseInt(fields[1]) || 0,
+    width:     parseInt(fields[2]) || 0,
+    height:    parseInt(fields[3]) || 0,
+    sha1:      unquote(fields[12]),
+    timestamp: unquote(fields[11]),
   };
 }
 
-// Split SQL VALUES string into individual records
 function splitSQLValues(valuesStr) {
   const records = [];
   let depth = 0;
@@ -493,22 +411,13 @@ function splitSQLValues(valuesStr) {
 
   for (let i = 0; i < valuesStr.length; i++) {
     const char = valuesStr[i];
-
     if (escape) { escape = false; continue; }
     if (char === '\\' && inString) { escape = true; continue; }
     if (char === "'" && !inString) { inString = true; continue; }
     if (char === "'" && inString) { inString = false; continue; }
     if (inString) continue;
-
-    if (char === '(') {
-      if (depth === 0) start = i;
-      depth++;
-    } else if (char === ')') {
-      depth--;
-      if (depth === 0) {
-        records.push(valuesStr.substring(start, i + 1));
-      }
-    }
+    if (char === '(') { if (depth === 0) start = i; depth++; }
+    else if (char === ')') { depth--; if (depth === 0) records.push(valuesStr.substring(start, i + 1)); }
   }
 
   return records;
@@ -516,85 +425,57 @@ function splitSQLValues(valuesStr) {
 
 // ─── Image Download and Hash ──────────────────────────────────
 
-function downloadImage(url, destPath, timeout = CONFIG.downloadTimeout) {
-  return new Promise((resolve, reject) => {
-    let redirectCount = 0;
-
-    const makeRequest = (requestUrl) => {
-      if (redirectCount > 5) return reject(new Error('Too many redirects'));
-
-      let parsed;
-      try { parsed = new URL(requestUrl); } catch { return reject(new Error('Invalid URL')); }
-
-      const protocol = parsed.protocol === 'https:' ? https : http;
-      const req = protocol.get(requestUrl, {
-        timeout,
-        headers: {
-          'User-Agent': CONFIG.userAgent,
-          'Accept': 'image/jpeg,image/*',
+function downloadImage(url, destPath, timeout) {
+  const to = timeout || CONFIG.downloadTimeout;
+  return new Promise(function(resolve, reject) {
+    const tmpPath = destPath + '.tmp';
+    const timeoutSecs = Math.ceil(to / 1000);
+    const fs2 = require('fs');
+    const args = [
+      '--http2', '-L', '-s', '-f',
+      '--max-time', String(timeoutSecs),
+      '--connect-timeout', '10',
+      '-A', CONFIG.userAgent,
+      '-H', 'Accept: image/*',
+      '-o', tmpPath,
+      '-w', '%{http_code}|%{size_download}',
+      url
+    ];
+    const curl = spawn('curl', args);
+    let stdout = '';
+    curl.stdout.on('data', d => { stdout += d.toString(); });
+    curl.on('close', code => {
+      try {
+        if (code !== 0) {
+          try { if (fs2.existsSync(tmpPath)) fs2.unlinkSync(tmpPath); } catch(e) {}
+          return reject(new Error('curl failed=' + code));
         }
-      }, (res) => {
-        if ([301, 302, 303, 307, 308].includes(res.statusCode)) {
-          redirectCount++;
-          const location = res.headers.location;
-          if (!location) return reject(new Error('Redirect without location'));
-          res.resume();
-          return makeRequest(new URL(location, requestUrl).toString());
+        const parts = stdout.trim().split('|');
+        const httpCode = parseInt(parts[0]) || 0;
+        if (httpCode !== 200) {
+          try { if (fs2.existsSync(tmpPath)) fs2.unlinkSync(tmpPath); } catch(e) {}
+          return reject(new Error('HTTP ' + httpCode));
         }
-
-        if (res.statusCode === 404) { res.resume(); return reject(new Error('HTTP 404')); }
-        if (res.statusCode === 429) { res.resume(); return reject(new Error('Rate limited')); }
-        if (res.statusCode !== 200) { res.resume(); return reject(new Error(`HTTP ${res.statusCode}`)); }
-
-        const tmpPath = `${destPath}.tmp`;
-        const out = fs.createWriteStream(tmpPath);
-        let bytes = 0;
-        const hasher = crypto.createHash('sha256');
-
-        res.on('data', chunk => {
-          bytes += chunk.length;
-          hasher.update(chunk);
-          if (bytes > CONFIG.maxDownloadBytes) {
-            req.destroy();
-            out.destroy();
-            fs.unlinkSync(tmpPath);
-            reject(new Error('File too large'));
-          }
-        });
-
-        res.on('error', err => { out.destroy(); try { fs.unlinkSync(tmpPath); } catch {} reject(err); });
-
-        out.on('error', err => { res.destroy(); try { fs.unlinkSync(tmpPath); } catch {} reject(err); });
-
-        out.on('finish', () => {
-          if (bytes < 5000) {
-            try { fs.unlinkSync(tmpPath); } catch {}
-            return reject(new Error('File too small'));
-          }
-          try {
-            fs.renameSync(tmpPath, destPath);
-            resolve({ size: bytes, sha256: hasher.digest('hex') });
-          } catch (e) {
-            try { fs.unlinkSync(tmpPath); } catch {}
-            reject(e);
-          }
-        });
-
-        res.pipe(out);
-      });
-
-      req.on('error', reject);
-      req.on('timeout', () => req.destroy(new Error('Timeout')));
-    };
-
-    makeRequest(url);
+        if (!fs2.existsSync(tmpPath)) return reject(new Error('missing'));
+        const stat = fs2.statSync(tmpPath);
+        if (stat.size < 1000) {
+          try { fs2.unlinkSync(tmpPath); } catch(e) {}
+          return reject(new Error('too small'));
+        }
+        fs2.renameSync(tmpPath, destPath);
+        resolve({ size: stat.size, sha256: '' });
+      } catch(e) {
+        try { if (fs2.existsSync(tmpPath)) fs2.unlinkSync(tmpPath); } catch(ex) {}
+        reject(e);
+      }
+    });
+    curl.on('error', err => reject(new Error('curl: ' + err.message)));
   });
 }
 
 async function generatePHash(imagePath) {
   try {
     const sharp = require('sharp');
-    // Resize to 32x32 for pHash computation
     const { data } = await sharp(imagePath)
       .resize(32, 32, { fit: 'fill' })
       .grayscale()
@@ -602,8 +483,6 @@ async function generatePHash(imagePath) {
       .toBuffer({ resolveWithObject: true });
 
     const pixels = Array.from(data);
-
-    // Compute DCT-based pHash (simplified 8x8 DCT)
     const size = 32;
     const smallSize = 8;
     const dct = [];
@@ -622,17 +501,13 @@ async function generatePHash(imagePath) {
       }
     }
 
-    // Skip DC component (index 0), use remaining 63 values
     const dctSubset = dct.slice(1);
     const mean = dctSubset.reduce((a, b) => a + b, 0) / dctSubset.length;
-
-    // Build hash
     const bits = dctSubset.map(v => v > mean ? 1 : 0);
     let hex = '';
     for (let i = 0; i < bits.length; i += 4) {
       hex += parseInt(bits.slice(i, i + 4).join(''), 2).toString(16);
     }
-
     return hex.padEnd(16, '0').substring(0, 16);
   } catch {
     return null;
@@ -652,25 +527,18 @@ async function ingest() {
 
   await ensureTable();
 
-  // Load checkpoint
   let checkpoint = { lastLine: 0, ingested: 0, skipped: 0, failed: 0 };
   if (CONFIG.resume && fs.existsSync(CONFIG.checkpointFile)) {
     checkpoint = JSON.parse(fs.readFileSync(CONFIG.checkpointFile, 'utf8'));
     log(`Resuming from line ${checkpoint.lastLine.toLocaleString()}`);
-    log(`Previous progress: ${checkpoint.ingested.toLocaleString()} ingested`);
   }
 
-  // Load existing source IDs to skip
   const existingIds = CONFIG.skipExisting ? await getExistingSourceIds() : new Set();
 
-  // Count total lines
   log('Counting total URLs...');
-  const totalLines = parseInt(
-    execSync(`wc -l < ${CONFIG.urlListFile}`).toString().trim()
-  );
+  const totalLines = parseInt(execSync(`wc -l < ${CONFIG.urlListFile}`).toString().trim());
   log(`Total images to process: ${totalLines.toLocaleString()}`);
 
-  // Read URL list
   const urlStream = fs.createReadStream(CONFIG.urlListFile, { encoding: 'utf8' });
   const rl = readline.createInterface({ input: urlStream });
 
@@ -679,20 +547,15 @@ async function ingest() {
     ingested: checkpoint.ingested,
     skipped: checkpoint.skipped,
     failed: checkpoint.failed,
-    currentLine: 0,
     rate: 0,
   };
 
   let pendingBatch = [];
-  let activeDownloads = 0;
   let lineNumber = 0;
-  const queue = [];
-  let queueProcessing = false;
-  let startTime = Date.now();
+  const startTime = Date.now();
   let lastRateCalc = Date.now();
   let lastIngestedCount = stats.ingested;
 
-  // Save checkpoint periodically
   const saveCheckpoint = () => {
     fs.writeFileSync(CONFIG.checkpointFile, JSON.stringify({
       ...checkpoint,
@@ -706,46 +569,36 @@ async function ingest() {
 
   const checkpointInterval = setInterval(saveCheckpoint, 30000);
 
-  // Rate calculation
   const rateInterval = setInterval(() => {
     const now = Date.now();
-    const elapsed = (now - lastRateCalc) / 1000 / 60; // minutes
+    const elapsed = (now - lastRateCalc) / 1000 / 60;
     stats.rate = Math.round((stats.ingested - lastIngestedCount) / elapsed);
     lastIngestedCount = stats.ingested;
     lastRateCalc = now;
     logProgress(stats);
   }, 10000);
 
-  // Process a single image entry
   async function processEntry(entry) {
-    // Skip if already in DB
-    if (existingIds.has(entry.source_id)) {
-      stats.skipped++;
-      return;
-    }
+    if (existingIds.has(entry.source_id)) { stats.skipped++; return; }
 
-    const ext = '.jpg';
     const safeId = entry.source_id.replace(/[^a-zA-Z0-9._-]/g, '_').substring(0, 100);
-    const imagePath = path.join(CONFIG.imageDir, safeId + ext);
+    const imagePath = path.join(CONFIG.imageDir, safeId + '.jpg');
 
     try {
-      // Download image
       let downloadResult;
       for (let attempt = 0; attempt < CONFIG.maxRetries; attempt++) {
         try {
-          downloadResult = await downloadImage(entry.image_url, imagePath);
+          downloadResult = await downloadImage(encodeURI(entry.image_url), imagePath);
           break;
         } catch (err) {
           if (attempt === CONFIG.maxRetries - 1) throw err;
-          if (err.message.includes('404')) throw err; // Don't retry 404s
+          if (err.message.includes('404')) throw err;
           await new Promise(r => setTimeout(r, CONFIG.retryDelay * (attempt + 1)));
         }
       }
 
-      // Generate pHash
       const phash = await generatePHash(imagePath);
 
-      // Add to batch
       pendingBatch.push({
         phash: phash || null,
         sha256: downloadResult.sha256,
@@ -758,8 +611,8 @@ async function ingest() {
 
       existingIds.add(entry.source_id);
       stats.ingested++;
+      await new Promise(r => setTimeout(r, 500));
 
-      // Flush batch if large enough
       if (pendingBatch.length >= CONFIG.batchSize) {
         const batch = pendingBatch.splice(0, CONFIG.batchSize);
         await batchInsert(batch);
@@ -767,16 +620,13 @@ async function ingest() {
 
     } catch (err) {
       stats.failed++;
-      // Clean up failed download
       try { if (fs.existsSync(imagePath)) fs.unlinkSync(imagePath); } catch {}
     }
   }
 
-  // Concurrent processing using a simple semaphore
   const processConcurrent = async (entries) => {
     const semaphore = new Array(CONFIG.concurrent).fill(null);
     let entryIdx = 0;
-
     const worker = async () => {
       while (entryIdx < entries.length) {
         if (stats.ingested >= CONFIG.maxImages) break;
@@ -784,57 +634,32 @@ async function ingest() {
         await processEntry(entry);
       }
     };
-
     await Promise.all(semaphore.map(() => worker()));
   };
 
-  // Read all entries into memory in chunks and process
   const CHUNK_SIZE = 1000;
   let chunk = [];
 
   for await (const line of rl) {
     lineNumber++;
-
-    // Skip lines before checkpoint
     if (lineNumber <= checkpoint.lastLine) continue;
-
     if (!line.trim()) continue;
 
     try {
-      const entry = JSON.parse(line);
-      chunk.push(entry);
-    } catch {
-      continue;
-    }
+      chunk.push(JSON.parse(line));
+    } catch { continue; }
 
     if (chunk.length >= CHUNK_SIZE) {
       await processConcurrent(chunk);
       chunk = [];
-
-      // Flush remaining batch
-      if (pendingBatch.length > 0) {
-        const batch = pendingBatch.splice(0);
-        await batchInsert(batch);
-      }
-
+      if (pendingBatch.length > 0) await batchInsert(pendingBatch.splice(0));
       saveCheckpoint();
-
-      if (stats.ingested >= CONFIG.maxImages) {
-        log(`\n\nReached max images limit (${CONFIG.maxImages.toLocaleString()})`);
-        break;
-      }
+      if (stats.ingested >= CONFIG.maxImages) { log(`\nReached max images limit`); break; }
     }
   }
 
-  // Process remaining chunk
-  if (chunk.length > 0) {
-    await processConcurrent(chunk);
-  }
-
-  // Flush final batch
-  if (pendingBatch.length > 0) {
-    await batchInsert(pendingBatch);
-  }
+  if (chunk.length > 0) await processConcurrent(chunk);
+  if (pendingBatch.length > 0) await batchInsert(pendingBatch);
 
   clearInterval(checkpointInterval);
   clearInterval(rateInterval);
@@ -847,10 +672,7 @@ async function ingest() {
   log(`   Failed:    ${stats.failed.toLocaleString()}`);
   log(`   Total time: ${((Date.now() - startTime) / 3600000).toFixed(1)} hours`);
 
-  // Final DB count
-  const countResult = await pool.query(
-    `SELECT COUNT(*) FROM media_hashes WHERE source = 'wikimedia'`
-  );
+  const countResult = await pool.query(`SELECT COUNT(*) FROM media_hashes WHERE source = 'wikimedia'`);
   log(`   Total Wikimedia in DB: ${parseInt(countResult.rows[0].count).toLocaleString()}`);
 }
 
@@ -865,23 +687,12 @@ async function main() {
   log(`Pre-2022 only: ${CONFIG.pre2022Only}`);
   log(`Min resolution: ${CONFIG.minWidth}x${CONFIG.minHeight}`);
   log(`Output dir: ${CONFIG.imageDir}`);
-  log(`Base dir: ${CONFIG.baseDir}`);
 
   try {
-    if (STEP === 'download-dump' || STEP === 'all') {
-      await downloadDump();
-    }
-
-    if (STEP === 'parse-dump' || STEP === 'all') {
-      await parseDump();
-    }
-
-    if (STEP === 'ingest' || STEP === 'all') {
-      await ingest();
-    }
-
+    if (STEP === 'download-dump' || STEP === 'all') await downloadDump();
+    if (STEP === 'parse-dump'   || STEP === 'all') await parseDump();
+    if (STEP === 'ingest'       || STEP === 'all') await ingest();
     log('\n✅ All steps complete');
-
   } catch (err) {
     log(`Fatal error: ${err.message}`, 'ERROR');
     log(err.stack, 'ERROR');
