@@ -1,224 +1,286 @@
 /**
- * VeriSource GPU Service Client
- * ==============================
- * Drop into: services/gpu-ai-detector.js
- * 
- * Calls the GPU FastAPI service running on RunPod for neural
- * network-based AI detection. Replaces the broken local heuristic.
- * 
- * NOTE: This class handles GPU detection only. Fallback to
- * Sightengine when GPU is unavailable must be handled by the
- * caller in the main verification flow.
+ * VeriSource GPU AI Detector
+ * ==========================
+ * Calls the RunPod GPU inference service for:
+ *   1. Binary AI detection (AI vs authentic) — CLIP + Frequency CNN ensemble
+ *   2. Generator classification — which AI tool produced the image
+ *
+ * The GPU service runs on RunPod at the URL stored in RUNPOD_ENDPOINT.
+ * Falls back gracefully if the service is unavailable.
+ *
+ * OOD Thresholds for generator classification:
+ *   > 80% confidence  → specific generator label
+ *   50-80% confidence → "possibly_[generator]"
+ *   < 50% confidence  → "unknown_generator"
  */
 
+const axios = require('axios');
+const FormData = require('form-data');
 const fs = require('fs');
-const path = require('path');
+
+const RUNPOD_ENDPOINT = process.env.RUNPOD_ENDPOINT || '';
+const RUNPOD_TIMEOUT = parseInt(process.env.RUNPOD_TIMEOUT || '30000', 10);
+
+// OOD confidence thresholds
+const OOD_HIGH_THRESHOLD   = 0.80;
+const OOD_MEDIUM_THRESHOLD = 0.50;
+
+const GENERATOR_DISPLAY_NAMES = {
+  'authentic':        'Authentic Photo',
+  'stable_diffusion': 'Stable Diffusion',
+  'sdxl_realistic':   'SDXL / Realistic Vision',
+  'flux':             'Flux.1',
+  'dall_e_3':         'DALL-E 3',
+  'grok':             'Grok (xAI)',
+  'gemini_flash':     'Gemini Flash Image (Nano Banana)',
+  'unknown_generator':'Unknown Generator',
+};
 
 class GPUAIDetector {
-  constructor() {
-    // Normalize URL: strip trailing slash, validate scheme
-    let rawUrl = (process.env.GPU_SERVICE_URL || '').trim();
-    if (rawUrl && !rawUrl.startsWith('http://') && !rawUrl.startsWith('https://')) {
-      rawUrl = `https://${rawUrl}`;
+
+  /**
+   * Check if the RunPod GPU service is configured and reachable.
+   */
+  static isAvailable() {
+    return !!(RUNPOD_ENDPOINT && RUNPOD_ENDPOINT.startsWith('http'));
+  }
+
+  /**
+   * Detect if an image is AI-generated using the GPU ensemble classifier.
+   * Uses CLIP ViT-L/14 + Frequency CNN trained on 100K+ images.
+   *
+   * @param {string} imagePath - Local path to image file
+   * @returns {Object} { isAI, confidence, ai_confidence, provider, score, details }
+   */
+  static async detectAI(imagePath) {
+    if (!this.isAvailable()) {
+      return {
+        isAI: false,
+        confidence: 0,
+        ai_confidence: 0,
+        provider: 'gpu_unavailable',
+        score: 0,
+        details: 'GPU service not configured',
+        error: true,
+      };
     }
-    this.gpuServiceUrl = rawUrl.replace(/\/+$/, '');
 
-    this.gpuApiKey = process.env.GPU_SERVICE_API_KEY || '';
+    try {
+      const form = new FormData();
+      form.append('file', fs.createReadStream(imagePath));
 
-    // Parse timeout with NaN guard
-    const parsed = parseInt(process.env.GPU_TIMEOUT_MS, 10);
-    this.timeout = Number.isFinite(parsed) ? parsed : 15000;
+      const response = await axios.post(
+        `${RUNPOD_ENDPOINT}/detect`,
+        form,
+        {
+          headers: form.getHeaders(),
+          timeout: RUNPOD_TIMEOUT,
+        }
+      );
 
-    this.enabled = !!this.gpuServiceUrl;
+      const { is_ai, confidence, clip_score, freq_score, ensemble_score } = response.data;
+      const aiConfidence = Math.round((confidence || ensemble_score || 0) * 100 * 10) / 10;
 
-    if (this.enabled) {
-      // Log hostname only — never log full URL in case keys are embedded
-      try {
-        const hostname = new URL(this.gpuServiceUrl).hostname;
-        console.log(`🔥 GPU AI detector enabled: ${hostname}`);
-      } catch {
-        console.log('🔥 GPU AI detector enabled (could not parse hostname)');
-      }
-    } else {
-      console.log('⚠️ GPU AI detector disabled (GPU_SERVICE_URL not set)');
+      return {
+        isAI: is_ai,
+        confidence: confidence || ensemble_score || 0,
+        ai_confidence: aiConfidence,
+        likely_ai_generated: is_ai,
+        provider: 'gpu_ensemble',
+        score: ensemble_score || confidence || 0,
+        details: {
+          clip_score: clip_score || null,
+          freq_score: freq_score || null,
+          ensemble_score: ensemble_score || null,
+        },
+      };
+
+    } catch (err) {
+      console.warn(`⚠️  GPU AI detection failed: ${err.message}`);
+      return {
+        isAI: false,
+        confidence: 0,
+        ai_confidence: 0,
+        provider: 'gpu_error',
+        score: 0,
+        details: err.message,
+        error: true,
+      };
     }
   }
 
   /**
-   * Create an AbortController that auto-aborts after the configured timeout.
-   * @returns {{ controller: AbortController, clear: Function }}
+   * Classify which AI generator produced an image.
+   * Only call this when detectAI() returns isAI=true.
+   *
+   * @param {string} imagePath - Local path to image file
+   * @returns {Object} { generator, display_name, verdict_message, confidence, ood_level, top_candidates }
    */
-  _createTimeout() {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), this.timeout);
+  static async classifyGenerator(imagePath) {
+    if (!this.isAvailable()) {
+      return this._formatGeneratorResult('unknown_generator', 0, 'unavailable', {});
+    }
+
+    try {
+      const form = new FormData();
+      form.append('file', fs.createReadStream(imagePath));
+
+      const response = await axios.post(
+        `${RUNPOD_ENDPOINT}/classify-generator`,
+        form,
+        {
+          headers: form.getHeaders(),
+          timeout: RUNPOD_TIMEOUT,
+        }
+      );
+
+      const { generator, confidence, raw_scores } = response.data;
+      return this._formatGeneratorResult(generator, confidence, 'ok', raw_scores || {});
+
+    } catch (err) {
+      console.warn(`⚠️  Generator classification failed: ${err.message}`);
+      return this._formatGeneratorResult('unknown_generator', 0, 'error', {});
+    }
+  }
+
+  /**
+   * Run both AI detection and generator classification in one call.
+   * More efficient than two separate calls when the GPU service supports it.
+   *
+   * @param {string} imagePath - Local path to image file
+   * @returns {Object} { aiDetection, generatorDetection }
+   */
+  static async analyzeImage(imagePath) {
+    if (!this.isAvailable()) {
+      return {
+        aiDetection: await this.detectAI(imagePath),
+        generatorDetection: null,
+      };
+    }
+
+    try {
+      const form = new FormData();
+      form.append('file', fs.createReadStream(imagePath));
+
+      // Try combined endpoint first
+      const response = await axios.post(
+        `${RUNPOD_ENDPOINT}/analyze`,
+        form,
+        {
+          headers: form.getHeaders(),
+          timeout: RUNPOD_TIMEOUT,
+        }
+      );
+
+      const data = response.data;
+
+      const aiDetection = {
+        isAI: data.is_ai,
+        confidence: data.confidence || data.ensemble_score || 0,
+        ai_confidence: Math.round((data.confidence || data.ensemble_score || 0) * 100 * 10) / 10,
+        likely_ai_generated: data.is_ai,
+        provider: 'gpu_ensemble',
+        score: data.ensemble_score || data.confidence || 0,
+        details: {
+          clip_score: data.clip_score || null,
+          freq_score: data.freq_score || null,
+          ensemble_score: data.ensemble_score || null,
+        },
+      };
+
+      let generatorDetection = null;
+      if (data.is_ai && data.generator) {
+        generatorDetection = this._formatGeneratorResult(
+          data.generator,
+          data.generator_confidence || 0,
+          'ok',
+          data.generator_scores || {}
+        );
+      }
+
+      return { aiDetection, generatorDetection };
+
+    } catch (err) {
+      // Fall back to separate calls
+      console.warn(`⚠️  Combined analyze failed, falling back: ${err.message}`);
+      const aiDetection = await this.detectAI(imagePath);
+      const generatorDetection = aiDetection.isAI
+        ? await this.classifyGenerator(imagePath)
+        : null;
+      return { aiDetection, generatorDetection };
+    }
+  }
+
+  /**
+   * Format generator classification result with OOD thresholds applied.
+   * @private
+   */
+  static _formatGeneratorResult(generator, confidence, status, rawScores) {
+    let oodLevel, finalGenerator;
+
+    if (status === 'unavailable' || status === 'error') {
+      oodLevel = status;
+      finalGenerator = 'unknown_generator';
+      confidence = 0;
+    } else if (confidence >= OOD_HIGH_THRESHOLD) {
+      oodLevel = 'confident';
+      finalGenerator = generator;
+    } else if (confidence >= OOD_MEDIUM_THRESHOLD) {
+      oodLevel = 'uncertain';
+      finalGenerator = `possibly_${generator}`;
+    } else {
+      oodLevel = 'unknown';
+      finalGenerator = 'unknown_generator';
+    }
+
+    const baseGenerator = finalGenerator.replace('possibly_', '');
+    const displayName = GENERATOR_DISPLAY_NAMES[baseGenerator] || baseGenerator;
+
+    let verdictMessage;
+    switch (oodLevel) {
+      case 'confident':
+        verdictMessage = `Generated by ${displayName}`;
+        break;
+      case 'uncertain':
+        verdictMessage = `Possibly generated by ${displayName}`;
+        break;
+      default:
+        verdictMessage = 'Unknown AI generator';
+        break;
+    }
+
+    // Top 3 candidates
+    const topCandidates = Object.entries(rawScores)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 3)
+      .map(([gen, score]) => ({
+        generator: gen,
+        display_name: GENERATOR_DISPLAY_NAMES[gen] || gen,
+        confidence: Math.round(score * 1000) / 10,
+      }));
+
     return {
-      controller,
-      clear: () => clearTimeout(timer),
+      detected_generator: finalGenerator,
+      raw_generator: generator,
+      display_name: displayName,
+      verdict_message: verdictMessage,
+      confidence: Math.round(confidence * 1000) / 10,
+      ood_level: oodLevel,
+      top_candidates: topCandidates,
     };
   }
 
   /**
-   * Detect AI-generated content using GPU neural models.
-   * 
-   * @param {string} filePath - Path to the image file
-   * @returns {Object} Detection result with ai_score, label, confidence, models
+   * Health check for the GPU service.
+   * @returns {boolean} Whether the service is healthy
    */
-  async detect(filePath) {
-    if (!this.enabled) {
-      return {
-        success: false,
-        source: 'gpu_disabled',
-        reason: 'GPU_SERVICE_URL not configured',
-        fallback_recommended: true,
-      };
-    }
-
-    const startTime = Date.now();
-
-    // Validate file exists before attempting upload
+  static async healthCheck() {
+    if (!this.isAvailable()) return false;
     try {
-      await fs.promises.access(filePath, fs.constants.R_OK);
+      const response = await axios.get(`${RUNPOD_ENDPOINT}/health`, { timeout: 5000 });
+      return response.status === 200;
     } catch {
-      return {
-        success: false,
-        source: 'gpu_error',
-        error: `File not readable: ${filePath}`,
-        fallback_recommended: true,
-        elapsed_ms: Date.now() - startTime,
-      };
-    }
-
-    const { controller, clear } = this._createTimeout();
-
-    try {
-      // Build multipart form using built-in Node fetch (18+)
-      const { Blob } = require('buffer');
-      const sharp = require('sharp');
-      const ext = path.extname(filePath).toLowerCase();
-      const needsConversion = ['.avif', '.heif', '.heic', '.webp'].includes(ext);
-
-      let fileBuffer;
-      let fileName;
-
-      if (needsConversion) {
-        // Convert to JPEG for GPU service compatibility
-        fileBuffer = await sharp(filePath).jpeg({ quality: 95 }).toBuffer();
-        fileName = path.basename(filePath, ext) + '.jpg';
-      } else {
-        fileBuffer = await fs.promises.readFile(filePath);
-        fileName = path.basename(filePath);
-      }
-
-      const file = new Blob([fileBuffer]);
-      const form = new FormData();
-      form.append('file', file, fileName);
-
-      const headers = {};
-      if (this.gpuApiKey) {
-        headers['Authorization'] = `Bearer ${this.gpuApiKey}`;
-      }
-
-      const response = await fetch(`${this.gpuServiceUrl}/analyze`, {
-        method: 'POST',
-        headers,
-        body: form,
-        signal: controller.signal,
-      });
-
-      if (!response.ok) {
-        let errorDetail;
-        try {
-          errorDetail = await response.text();
-        } catch {
-          errorDetail = `HTTP ${response.status}`;
-        }
-        throw new Error(`GPU service returned ${response.status}: ${errorDetail}`);
-      }
-
-      let result;
-      try {
-        result = await response.json();
-      } catch {
-        throw new Error('GPU service returned non-JSON response');
-      }
-
-      const elapsed = Date.now() - startTime;
-
-      return {
-        success: true,
-        source: 'gpu_neural',
-
-        // Primary results
-        ai_score: result.ai_score,
-        label: result.label,
-        confidence: result.confidence,
-
-        // Model breakdown
-        models: result.models,
-        ensemble: result.ensemble,
-
-        // Meta
-        device: result.device,
-        gpu_inference_ms: result.total_ms,
-        total_round_trip_ms: elapsed,
-      };
-    } catch (error) {
-      const elapsed = Date.now() - startTime;
-      const isTimeout = error.name === 'AbortError';
-
-      console.error(`GPU detector ${isTimeout ? 'timeout' : 'error'} (${elapsed}ms): ${error.message}`);
-
-      return {
-        success: false,
-        source: isTimeout ? 'gpu_timeout' : 'gpu_error',
-        error: isTimeout ? `Request timed out after ${this.timeout}ms` : error.message,
-        fallback_recommended: true,
-        elapsed_ms: elapsed,
-      };
-    } finally {
-      clear();
-    }
-  }
-
-  /**
-   * Check if GPU service is healthy and responsive.
-   */
-  async healthCheck() {
-    if (!this.enabled) return { healthy: false, reason: 'disabled' };
-
-    const { controller, clear } = this._createTimeout();
-
-    try {
-      const response = await fetch(`${this.gpuServiceUrl}/health`, {
-        signal: controller.signal,
-      });
-
-      if (!response.ok) {
-        let detail;
-        try {
-          detail = await response.text();
-        } catch {
-          detail = `HTTP ${response.status}`;
-        }
-        return { healthy: false, error: `HTTP ${response.status}: ${detail}` };
-      }
-
-      let data;
-      try {
-        data = await response.json();
-      } catch {
-        return { healthy: false, error: 'Non-JSON response from health endpoint' };
-      }
-
-      return { healthy: true, ...data };
-    } catch (error) {
-      const isTimeout = error.name === 'AbortError';
-      return {
-        healthy: false,
-        error: isTimeout ? `Health check timed out after ${this.timeout}ms` : error.message,
-      };
-    } finally {
-      clear();
+      return false;
     }
   }
 }
