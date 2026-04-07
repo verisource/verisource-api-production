@@ -1,8 +1,9 @@
 /**
- * VeriSource — Imagen 4 / Nano Banana Training Data Generator
+ * VeriSource — Nano Banana (Gemini 2.5 Flash Image) Training Data Generator
  * Generates photorealistic face/portrait images via Google Gemini API.
  * Saves directly to /mnt/verisource/training-data/ai/nanobana/
  * Run on RunPod: export $(cat /mnt/verisource/.env | xargs) && node generate_nanob_training_data.js
+ * ~$0.039/image, ~2400 images within $97 budget
  */
 
 const https = require('https');
@@ -12,9 +13,9 @@ const crypto = require('crypto');
 
 const GOOGLE_API_KEY = process.env.GOOGLE_API_KEY || 'YOUR_GOOGLE_API_KEY_HERE';
 const OUT_DIR = process.env.OUTPUT_DIR || '/mnt/verisource/training-data/ai/nanobana';
-const TARGET = parseInt(process.env.BATCH_SIZE || '3000', 10);
-const CONCURRENCY = 2; // reduced to avoid connection drops
-const DELAY_MS = 3000; // increased delay
+const TARGET = parseInt(process.env.BATCH_SIZE || '2400', 10);
+const CONCURRENCY = 2;
+const DELAY_MS = 3000;
 const MAX_RETRIES = 5;
 const RETRY_DELAY_MS = 5000;
 
@@ -87,26 +88,27 @@ let done = 0, fail = 0;
 
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
+// Nano Banana uses generateContent API, not predict
 function generateImage(prompt) {
   return new Promise((resolve, reject) => {
     const body = JSON.stringify({
-      instances: [{ prompt }],
-      parameters: {
-        sampleCount: 1,
-        aspectRatio: '1:1',
-        personGeneration: 'allow_adult',
-      },
+      contents: [{
+        parts: [{ text: prompt }]
+      }],
+      generationConfig: {
+        responseModalities: ['IMAGE'],
+      }
     });
 
     const options = {
       hostname: 'generativelanguage.googleapis.com',
-      path: `/v1beta/models/imagen-4.0-generate-001:predict?key=${GOOGLE_API_KEY}`,
+      path: `/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${GOOGLE_API_KEY}`,
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Content-Length': Buffer.byteLength(body),
       },
-      timeout: 30000,
+      timeout: 60000,
     };
 
     const req = https.request(options, res => {
@@ -116,18 +118,17 @@ function generateImage(prompt) {
         try {
           const json = JSON.parse(data);
           if (json.error) return reject(new Error(json.error.message || JSON.stringify(json.error)));
-          const b64 = json.predictions?.[0]?.bytesBase64Encoded;
-          if (!b64) return reject(new Error('No image data in response'));
-          resolve(b64);
+          // Extract image from response
+          const parts = json.candidates?.[0]?.content?.parts;
+          if (!parts) return reject(new Error('No candidates in response'));
+          const imagePart = parts.find(p => p.inlineData?.mimeType?.startsWith('image/'));
+          if (!imagePart) return reject(new Error('No image data in response parts'));
+          resolve({ b64: imagePart.inlineData.data, mime: imagePart.inlineData.mimeType });
         } catch (e) { reject(e); }
       });
     });
 
-    req.on('timeout', () => {
-      req.destroy();
-      reject(new Error('Request timed out'));
-    });
-
+    req.on('timeout', () => { req.destroy(); reject(new Error('Request timed out')); });
     req.on('error', err => reject(err));
     req.write(body);
     req.end();
@@ -155,7 +156,7 @@ async function worker(id) {
     const dest = path.join(OUT_DIR, `nanob_${imageId}.jpg`);
 
     try {
-      const b64 = await generateWithRetry(prompt);
+      const { b64 } = await generateWithRetry(prompt);
       fs.writeFileSync(dest, Buffer.from(b64, 'base64'));
       done++;
       process.stdout.write(`\r✅ ${done} ❌ ${fail} | ${done + fail}/${TARGET} | ${prompt.substring(0, 50)}...`);
@@ -179,9 +180,10 @@ async function main() {
     : 0;
   done = existing;
 
-  console.log(`Imagen 4 / Nano Banana Portrait Generator`);
+  console.log(`Nano Banana (Gemini 2.5 Flash Image) Portrait Generator`);
   console.log(`Target: ${TARGET} images | Already have: ${existing}`);
   console.log(`Output: ${OUT_DIR}`);
+  console.log(`Estimated cost: ~$${((TARGET - existing) * 0.039).toFixed(2)}`);
   console.log(`Concurrency: ${CONCURRENCY} | Delay: ${DELAY_MS}ms | Max retries: ${MAX_RETRIES}\n`);
 
   if (done >= TARGET) { console.log('Already at target!'); return; }
@@ -189,6 +191,7 @@ async function main() {
   await Promise.all(Array.from({ length: CONCURRENCY }, (_, i) => worker(i)));
 
   console.log(`\n\nComplete! Generated: ${done} | Failed: ${fail}`);
+  console.log(`Estimated spend: ~$${(done * 0.039).toFixed(2)}`);
 }
 
 main().catch(console.error);
