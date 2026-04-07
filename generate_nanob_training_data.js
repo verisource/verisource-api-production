@@ -1,12 +1,11 @@
 /**
  * VeriSource — Nano Banana (Gemini 2.5 Flash Image) Training Data Generator
- * Generates photorealistic face/portrait images via Google Gemini API.
+ * Uses curl subprocess to avoid Node.js HTTPS connection drop issues.
  * Saves directly to /mnt/verisource/training-data/ai/nanobana/
- * Run on RunPod: export $(cat /mnt/verisource/.env | xargs) && node generate_nanob_training_data.js
- * ~$0.039/image, ~2400 images within $97 budget
+ * Run: export $(cat /mnt/verisource/.env | xargs) && node generate_nanob_training_data.js
  */
 
-const https = require('https');
+const { execFile } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
@@ -88,50 +87,44 @@ let done = 0, fail = 0;
 
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
-// Nano Banana uses generateContent API, not predict
 function generateImage(prompt) {
   return new Promise((resolve, reject) => {
     const body = JSON.stringify({
-      contents: [{
-        parts: [{ text: prompt }]
-      }],
-      generationConfig: {
-        responseModalities: ['IMAGE'],
+      contents: [{ parts: [{ text: prompt }] }],
+      generationConfig: { responseModalities: ['IMAGE'] }
+    });
+
+    const tmp = `/tmp/nanob_${Date.now()}_${Math.random().toString(36).slice(2)}.json`;
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image:generateContent?key=${GOOGLE_API_KEY}`;
+
+    const args = [
+      '-s', '--max-time', '120', '--connect-timeout', '30',
+      '-X', 'POST', url,
+      '-H', 'Content-Type: application/json',
+      '-d', body,
+      '-o', tmp
+    ];
+
+    execFile('curl', args, { maxBuffer: 50 * 1024 * 1024 }, (err) => {
+      if (err) {
+        try { fs.unlinkSync(tmp); } catch {}
+        return reject(new Error('curl failed: ' + err.message));
+      }
+      try {
+        const data = fs.readFileSync(tmp, 'utf8');
+        try { fs.unlinkSync(tmp); } catch {}
+        const json = JSON.parse(data);
+        if (json.error) return reject(new Error(json.error.message || JSON.stringify(json.error)));
+        const parts = json.candidates?.[0]?.content?.parts;
+        if (!parts) return reject(new Error('No candidates in response'));
+        const imagePart = parts.find(p => p.inlineData?.mimeType?.startsWith('image/'));
+        if (!imagePart) return reject(new Error('No image data in response parts'));
+        resolve({ b64: imagePart.inlineData.data, mime: imagePart.inlineData.mimeType });
+      } catch (e) {
+        try { fs.unlinkSync(tmp); } catch {}
+        reject(e);
       }
     });
-
-    const options = {
-      hostname: 'generativelanguage.googleapis.com',
-      path: `/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${GOOGLE_API_KEY}`,
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Content-Length': Buffer.byteLength(body),
-      },
-      timeout: 60000,
-    };
-
-    const req = https.request(options, res => {
-      let data = '';
-      res.on('data', chunk => { data += chunk; });
-      res.on('end', () => {
-        try {
-          const json = JSON.parse(data);
-          if (json.error) return reject(new Error(json.error.message || JSON.stringify(json.error)));
-          // Extract image from response
-          const parts = json.candidates?.[0]?.content?.parts;
-          if (!parts) return reject(new Error('No candidates in response'));
-          const imagePart = parts.find(p => p.inlineData?.mimeType?.startsWith('image/'));
-          if (!imagePart) return reject(new Error('No image data in response parts'));
-          resolve({ b64: imagePart.inlineData.data, mime: imagePart.inlineData.mimeType });
-        } catch (e) { reject(e); }
-      });
-    });
-
-    req.on('timeout', () => { req.destroy(); reject(new Error('Request timed out')); });
-    req.on('error', err => reject(err));
-    req.write(body);
-    req.end();
   });
 }
 
