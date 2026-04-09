@@ -104,7 +104,12 @@ def load_clip_detector():
         if os.path.exists(classifier_path):
             logger.info(f"Loading UFD classifier from {classifier_path}")
             state = torch.load(classifier_path, map_location=DEVICE, weights_only=True)
-            classifier.load_state_dict(state)
+            # Remap layers. prefix if present
+            new_state = {k.replace('layers.', ''): v for k, v in state.items()}
+            try:
+                classifier.load_state_dict(new_state)
+            except:
+                classifier.load_state_dict(state)
             trained = True
         else:
             logger.warning("UFD classifier weights not found. Using untrained.")
