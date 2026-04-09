@@ -1,0 +1,1028 @@
+{
+  "generated_at": "2026-03-11T20:22:44.015Z",
+  "total_downloaded": 68,
+  "total_failed": 0,
+  "generator": "dall-e-3",
+  "images": [
+    {
+      "id": "ai_dalle3_car_accidents_0000",
+      "filename": "dalle3_car_accidents_0000.png",
+      "filepath": "dalle-training/images/dalle3_car_accidents_0000.png",
+      "label": "ai",
+      "source": "dalle3",
+      "category": "car_accidents",
+      "metadata": {
+        "generator_model": "dall-e-3",
+        "revised_prompt": "A professional insurance documentation-style photograph of two vehicles with damaged bumpers in a parking lot, under the brightness of natural daylight. The photograph depicts a careful and systematic assessment of the damage done to the cars, with dents clearly visible on the metallic surfaces of the cars' bumpers.",
+        "generated_at": "2026-03-11T20:16:22.484Z",
+        "size": "1024x1024",
+        "quality": "standard"
+      }
+    },
+    {
+      "id": "ai_dalle3_car_accidents_0001",
+      "filename": "dalle3_car_accidents_0001.png",
+      "filepath": "dalle-training/images/dalle3_car_accidents_0001.png",
+      "label": "ai",
+      "source": "dalle3",
+      "category": "car_accidents",
+      "metadata": {
+        "generator_model": "dall-e-3",
+        "revised_prompt": "Picture of a car involved in a rear-end collision. The vehicle's bumper should be visibly damaged and crumpled, giving clear evidence of the collision. The hazard lights of the vehicle are in operation, flashing intermittently. The car is positioned at the side of an open road, with nearby vegetation and asphalt visible. This scene unfolds under an overcast sky, with gray, dense clouds covering the surroundings, further setting the somber mood.",
+        "generated_at": "2026-03-11T20:16:24.937Z",
+        "size": "1024x1024",
+        "quality": "standard"
+      }
+    },
+    {
+      "id": "ai_dalle3_car_accidents_0002",
+      "filename": "dalle3_car_accidents_0002.png",
+      "filepath": "dalle-training/images/dalle3_car_accidents_0002.png",
+      "label": "ai",
+      "source": "dalle3",
+      "category": "car_accidents",
+      "metadata": {
+        "generator_model": "dall-e-3",
+        "revised_prompt": "An image illustrating an insurance claim scenario: a badly rolled-over vehicle is lying on a quiet, unspoiled rural road. The car has noticeable damage to its roof, which is visible due to the angle from which the photograph is taken. This professional assessment photograph has a warm and soothing aesthetic due to it being taken during the golden hour, adding a rich, warm, amber light to the scene. The road is surrounded by rural elements, such as trees and shrubs, adding a calm atmosphere to the otherwise tense situation.",
+        "generated_at": "2026-03-11T20:16:25.163Z",
+        "size": "1024x1024",
+        "quality": "standard"
+      }
+    },
+    {
+      "id": "ai_dalle3_car_accidents_0003",
+      "filename": "dalle3_car_accidents_0003.png",
+      "filepath": "dalle-training/images/dalle3_car_accidents_0003.png",
+      "label": "ai",
+      "source": "dalle3",
+      "category": "car_accidents",
+      "metadata": {
+        "generator_model": "dall-e-3",
+        "revised_prompt": "A detailed snapshot of an incident where two cars, one a sleek silver sedan and the other a bold blue compact SUV, that have sustained minor impact damage in a shopping mall parking lot. The damage is noticeable but not extreme, with minor dents and scratched paint visible. The drivers of both the cars, a middle-aged Asian woman from the sedan and a young African man from the SUV, are standing by their vehicles, exchanging contact and insurance information. They both maintain a composed demeanor, actively participating in resolving the situation. The shopping mall can be seen in the background with people moving about.",
+        "generated_at": "2026-03-11T20:16:32.548Z",
+        "size": "1024x1024",
+        "quality": "standard"
+      }
+    },
+    {
+      "id": "ai_dalle3_car_accidents_0005",
+      "filename": "dalle3_car_accidents_0005.png",
+      "filepath": "dalle-training/images/dalle3_car_accidents_0005.png",
+      "label": "ai",
+      "source": "dalle3",
+      "category": "car_accidents",
+      "metadata": {
+        "generator_model": "dall-e-3",
+        "revised_prompt": "An image depicting the outcome of a hailstorm: multiple substantial impact marks created by hail stones are visibly denting the roof and hood of a vehicle. The car is parked in a suburban driveway, surrounded by familiar terraced houses and domestically tended gardens. The scene is lit by natural daylight, casting soft shadows underneath the car and hints of sunlight reflecting off the damaged metal surface of the vehicle.",
+        "generated_at": "2026-03-11T20:16:36.364Z",
+        "size": "1024x1024",
+        "quality": "standard"
+      }
+    },
+    {
+      "id": "ai_dalle3_car_accidents_0006",
+      "filename": "dalle3_car_accidents_0006.png",
+      "filepath": "dalle-training/images/dalle3_car_accidents_0006.png",
+      "label": "ai",
+      "source": "dalle3",
+      "category": "car_accidents",
+      "metadata": {
+        "generator_model": "dall-e-3",
+        "revised_prompt": "An insurance documentation themed image illustrating the interior of a vehicle severely damaged by water. A clear waterline should be noticeable on the car seats, marking the extent of water infiltration. The floor mats should be shown soiled and muddy as evidence of a recent flood. It should simulate the kind of photography typically used in flood assessment claims, capturing enough detail to reflect the level of damage.",
+        "generated_at": "2026-03-11T20:16:43.254Z",
+        "size": "1024x1024",
+        "quality": "standard"
+      }
+    },
+    {
+      "id": "ai_dalle3_car_accidents_0004",
+      "filename": "dalle3_car_accidents_0004.png",
+      "filepath": "dalle-training/images/dalle3_car_accidents_0004.png",
+      "label": "ai",
+      "source": "dalle3",
+      "category": "car_accidents",
+      "metadata": {
+        "generator_model": "dall-e-3",
+        "revised_prompt": "An insurance evaluation image displaying a vehicle with its front end heavily damaged due to a collision with a utility pole. The situation depicted is a nighttime one, which is illuminated with ambient street lights. The scene should evoke a purely documentary aesthetic, without any exaggerated or dramatic elements.",
+        "generated_at": "2026-03-11T20:16:44.503Z",
+        "size": "1024x1024",
+        "quality": "standard"
+      }
+    },
+    {
+      "id": "ai_dalle3_car_accidents_0007",
+      "filename": "dalle3_car_accidents_0007.png",
+      "filepath": "dalle-training/images/dalle3_car_accidents_0007.png",
+      "label": "ai",
+      "source": "dalle3",
+      "category": "car_accidents",
+      "metadata": {
+        "generator_model": "dall-e-3",
+        "revised_prompt": "Detailed depiction of a motorcycle accident scene for insurance claim document purposes. The scene includes a motorcycle tipped over resting on its side nearby a damaged vehicle. Surrounding them, are emergency responders who appear to be in active duty. A few of them are Caucasian and Hispanic men and women. They seem to be assessing the destruction caused to both the motorcycle and car. The setting is neither chaotic nor calm, further emphasising the nature of the incident. It is a realistic, unedited presentation of an AFTERMATH of a traffic incident as would be presented in an insurance claim case.",
+        "generated_at": "2026-03-11T20:16:53.257Z",
+        "size": "1024x1024",
+        "quality": "standard"
+      }
+    },
+    {
+      "id": "ai_dalle3_car_accidents_0008",
+      "filename": "dalle3_car_accidents_0008.png",
+      "filepath": "dalle-training/images/dalle3_car_accidents_0008.png",
+      "label": "ai",
+      "source": "dalle3",
+      "category": "car_accidents",
+      "metadata": {
+        "generator_model": "dall-e-3",
+        "revised_prompt": "A detailed view of a motor vehicle with extensive fire damage, noticeably charred and smoky, stationed on the shoulder of a busy highway. The surrounding scene includes flashing red and blue lights from emergency vehicles - an ambulance and a fire truck. They are attending to the situation, with personnel wearing protective gear. The contrasting dull gray concrete of the highway and the lush greenery in the background add layers to the scene. This is a scene typically seen in insurance assessment photography, capturing the severity of property damage for record and evaluation.",
+        "generated_at": "2026-03-11T20:16:54.933Z",
+        "size": "1024x1024",
+        "quality": "standard"
+      }
+    },
+    {
+      "id": "ai_dalle3_car_accidents_0009",
+      "filename": "dalle3_car_accidents_0009.png",
+      "filepath": "dalle-training/images/dalle3_car_accidents_0009.png",
+      "label": "ai",
+      "source": "dalle3",
+      "category": "car_accidents",
+      "metadata": {
+        "generator_model": "dall-e-3",
+        "revised_prompt": "Photographic scene featuring an insurance documentation style capturing a vehicle impacted by a storm. The car showcases significant damage, with its windshield shattered due to a fallen tree branch. It sits amidst a suburban street setting, neatly lined homes with manicured lawns and sidewalks framing the scene. The atmosphere post-storm is palpable with clear skies giving hint to a calm after the turbulence.",
+        "generated_at": "2026-03-11T20:16:57.512Z",
+        "size": "1024x1024",
+        "quality": "standard"
+      }
+    },
+    {
+      "id": "ai_dalle3_property_damage_0010",
+      "filename": "dalle3_property_damage_0010.png",
+      "filepath": "dalle-training/images/dalle3_property_damage_0010.png",
+      "label": "ai",
+      "source": "dalle3",
+      "category": "property_damage",
+      "metadata": {
+        "generator_model": "dall-e-3",
+        "revised_prompt": "An image capturing the scene of a house that has undergone fire damage, particularly to the roof structure, as part of a property insurance assessment. The charred beams of the house are clearly visible, a testament to the intensity of the fire. The photo is taken in daylight, highlighting the burnt features of the house in a professional, evidentiary style to ensure accurate documentation.",
+        "generated_at": "2026-03-11T20:17:05.008Z",
+        "size": "1024x1024",
+        "quality": "standard"
+      }
+    },
+    {
+      "id": "ai_dalle3_property_damage_0012",
+      "filename": "dalle3_property_damage_0012.png",
+      "filepath": "dalle-training/images/dalle3_property_damage_0012.png",
+      "label": "ai",
+      "source": "dalle3",
+      "category": "property_damage",
+      "metadata": {
+        "generator_model": "dall-e-3",
+        "revised_prompt": "A realistic depiction of a living room in the aftermath of a significant event. The visuals should capture a collapsed ceiling which has resulted in debris being scattered all over the floor. The scene is further emphasized by signs of water damage, manifesting in soaked items and discoloration on the walls. Please make sure to illuminate the scene with natural light giving it a somber and deserted feel.",
+        "generated_at": "2026-03-11T20:17:12.410Z",
+        "size": "1024x1024",
+        "quality": "standard"
+      }
+    },
+    {
+      "id": "ai_dalle3_property_damage_0011",
+      "filename": "dalle3_property_damage_0011.png",
+      "filepath": "dalle-training/images/dalle3_property_damage_0011.png",
+      "label": "ai",
+      "source": "dalle3",
+      "category": "property_damage",
+      "metadata": {
+        "generator_model": "dall-e-3",
+        "revised_prompt": "A detailed depiction of a basement affected by water damage. The walls have visible waterlines, a clear sign of the level the water reached. Various pieces of furniture such as chairs, tables and bookshelves have sustained damage, more noticeable in their tainted colors and swollen surfaces. A professional home inspector is carefully conducting an assessment of the damage, taking high-resolution photographs with a high-end camera. The inspector is a middle-aged Hispanic woman wearing a uniform denoting her role, with protective gloves and helmet. The atmosphere of the image should evoke a very precise and orderly yet unfortunate event.",
+        "generated_at": "2026-03-11T20:17:12.542Z",
+        "size": "1024x1024",
+        "quality": "standard"
+      }
+    },
+    {
+      "id": "ai_dalle3_property_damage_0013",
+      "filename": "dalle3_property_damage_0013.png",
+      "filepath": "dalle-training/images/dalle3_property_damage_0013.png",
+      "label": "ai",
+      "source": "dalle3",
+      "category": "property_damage",
+      "metadata": {
+        "generator_model": "dall-e-3",
+        "revised_prompt": "An image capturing a roofing insurance assessment in progress. It clearly shows storm damage on a roof with missing shingles. Workers installing a blue tarp can also be seen in the picture, meticulously documenting the extent of the damage and the work being done for professional documentation and insurance purposes.",
+        "generated_at": "2026-03-11T20:17:14.713Z",
+        "size": "1024x1024",
+        "quality": "standard"
+      }
+    },
+    {
+      "id": "ai_dalle3_property_damage_0015",
+      "filename": "dalle3_property_damage_0015.png",
+      "filepath": "dalle-training/images/dalle3_property_damage_0015.png",
+      "label": "ai",
+      "source": "dalle3",
+      "category": "property_damage",
+      "metadata": {
+        "generator_model": "dall-e-3",
+        "revised_prompt": "Depict a damaged commercial storefront in the aftermath of vandalism. The scene should include details such as scattered shards of broken glass and signs of disturbance. This is to be used for a professional insurance assessment. Ensure the scene is lit by the soft, diffused light characteristic of an early morning scene.",
+        "generated_at": "2026-03-11T20:17:26.347Z",
+        "size": "1024x1024",
+        "quality": "standard"
+      }
+    },
+    {
+      "id": "ai_dalle3_property_damage_0016",
+      "filename": "dalle3_property_damage_0016.png",
+      "filepath": "dalle-training/images/dalle3_property_damage_0016.png",
+      "label": "ai",
+      "source": "dalle3",
+      "category": "property_damage",
+      "metadata": {
+        "generator_model": "dall-e-3",
+        "revised_prompt": "An expertly taken photograph depicting the aftermath of a catastrophic storm in a suburban neighborhood. The focus of the image is a particular residential house that has suffered extensive structural damage due to the harsh weather conditions. Fallen tree branches, scattered roof tiles, shattered windows, and other debris strewn around the property provide a stark testament to the power of the storm. The photograph is taken in a style typical for professional insurance documentation, attempting to capture every relevant detail for further assessment.",
+        "generated_at": "2026-03-11T20:17:30.140Z",
+        "size": "1024x1024",
+        "quality": "standard"
+      }
+    },
+    {
+      "id": "ai_dalle3_property_damage_0017",
+      "filename": "dalle3_property_damage_0017.png",
+      "filepath": "dalle-training/images/dalle3_property_damage_0017.png",
+      "label": "ai",
+      "source": "dalle3",
+      "category": "property_damage",
+      "metadata": {
+        "generator_model": "dall-e-3",
+        "revised_prompt": "A high resolution image of the interior of a bedroom showing signs of smoke damage. The walls and ceiling are covered with black soot stains, indicating extensive fire damage. Detail in photography is significant enough to provide a professional evaluation. Elements comprise a darkened and discolored ceiling, blackened walls, and smeared stains on the paintwork, collectively presenting a vivid depiction of fire aftermath in a domestic space. Accurate recording for the purposes of property insurance documentation.",
+        "generated_at": "2026-03-11T20:17:41.395Z",
+        "size": "1024x1024",
+        "quality": "standard"
+      }
+    },
+    {
+      "id": "ai_dalle3_property_damage_0018",
+      "filename": "dalle3_property_damage_0018.png",
+      "filepath": "dalle-training/images/dalle3_property_damage_0018.png",
+      "label": "ai",
+      "source": "dalle3",
+      "category": "property_damage",
+      "metadata": {
+        "generator_model": "dall-e-3",
+        "revised_prompt": "An image capturing a residential driveway in a suburban setting that has been affected by ground subsidence. The photograph appears to be taken from a professional standpoint aiming at geological damage assessment. The driveway has visible cracks and uneven surfaces due to the impact of the subsidence. The surrounding suburban houses can be seen in the background. There is also the presence of gradation poles used by professionals for survey and damage measurement.",
+        "generated_at": "2026-03-11T20:17:50.325Z",
+        "size": "1024x1024",
+        "quality": "standard"
+      }
+    },
+    {
+      "id": "ai_dalle3_property_damage_0019",
+      "filename": "dalle3_property_damage_0019.png",
+      "filepath": "dalle-training/images/dalle3_property_damage_0019.png",
+      "label": "ai",
+      "source": "dalle3",
+      "category": "property_damage",
+      "metadata": {
+        "generator_model": "dall-e-3",
+        "revised_prompt": "Capture a detailed scene in the aftermath of an earthquake where a brick building bears clear signs of the tremor. The front façade is extensively cracked, indicating substantial structural damage. A trained eye would conclude that the building's unstable condition necessitates immediate rehabilitation works. To convey the professional context of the scene, please include elements often seen in insurance documentation photos. A structural engineer, a Caucasian male, with his hard hat and clipboard, inspects the structural integrity while scribbling notes. A nearby broken street lamp and upturned pavement add to the overall effect of chaos and destruction.",
+        "generated_at": "2026-03-11T20:17:58.086Z",
+        "size": "1024x1024",
+        "quality": "standard"
+      }
+    },
+    {
+      "id": "ai_dalle3_personal_injury_0021",
+      "filename": "dalle3_personal_injury_0021.png",
+      "filepath": "dalle-training/images/dalle3_personal_injury_0021.png",
+      "label": "ai",
+      "source": "dalle3",
+      "category": "personal_injury",
+      "metadata": {
+        "generator_model": "dall-e-3",
+        "revised_prompt": "Detailed image of a South Asian male patient in a clinical setting, with his arm immobilized and rested in a medical splint. He is patiently waiting in a hospital waiting room, surrounded by hospital equipment and chairs. The room is lit with stark fluorescent lighting that casts a sterile glow on the environment. Every detail in the image reflects the usual calm yet tense atmosphere one would find in such situations.",
+        "generated_at": "2026-03-11T20:18:09.955Z",
+        "size": "1024x1024",
+        "quality": "standard"
+      }
+    },
+    {
+      "id": "ai_dalle3_personal_injury_0020",
+      "filename": "dalle3_personal_injury_0020.png",
+      "filepath": "dalle-training/images/dalle3_personal_injury_0020.png",
+      "label": "ai",
+      "source": "dalle3",
+      "category": "personal_injury",
+      "metadata": {
+        "generator_model": "dall-e-3",
+        "revised_prompt": "A profoundly detailed image showcasing a medical ankle examination. There's a professional spotlight falling on the area, casting soft shadows and illuminating the skin textures. A sturdy, professional ruler rests against the limb, lending a sense of scale and precision to the scene. The backdrop is hazily blurred, accentuating the main subject, the ankle. The composition takes inspiration from medical literature but is transformed into a more graphical depiction, complete with accurate tonal variations and a controlled colour palette, primarily white, off-white and skin tones. Please abstain from including any specific individuals in the photograph.",
+        "generated_at": "2026-03-11T20:18:13.785Z",
+        "size": "1024x1024",
+        "quality": "standard"
+      }
+    },
+    {
+      "id": "ai_dalle3_property_damage_0014",
+      "filename": "dalle3_property_damage_0014.png",
+      "filepath": "dalle-training/images/dalle3_property_damage_0014.png",
+      "label": "ai",
+      "source": "dalle3",
+      "category": "property_damage",
+      "metadata": {
+        "generator_model": "dall-e-3",
+        "revised_prompt": "An image of a kitchen affected by water damage. The scene depicts warped wooden flooring soaked in water, with color changes indicating water stains. The walls show signs of wet drywall with damp patches and possible signs of mold. The visual style should evoke the sense of a professional property assessment photograph, with clear details and perfect lighting to capture the extent of the damage for insurance documentation purposes.",
+        "generated_at": "2026-03-11T20:18:25.605Z",
+        "size": "1024x1024",
+        "quality": "standard"
+      }
+    },
+    {
+      "id": "ai_dalle3_personal_injury_0023",
+      "filename": "dalle3_personal_injury_0023.png",
+      "filepath": "dalle-training/images/dalle3_personal_injury_0023.png",
+      "label": "ai",
+      "source": "dalle3",
+      "category": "personal_injury",
+      "metadata": {
+        "generator_model": "dall-e-3",
+        "revised_prompt": "Imagine a photograph typically found in medical documentation required by insurance companies. At the center of the image is a patient of South-Asian descent and an unidentified gender, wearing a hospital gown and a cervical collar. The setting appears to be a sterile, well-lit clinical environment, possibly within a hospital or a professional medical institution. A healthcare worker, a Caucasian man, is in the process of assessing the fit and positioning of the cervical collar on the patient, his hands skillfully adjusting the medical device.",
+        "generated_at": "2026-03-11T20:18:26.134Z",
+        "size": "1024x1024",
+        "quality": "standard"
+      }
+    },
+    {
+      "id": "ai_dalle3_personal_injury_0024",
+      "filename": "dalle3_personal_injury_0024.png",
+      "filepath": "dalle-training/images/dalle3_personal_injury_0024.png",
+      "label": "ai",
+      "source": "dalle3",
+      "category": "personal_injury",
+      "metadata": {
+        "generator_model": "dall-e-3",
+        "revised_prompt": "An elaborate depiction of a grocery store highlighting a 'slip hazard' scene. The interior should exhibit a range of products on shelves, bright lights, and shoppers interacting with items. Near the center, emphasize a puddle of water on the tiled floor, hinting towards a potential slip hazard. Next to the puddle, place a vivid yellow caution sign warning 'Wet Floor'. Include store employees, a middle-eastern female and a black male, both in uniform, responding swiftly to the situation carrying mops. Ensure a sense of urgency and responsibility in their demeanor and carefulness among nearby shoppers of varying descents and genders.",
+        "generated_at": "2026-03-11T20:18:44.126Z",
+        "size": "1024x1024",
+        "quality": "standard"
+      }
+    },
+    {
+      "id": "ai_dalle3_personal_injury_0022",
+      "filename": "dalle3_personal_injury_0022.png",
+      "filepath": "dalle-training/images/dalle3_personal_injury_0022.png",
+      "label": "ai",
+      "source": "dalle3",
+      "category": "personal_injury",
+      "metadata": {
+        "generator_model": "dall-e-3",
+        "revised_prompt": "A detailed image of a clinical setting featuring a medical professional examining a forearm. The medical professional, a Black female, is seen wearing blue clinical gloves. The forearm belongs to a White male patient. The examination room is clean and neatly organized with standard medical equipment such as an examination table, a tray of medical tools, and a wall-mounted blood pressure monitor. The image captures the carefully precise movements of the professional as they inspect the patient's forearm.",
+        "generated_at": "2026-03-11T20:18:47.170Z",
+        "size": "1024x1024",
+        "quality": "standard"
+      }
+    },
+    {
+      "id": "ai_dalle3_personal_injury_0026",
+      "filename": "dalle3_personal_injury_0026.png",
+      "filepath": "dalle-training/images/dalle3_personal_injury_0026.png",
+      "label": "ai",
+      "source": "dalle3",
+      "category": "personal_injury",
+      "metadata": {
+        "generator_model": "dall-e-3",
+        "revised_prompt": "An illustrative depiction of a workplace scenario where a Hispanic male construction worker is in the process of receiving a medical assessment following an injury. The incident is happening on a busy construction job site full of equipment and structures. The medical professional, a Caucasian woman with a first aid kit, is offering support and care. Emphasize the seriousness of the situation while ensuring the safety procedures in place are highlighted.",
+        "generated_at": "2026-03-11T20:18:54.630Z",
+        "size": "1024x1024",
+        "quality": "standard"
+      }
+    },
+    {
+      "id": "ai_dalle3_personal_injury_0027",
+      "filename": "dalle3_personal_injury_0027.png",
+      "filepath": "dalle-training/images/dalle3_personal_injury_0027.png",
+      "label": "ai",
+      "source": "dalle3",
+      "category": "personal_injury",
+      "metadata": {
+        "generator_model": "dall-e-3",
+        "revised_prompt": "A highly detailed image showcasing an emergency response situation at a city crosswalk. A Black female pedestrian is seen receiving medical assistance from a team of paramedics. Two paramedics, one a White man and the other a Middle-Eastern woman, are focused on helping her, their features etched with concern. The environment around is seen blurred in the background to emphasize the intensity of the situation.",
+        "generated_at": "2026-03-11T20:18:57.099Z",
+        "size": "1024x1024",
+        "quality": "standard"
+      }
+    },
+    {
+      "id": "ai_dalle3_personal_injury_0025",
+      "filename": "dalle3_personal_injury_0025.png",
+      "filepath": "dalle-training/images/dalle3_personal_injury_0025.png",
+      "label": "ai",
+      "source": "dalle3",
+      "category": "personal_injury",
+      "metadata": {
+        "generator_model": "dall-e-3",
+        "revised_prompt": "A photograph showcasing a professional medical consultation. In the image, a Middle-Eastern female physician is seen reviewing the condition of her patient. The patient is a Caucasian male. They are in a clinical setting, filled with medical equipment and a sterile atmosphere. The doctor's focus and attention to the patient's condition is evident. The photograph belongs to the genre of professional medical photography. It vividly shows the interaction between a medical practitioner and her patient during a consultation.",
+        "generated_at": "2026-03-11T20:18:58.072Z",
+        "size": "1024x1024",
+        "quality": "standard"
+      }
+    },
+    {
+      "id": "ai_dalle3_workers_compensation_0028",
+      "filename": "dalle3_workers_compensation_0028.png",
+      "filepath": "dalle-training/images/dalle3_workers_compensation_0028.png",
+      "label": "ai",
+      "source": "dalle3",
+      "category": "workers_compensation",
+      "metadata": {
+        "generator_model": "dall-e-3",
+        "revised_prompt": "A detailed image of a West-Asian female warehouse worker receiving a medical evaluation from a Black male doctor. They are inside a warehouse, surrounded by neatly stacked boxes. Various safety equipment such as hard helmets, visibility vests, and safety goggles are visibly scattered around the area. The atmosphere suggests they are following workers' compensation paperwork procedure.",
+        "generated_at": "2026-03-11T20:19:06.045Z",
+        "size": "1024x1024",
+        "quality": "standard"
+      }
+    },
+    {
+      "id": "ai_dalle3_workers_compensation_0030",
+      "filename": "dalle3_workers_compensation_0030.png",
+      "filepath": "dalle-training/images/dalle3_workers_compensation_0030.png",
+      "label": "ai",
+      "source": "dalle3",
+      "category": "workers_compensation",
+      "metadata": {
+        "generator_model": "dall-e-3",
+        "revised_prompt": "An image illustrating a workers' compensation scenario in an industrial setting. The main focus is on a South Asian female factory worker, wearing standard industry safety clothing like a luminescent green safety vest and safety goggles. She is receiving a medical assessment for a hand injury. Around her, machinery, metallic structures, and other industrial paraphernalia can be spotted. The atmosphere conveys the importance of safety measures in such a demanding environment.",
+        "generated_at": "2026-03-11T20:19:09.891Z",
+        "size": "1024x1024",
+        "quality": "standard"
+      }
+    },
+    {
+      "id": "ai_dalle3_workers_compensation_0031",
+      "filename": "dalle3_workers_compensation_0031.png",
+      "filepath": "dalle-training/images/dalle3_workers_compensation_0031.png",
+      "label": "ai",
+      "source": "dalle3",
+      "category": "workers_compensation",
+      "metadata": {
+        "generator_model": "dall-e-3",
+        "revised_prompt": "Capture an image of a clinical assessment scenario in a hospital setting. It should feature a patient of South Asian descent, with a neutral facial expression, receiving medical evaluation from a medical professional, who is a Hispanic woman. The environment should clearly indicate a professional medical setting with appropriate instruments and facilities. The photography style should project professionalism, suitable for documentation purposes.",
+        "generated_at": "2026-03-11T20:19:16.408Z",
+        "size": "1024x1024",
+        "quality": "standard"
+      }
+    },
+    {
+      "id": "ai_dalle3_workers_compensation_0032",
+      "filename": "dalle3_workers_compensation_0032.png",
+      "filepath": "dalle-training/images/dalle3_workers_compensation_0032.png",
+      "label": "ai",
+      "source": "dalle3",
+      "category": "workers_compensation",
+      "metadata": {
+        "generator_model": "dall-e-3",
+        "revised_prompt": "A vivid image exhibiting a workplace scene at a loading dock environment. The dock portrays typical features such as large industrial buildings, shipment pallets, and trucks. In the background a dock is visible, filled with an assortment of packages ready to be shipped. The central focus is on a Hispanic male delivery worker, wearing his company's uniform and a hat, appearing to have a shoulder discomfort. He is actively receiving a shoulder assessment from a Caucasian female physiotherapist who is professionally dressed. Also visible are some medical equipment and charts, indicating the worker's compensation-related documentation process.",
+        "generated_at": "2026-03-11T20:19:23.411Z",
+        "size": "1024x1024",
+        "quality": "standard"
+      }
+    },
+    {
+      "id": "ai_dalle3_war_documentary_0033",
+      "filename": "dalle3_war_documentary_0033.png",
+      "filepath": "dalle-training/images/dalle3_war_documentary_0033.png",
+      "label": "ai",
+      "source": "dalle3",
+      "category": "war_documentary",
+      "metadata": {
+        "generator_model": "dall-e-3",
+        "revised_prompt": "Image of a cityscape where urban infrastructure has undergone significant damage, presumably due to a conflict. Streets and buildings are filled with rubble, carefully documented for assessment of the severity of the situation. An overcast sky looms overhead, vividly encapsulating the somber atmosphere of the scene.",
+        "generated_at": "2026-03-11T20:19:26.214Z",
+        "size": "1024x1024",
+        "quality": "standard"
+      }
+    },
+    {
+      "id": "ai_dalle3_war_documentary_0034",
+      "filename": "dalle3_war_documentary_0034.png",
+      "filepath": "dalle-training/images/dalle3_war_documentary_0034.png",
+      "label": "ai",
+      "source": "dalle3",
+      "category": "war_documentary",
+      "metadata": {
+        "generator_model": "dall-e-3",
+        "revised_prompt": "An image capturing the tense atmosphere of peacekeeping security personnel, clad in tactical gear, weaving their way through the ravaged streets of a war-impacted city. The composition reflects a style similar to documentary photography, focusing on their detailed equipment, body language, and the surrounding destruction. The team is diverse, including Caucasian, South Asian, and Middle-Eastern men and women who volunteered to aid in rebuilding efforts. The shot is in striking black and white, highlighting the contrast between the forces' crisp attire and the city's dusty ruins.",
+        "generated_at": "2026-03-11T20:19:35.937Z",
+        "size": "1024x1024",
+        "quality": "standard"
+      }
+    },
+    {
+      "id": "ai_dalle3_war_documentary_0035",
+      "filename": "dalle3_war_documentary_0035.png",
+      "filepath": "dalle-training/images/dalle3_war_documentary_0035.png",
+      "label": "ai",
+      "source": "dalle3",
+      "category": "war_documentary",
+      "metadata": {
+        "generator_model": "dall-e-3",
+        "revised_prompt": "An emotive image capturing a residential area   impacted by conflict during the warm golden hour. The neighborhood displays structural damage with rubble and debris, testament to the unfortunate reality of the war. Depict the buildings with varying levels of damage, some standing while others are reduced to ruins. The golden sunlight cascades, infusing the scene with an aura of somber beauty and painting long, looming shadows across the battered landscape. Despite the chaotic evidence of conflict, elements of daily life - toys, household items, a hint of a garden - display resilience amidst destruction.",
+        "generated_at": "2026-03-11T20:19:39.541Z",
+        "size": "1024x1024",
+        "quality": "standard"
+      }
+    },
+    {
+      "id": "ai_dalle3_workers_compensation_0029",
+      "filename": "dalle3_workers_compensation_0029.png",
+      "filepath": "dalle-training/images/dalle3_workers_compensation_0029.png",
+      "label": "ai",
+      "source": "dalle3",
+      "category": "workers_compensation",
+      "metadata": {
+        "generator_model": "dall-e-3",
+        "revised_prompt": "Detail-oriented documentation of a workplace incident at a construction site, showcasing the immediate medical response in process. The image should include safety equipment such as hard hats, reflective vests, safety boots, and ear protectors clearly visible. Capture various construction workers, comprising of a South Asian male, an Hispanic female, and a Middle Eastern male involved in the incident. The overall scenario should clearly signify the importance of workers' compensation through visual cues such as paperwork and medical treatment at site. Lighting should give the scene a look of daytime clarity.",
+        "generated_at": "2026-03-11T20:19:46.615Z",
+        "size": "1024x1024",
+        "quality": "standard"
+      }
+    },
+    {
+      "id": "ai_dalle3_war_documentary_0036",
+      "filename": "dalle3_war_documentary_0036.png",
+      "filepath": "dalle-training/images/dalle3_war_documentary_0036.png",
+      "label": "ai",
+      "source": "dalle3",
+      "category": "war_documentary",
+      "metadata": {
+        "generator_model": "dall-e-3",
+        "revised_prompt": "Documentary photo portraying a military logistics convoy with men and women of diverse descents wearing military uniforms. The convoy is navigating a damaged road through a town that bears the marks of conflict. Old, worn-out buildings, fractured lanes, demolished structures line the street. The convoy is on a humanitarian mission, carrying food, water, and medical supplies for the locals. Some soldiers are distributing the aid, while others are conversing with the townspeople, reflecting the harrowing yet hopeful environment in the wake of conflict.",
+        "generated_at": "2026-03-11T20:19:48.354Z",
+        "size": "1024x1024",
+        "quality": "standard"
+      }
+    },
+    {
+      "id": "ai_dalle3_war_documentary_0038",
+      "filename": "dalle3_war_documentary_0038.png",
+      "filepath": "dalle-training/images/dalle3_war_documentary_0038.png",
+      "label": "ai",
+      "source": "dalle3",
+      "category": "war_documentary",
+      "metadata": {
+        "generator_model": "dall-e-3",
+        "revised_prompt": "A documentary-style photojournalism photograph showcasing a display of press corps from diverse descents and genders. They are all equipped with various protective gear such as helmets, bulletproof vests, and eyewear as they attend a briefing at a conflict zone. Front and center is a middle-eastern woman, sharply focused, her face serious and intent, a notepad clutched in her hands. In the action-filled background, a South Asian man adjusts his camera, and a Caucasian man peers at his phone, their expressions palpable with focus and determination.",
+        "generated_at": "2026-03-11T20:19:59.312Z",
+        "size": "1024x1024",
+        "quality": "standard"
+      }
+    },
+    {
+      "id": "ai_dalle3_war_documentary_0039",
+      "filename": "dalle3_war_documentary_0039.png",
+      "filepath": "dalle-training/images/dalle3_war_documentary_0039.png",
+      "label": "ai",
+      "source": "dalle3",
+      "category": "war_documentary",
+      "metadata": {
+        "generator_model": "dall-e-3",
+        "revised_prompt": "A carefully captured image in the style of documentary photography showing infrastructure damage in a conflict-affected zone. The main focus of the photo is a bridge that has experienced substantial damage. The surroundings of the bridge show signs of devastation and war, with rubble and possibly abandoned vehicles, which narrate a silent tale of the chaos and conflict that has taken place here. The photo carries a sense of urgency and importance, typically seen in war-zone documentation and journalism.",
+        "generated_at": "2026-03-11T20:20:00.884Z",
+        "size": "1024x1024",
+        "quality": "standard"
+      }
+    },
+    {
+      "id": "ai_dalle3_war_documentary_0037",
+      "filename": "dalle3_war_documentary_0037.png",
+      "filepath": "dalle-training/images/dalle3_war_documentary_0037.png",
+      "label": "ai",
+      "source": "dalle3",
+      "category": "war_documentary",
+      "metadata": {
+        "generator_model": "dall-e-3",
+        "revised_prompt": "A photograph in documentary style captures a glimpse of a field medical facility. This temporary setup is filled with dedicated medical personnel of diverse racial backgrounds including South Asian and Caucasian, with a balanced mix of genders. A multitude of medical supplies are carefully sorted, ready to provide vital humanitarian aid. Every detail in the photograph speaks to care, precision, and a relentless commitment to comfort and healing. Lining the edges of the scene, the rough and natural terrain subtly communicates the facility's remote location, serving as a stark background to the oasis of care within.",
+        "generated_at": "2026-03-11T20:20:13.460Z",
+        "size": "1024x1024",
+        "quality": "standard"
+      }
+    },
+    {
+      "id": "ai_dalle3_war_documentary_0041",
+      "filename": "dalle3_war_documentary_0041.png",
+      "filepath": "dalle-training/images/dalle3_war_documentary_0041.png",
+      "label": "ai",
+      "source": "dalle3",
+      "category": "war_documentary",
+      "metadata": {
+        "generator_model": "dall-e-3",
+        "revised_prompt": "Capture a meaningful scene depicting civilian displacement evident in a humanitarian documentary. It features diverse individuals belonging to different descents, such as Black, Caucasian, Midde-Eastern families carrying their personal belongings, showcasing their strength and resilience. Damaged urban infrastructure is noticeably scattered around the image, highlighting the enormity of their challenging situation. Capture the emotion, the hardship, and resilience in this poignant setting.",
+        "generated_at": "2026-03-11T20:20:14.699Z",
+        "size": "1024x1024",
+        "quality": "standard"
+      }
+    },
+    {
+      "id": "ai_dalle3_war_documentary_0040",
+      "filename": "dalle3_war_documentary_0040.png",
+      "filepath": "dalle-training/images/dalle3_war_documentary_0040.png",
+      "label": "ai",
+      "source": "dalle3",
+      "category": "war_documentary",
+      "metadata": {
+        "generator_model": "dall-e-3",
+        "revised_prompt": "Capture an image inspired by the humanitarian documentation genre. The scene is set on a rural road where decommissioned military equipment has been left to rust. The equipment looms large in the forefront, a quiet testament to a war-torn past. The sky above is overcast, a blanket of grey clouds adding a somber ambiance to the scene. The style is akin to traditional documentary photography, showcasing an unembellished truth about our world.",
+        "generated_at": "2026-03-11T20:20:15.314Z",
+        "size": "1024x1024",
+        "quality": "standard"
+      }
+    },
+    {
+      "id": "ai_dalle3_social_unrest_0044",
+      "filename": "dalle3_social_unrest_0044.png",
+      "filepath": "dalle-training/images/dalle3_social_unrest_0044.png",
+      "label": "ai",
+      "source": "dalle3",
+      "category": "social_unrest",
+      "metadata": {
+        "generator_model": "dall-e-3",
+        "revised_prompt": "A scene displaying a large group of diverse people in an urban setting as the sun is setting, creating a scenic dusk lighting. The ambiance is that of a public gathering and you can see authority figures maintaining crowd control. This scene should encapsulate the essence and subjectivity of photojournalism, with an emphasis on truth, objectivity, and timeliness. The scene is depicted with an observational approach in a documentary aesthetic style, showcasing details of this real-life situation.",
+        "generated_at": "2026-03-11T20:20:29.702Z",
+        "size": "1024x1024",
+        "quality": "standard"
+      }
+    },
+    {
+      "id": "ai_dalle3_war_documentary_0042",
+      "filename": "dalle3_war_documentary_0042.png",
+      "filepath": "dalle-training/images/dalle3_war_documentary_0042.png",
+      "label": "ai",
+      "source": "dalle3",
+      "category": "war_documentary",
+      "metadata": {
+        "generator_model": "dall-e-3",
+        "revised_prompt": "A neutral-toned, high-resolution image showcasing a diverse humanitarian demining team at work in a rural landscape. The team consists of men and women of different descents - Caucasian, Hispanic, Black, Middle-Eastern, South Asian, and White, each adorned in their protective equipment. The image captures their seriousness and dedication in executing their tasks with safe tools within this dangerous occupation. The entire scene has a professional documentary style, encapsulating the realness and importance of their work. The image should also capture elements of the rural landscape - trees, open fields, and perhaps a setting or rising sun in the background, lending contrasts and shadows to the scene.",
+        "generated_at": "2026-03-11T20:20:31.056Z",
+        "size": "1024x1024",
+        "quality": "standard"
+      }
+    },
+    {
+      "id": "ai_dalle3_social_unrest_0043",
+      "filename": "dalle3_social_unrest_0043.png",
+      "filepath": "dalle-training/images/dalle3_social_unrest_0043.png",
+      "label": "ai",
+      "source": "dalle3",
+      "category": "social_unrest",
+      "metadata": {
+        "generator_model": "dall-e-3",
+        "revised_prompt": "Envision a black and white documentary-style photograph showcasing a public demonstration happening on a bustling city street. The scene is alive with people of all genders and ethnicities: Black, Hispanic, Middle-Eastern, South Asian, Caucasian, and others. They carry signs bearing various messages of solidarity and protest. The people's faces display a multitude of emotions—passion, determination, frustration, and hope—capturing the essence of photojournalism that strives to tell the truth through images. The backdrop of the scene comprises towering buildings, streetlights, and vehicles, adding to the urban environment's ambiance.",
+        "generated_at": "2026-03-11T20:20:31.704Z",
+        "size": "1024x1024",
+        "quality": "standard"
+      }
+    },
+    {
+      "id": "ai_dalle3_social_unrest_0045",
+      "filename": "dalle3_social_unrest_0045.png",
+      "filepath": "dalle-training/images/dalle3_social_unrest_0045.png",
+      "label": "ai",
+      "source": "dalle3",
+      "category": "social_unrest",
+      "metadata": {
+        "generator_model": "dall-e-3",
+        "revised_prompt": "A scene unfolding in the style of traditional photojournalism. A large structure is consumed by untamed flames during a period of civil unrest. The fire has broken the quiet of the night, painting the dark sky with an ominous glow. In their efforts to control the situation, members of the fire department are visible, fearlessly pushing forward through the chaos. With fire hoses in their hands and comrades beside them, they are a symbol of courage amidst the turmoil. A black, South Asian and Hispanic female are prominently active as firefighters in the scene, sheltered in their heavy gear.",
+        "generated_at": "2026-03-11T20:20:42.801Z",
+        "size": "1024x1024",
+        "quality": "standard"
+      }
+    },
+    {
+      "id": "ai_dalle3_social_unrest_0047",
+      "filename": "dalle3_social_unrest_0047.png",
+      "filepath": "dalle-training/images/dalle3_social_unrest_0047.png",
+      "label": "ai",
+      "source": "dalle3",
+      "category": "social_unrest",
+      "metadata": {
+        "generator_model": "dall-e-3",
+        "revised_prompt": "Photorealistic representation of a deserted urban street, once vibrant and lively, now void of human presence. At the forefront capturing the mood of silence and solitude, is a conspicuous line-up of public safety vehicles hinting at a stand-by protocol. Interestingly, the depiction should adopt the visual ethos of document-style photojournalism, capturing the raw essence and truth of a profound social circumstance in a city landscape. The architectural details of the buildings, the stark contrast between light and shadow, along with the eeriness of an empty street, should beautifully encapsulate this scene.",
+        "generated_at": "2026-03-11T20:20:47.102Z",
+        "size": "1024x1024",
+        "quality": "standard"
+      }
+    },
+    {
+      "id": "ai_dalle3_social_unrest_0049",
+      "filename": "dalle3_social_unrest_0049.png",
+      "filepath": "dalle-training/images/dalle3_social_unrest_0049.png",
+      "label": "ai",
+      "source": "dalle3",
+      "category": "social_unrest",
+      "metadata": {
+        "generator_model": "dall-e-3",
+        "revised_prompt": "A dynamic black and white documentary-style photograph capturing a moment of crowd dispersal at a public plaza in an urban setting. Amid the chaos, smoke rises, diffusing the atmosphere and casting an eerie veil over figures in motion. The architecture of the cityscape frames the scene, from towering buildings to hastily deserted benches. This image embodies the tradition of photojournalism – capturing a decisive moment, the urgency of events, and a view of the human condition amidst the milieu of city life.",
+        "generated_at": "2026-03-11T20:21:02.642Z",
+        "size": "1024x1024",
+        "quality": "standard"
+      }
+    },
+    {
+      "id": "ai_dalle3_social_unrest_0046",
+      "filename": "dalle3_social_unrest_0046.png",
+      "filepath": "dalle-training/images/dalle3_social_unrest_0046.png",
+      "label": "ai",
+      "source": "dalle3",
+      "category": "social_unrest",
+      "metadata": {
+        "generator_model": "dall-e-3",
+        "revised_prompt": "Documentary-style photograph capturing a scene of a commercial property, post-civil disturbance. Emphasize the marks and traces of turmoil, as well as signs of property damage in the setting. The venue should have a silent yet expressive narrative, much like a piece of photojournalism: broken glass panes, scattered debris, and graffiti might be visible. Capture the details that hint towards a damage assessment process - perhaps remnants of caution tape, notation markings or signs. The setting could be at dawn/dusk to add a natural dramatic effect.",
+        "generated_at": "2026-03-11T20:21:12.676Z",
+        "size": "1024x1024",
+        "quality": "standard"
+      }
+    },
+    {
+      "id": "ai_dalle3_social_unrest_0050",
+      "filename": "dalle3_social_unrest_0050.png",
+      "filepath": "dalle-training/images/dalle3_social_unrest_0050.png",
+      "label": "ai",
+      "source": "dalle3",
+      "category": "social_unrest",
+      "metadata": {
+        "generator_model": "dall-e-3",
+        "revised_prompt": "A detailed photographic style image that captures a government building facade covered in colorful graffiti. The scene is bustling with a diverse cleanup crew. Depict a Black woman and a Middle-Eastern man working with power washers on the facade, wearing appropriate safety gear like protective eye glasses, gloves, and high visibility jackets. The scene mirrors photojournalism aesthetics with its sharp focus and high contrast, highlighting the tension between urban art and civic cleanliness.",
+        "generated_at": "2026-03-11T20:21:12.928Z",
+        "size": "1024x1024",
+        "quality": "standard"
+      }
+    },
+    {
+      "id": "ai_dalle3_social_unrest_0048",
+      "filename": "dalle3_social_unrest_0048.png",
+      "filepath": "dalle-training/images/dalle3_social_unrest_0048.png",
+      "label": "ai",
+      "source": "dalle3",
+      "category": "social_unrest",
+      "metadata": {
+        "generator_model": "dall-e-3",
+        "revised_prompt": "A dramatic nocturnal scene in a bustling city intersection. A large crowd of people of varying races and genders have gathered around an overturned vehicle, their facial expressions ranging from shock to concern. The city lights cast long shadows and contrast with the darkness of the night. Photojournalists are subtly present, capturing the compelling scene with their cameras. The tension of the event suggests an unexpected event has taken place, while the urban backdrop of tall buildings, traffic lights, and busy roads further sets the stage.",
+        "generated_at": "2026-03-11T20:21:15.859Z",
+        "size": "1024x1024",
+        "quality": "standard"
+      }
+    },
+    {
+      "id": "ai_dalle3_social_unrest_0051",
+      "filename": "dalle3_social_unrest_0051.png",
+      "filepath": "dalle-training/images/dalle3_social_unrest_0051.png",
+      "label": "ai",
+      "source": "dalle3",
+      "category": "social_unrest",
+      "metadata": {
+        "generator_model": "dall-e-3",
+        "revised_prompt": "Documentary style photograph of a candlelight memorial ceremony. The image features a large crowd of people with a diverse mixture of descents such as Caucasian, Hispanic, Black, Middle-Eastern, South Asian among others. Everyone in the crowd is holding lit candles, creating a shimmering sea of lights against the dark night-time setting. In the background, there's an imposing building symbolic of City Hall, with its lit windows adding more serenity to the night. The overall mood is somber yet peaceful.",
+        "generated_at": "2026-03-11T20:21:26.278Z",
+        "size": "1024x1024",
+        "quality": "standard"
+      }
+    },
+    {
+      "id": "ai_dalle3_fraud_scenarios_0053",
+      "filename": "dalle3_fraud_scenarios_0053.png",
+      "filepath": "dalle-training/images/dalle3_fraud_scenarios_0053.png",
+      "label": "ai",
+      "source": "dalle3",
+      "category": "fraud_scenarios",
+      "metadata": {
+        "generator_model": "dall-e-3",
+        "revised_prompt": "Picture a grocery store scene where a spill has just occurred. A yellow, pyramid-shaped wet floor sign is positioned tactically to signal caution. The surrounding environment is filled with well-stocked shelves, displaying a variety of food and household items. In the background, a Caucasian female employee in uniform, handling a mop, is preparing to clean up the mess. There's a Black male customer nearby, maneuvering his cart carefully, wary of the slip hazard. The photograph is shot in a way to reflect the practical aspects of safety regulations and insurance documentation.",
+        "generated_at": "2026-03-11T20:21:28.446Z",
+        "size": "1024x1024",
+        "quality": "standard"
+      }
+    },
+    {
+      "id": "ai_dalle3_fraud_scenarios_0054",
+      "filename": "dalle3_fraud_scenarios_0054.png",
+      "filepath": "dalle-training/images/dalle3_fraud_scenarios_0054.png",
+      "label": "ai",
+      "source": "dalle3",
+      "category": "fraud_scenarios",
+      "metadata": {
+        "generator_model": "dall-e-3",
+        "revised_prompt": "A professional-grade photograph of a minor vehicle accident scene. The picture captures the details needed for an insurance claim assessment. The setting is a busy parking lot, the sunlight streaming in at a late afternoon angle. There're crumpled bumpers on a pair of cars - one a fiery red sedan driven by a South Asian woman, and the other a pristine white SUV steered by a Middle Eastern man. Scratches and dents from the impact are clear, alongside the expressions of slight shock on the drivers' faces, setting a real context to a routine insurance case.",
+        "generated_at": "2026-03-11T20:21:38.575Z",
+        "size": "1024x1024",
+        "quality": "standard"
+      }
+    },
+    {
+      "id": "ai_dalle3_fraud_scenarios_0055",
+      "filename": "dalle3_fraud_scenarios_0055.png",
+      "filepath": "dalle-training/images/dalle3_fraud_scenarios_0055.png",
+      "label": "ai",
+      "source": "dalle3",
+      "category": "fraud_scenarios",
+      "metadata": {
+        "generator_model": "dall-e-3",
+        "revised_prompt": "A professionally styled photograph of an insurance claims documentation scene. There are two individuals involved in a minor vehicle collision in a parking lot. One person, a South Asian male, is near a small silver sedan with its bumper lightly scraped. The other individual, a Black female, is standing next to a blue SUV with a tiny dent at the rear. Both are seen in the middle of an earnest conversation, likely discussing the accident details.",
+        "generated_at": "2026-03-11T20:21:39.483Z",
+        "size": "1024x1024",
+        "quality": "standard"
+      }
+    },
+    {
+      "id": "ai_dalle3_social_unrest_0052",
+      "filename": "dalle3_social_unrest_0052.png",
+      "filepath": "dalle-training/images/dalle3_social_unrest_0052.png",
+      "label": "ai",
+      "source": "dalle3",
+      "category": "social_unrest",
+      "metadata": {
+        "generator_model": "dall-e-3",
+        "revised_prompt": "An urban scene depicting the chaos and intensity of public unrest. Picture barricaded downtown streets with hastily erected barriers of debris and hastily abandoned vehicles. There are signs of a strong security presence, visible through the occasional armored vehicle and officers in riot gear. Focus should be given to the abandoned vehicles that symbolize the abruptness of the events - cars hastily left in the middle of streets, doors left open, perhaps an overturned bike. Buildings in the background have their windows boarded up. The atmosphere is tense, laden with the weight of recent events.",
+        "generated_at": "2026-03-11T20:21:51.762Z",
+        "size": "1024x1024",
+        "quality": "standard"
+      }
+    },
+    {
+      "id": "ai_dalle3_fraud_scenarios_0057",
+      "filename": "dalle3_fraud_scenarios_0057.png",
+      "filepath": "dalle-training/images/dalle3_fraud_scenarios_0057.png",
+      "label": "ai",
+      "source": "dalle3",
+      "category": "fraud_scenarios",
+      "metadata": {
+        "generator_model": "dall-e-3",
+        "revised_prompt": "An image of a medical assessment taking place in a hospital. It includes a Caucasian male patient in his middle ages wearing a hospital gown. He is sitting on the examination table, looking calm and patient. The shot also includes a South Asian female doctor in her early 30s, wearing a white coat, stethoscope around her neck, looking into her patient's medical records. The image maintains a neutral, straightforward clinical documentation style, without any artistic effects or dramatization. The emphasis is on the clinical details and professional nature of the environment. The setting is clean and well-lit.",
+        "generated_at": "2026-03-11T20:21:53.348Z",
+        "size": "1024x1024",
+        "quality": "standard"
+      }
+    },
+    {
+      "id": "ai_dalle3_fraud_scenarios_0056",
+      "filename": "dalle3_fraud_scenarios_0056.png",
+      "filepath": "dalle-training/images/dalle3_fraud_scenarios_0056.png",
+      "label": "ai",
+      "source": "dalle3",
+      "category": "fraud_scenarios",
+      "metadata": {
+        "generator_model": "dall-e-3",
+        "revised_prompt": "A detailed photograph capturing a scene of an insurance property claim assessment. The image showcases a room with noticeable water damage. Wet and warped wooden floors, discolored walls, and damp furniture can be seen. Lying next to the damaged areas, a measurement marker is prominent, providing scale for damage size. A professional, possibly of Hispanic descent, is in the frame documenting the extent of destruction. The individual is equipped with a clipboard and pen, diligently taking notes. The atmosphere conveys a sense of seriousness and urgency, common in such professional assessments.",
+        "generated_at": "2026-03-11T20:21:58.863Z",
+        "size": "1024x1024",
+        "quality": "standard"
+      }
+    },
+    {
+      "id": "ai_dalle3_medical_0059",
+      "filename": "dalle3_medical_0059.png",
+      "filepath": "dalle-training/images/dalle3_medical_0059.png",
+      "label": "ai",
+      "source": "dalle3",
+      "category": "medical",
+      "metadata": {
+        "generator_model": "dall-e-3",
+        "revised_prompt": "Create a highly realistic image of a middle-aged Caucasian female patient resting on a hospital bed. She should be connected to an IV drip, and various medical monitors with soft glow should be visible nearby. Three medical staff members should be seen in the background, comprised of a Black male nurse, a South Asian female doctor, and a Hispanic male technician, each busy with their respective tasks. The scene should have typical clinical lighting, casting everything in cool, sterile white light.",
+        "generated_at": "2026-03-11T20:22:04.537Z",
+        "size": "1024x1024",
+        "quality": "standard"
+      }
+    },
+    {
+      "id": "ai_dalle3_medical_0058",
+      "filename": "dalle3_medical_0058.png",
+      "filepath": "dalle-training/images/dalle3_medical_0058.png",
+      "label": "ai",
+      "source": "dalle3",
+      "category": "medical",
+      "metadata": {
+        "generator_model": "dall-e-3",
+        "revised_prompt": "Generate a photorealistic clinical image of a Middle-Eastern female doctor reviewing an X-ray on a lightboard in a hospital setting. She is wearing professional medical attire, which includes a white coat, stethoscope around her neck, and glasses. The setting is a well-lit and organized medical office, with medical equipment and charts in the background. The emphasis should be on the technique and detail used in her examination of the X-ray.",
+        "generated_at": "2026-03-11T20:22:08.288Z",
+        "size": "1024x1024",
+        "quality": "standard"
+      }
+    },
+    {
+      "id": "ai_dalle3_medical_0060",
+      "filename": "dalle3_medical_0060.png",
+      "filepath": "dalle-training/images/dalle3_medical_0060.png",
+      "label": "ai",
+      "source": "dalle3",
+      "category": "medical",
+      "metadata": {
+        "generator_model": "dall-e-3",
+        "revised_prompt": "Create a photorealistic image of an MRI scan result being examined. Picture a consultation room with neutral lighting. A South Asian female doctor clad in her white lab coat is deep in conversation with her Caucasian male patient. They both express a deep focus on the MRI scan result displayed on a monitor.",
+        "generated_at": "2026-03-11T20:22:10.637Z",
+        "size": "1024x1024",
+        "quality": "standard"
+      }
+    },
+    {
+      "id": "ai_dalle3_medical_0062",
+      "filename": "dalle3_medical_0062.png",
+      "filepath": "dalle-training/images/dalle3_medical_0062.png",
+      "label": "ai",
+      "source": "dalle3",
+      "category": "medical",
+      "metadata": {
+        "generator_model": "dall-e-3",
+        "revised_prompt": "Create a photorealistic image of a bustling emergency room triage area. Picture people of various descents including Hispanic, Caucasian, Black, Middle-Eastern, and South Asian. The image must include multiple patients of different genders and ages, male and female nurses clothed in blue medical scrubs, attending to the patients. Also, make sure to incorporate the glow of fluorescent lighting reflecting off the sterile, polished surfaces and medical equipment",
+        "generated_at": "2026-03-11T20:22:19.955Z",
+        "size": "1024x1024",
+        "quality": "standard"
+      }
+    },
+    {
+      "id": "ai_dalle3_realistic_portraits_0063",
+      "filename": "dalle3_realistic_portraits_0063.png",
+      "filepath": "dalle-training/images/dalle3_realistic_portraits_0063.png",
+      "label": "ai",
+      "source": "dalle3",
+      "category": "realistic_portraits",
+      "metadata": {
+        "generator_model": "dall-e-3",
+        "revised_prompt": "Professional portrait photograph of a middle-aged, South Asian man dressed in business casual attire. His face bears a neutral expression, while a modern office setting forms the backdrop of the photograph. The lighting is natural, casting soft shadows, and the overall atmosphere of the image is clean and professional.",
+        "generated_at": "2026-03-11T20:22:23.594Z",
+        "size": "1024x1024",
+        "quality": "standard"
+      }
+    },
+    {
+      "id": "ai_dalle3_medical_0061",
+      "filename": "dalle3_medical_0061.png",
+      "filepath": "dalle-training/images/dalle3_medical_0061.png",
+      "label": "ai",
+      "source": "dalle3",
+      "category": "medical",
+      "metadata": {
+        "generator_model": "dall-e-3",
+        "revised_prompt": "Realistic image of a physical therapy session taking place. A South Asian gender-neutral therapist is assisting a Caucasian male patient with his knee rehabilitation. The setting is a clinical environment, equipped with necessary medical and rehabilitation equipment, a rehabilitation mat, and a treatment table. The patient is lying down on the therapy couch, while the therapist is dedicatedly working on the patient's knee. The atmosphere portrays a professional yet comforting mood, showcasing the therapeutic relationship.",
+        "generated_at": "2026-03-11T20:22:26.848Z",
+        "size": "1024x1024",
+        "quality": "standard"
+      }
+    },
+    {
+      "id": "ai_dalle3_realistic_portraits_0064",
+      "filename": "dalle3_realistic_portraits_0064.png",
+      "filepath": "dalle-training/images/dalle3_realistic_portraits_0064.png",
+      "label": "ai",
+      "source": "dalle3",
+      "category": "realistic_portraits",
+      "metadata": {
+        "generator_model": "dall-e-3",
+        "revised_prompt": "Create a professional quality DSLR image of a Hispanic woman in her 30s. She should be dressed in business attire and exhibit a slight smile. The background should hint at an office setting but remain blurred to maintain focus on the woman. Her positioning should be as you'd typically find in a well-executed headshot photograph.",
+        "generated_at": "2026-03-11T20:22:32.128Z",
+        "size": "1024x1024",
+        "quality": "standard"
+      }
+    },
+    {
+      "id": "ai_dalle3_realistic_portraits_0066",
+      "filename": "dalle3_realistic_portraits_0066.png",
+      "filepath": "dalle-training/images/dalle3_realistic_portraits_0066.png",
+      "label": "ai",
+      "source": "dalle3",
+      "category": "realistic_portraits",
+      "metadata": {
+        "generator_model": "dall-e-3",
+        "revised_prompt": "Candid portrait of a young Middle-Eastern woman, casually dressed, situated in an outdoor cafe scenario. The environment exhibits ambient natural lighting with a background bearing a shallow depth of field.",
+        "generated_at": "2026-03-11T20:22:36.724Z",
+        "size": "1024x1024",
+        "quality": "standard"
+      }
+    },
+    {
+      "id": "ai_dalle3_realistic_portraits_0065",
+      "filename": "dalle3_realistic_portraits_0065.png",
+      "filepath": "dalle-training/images/dalle3_realistic_portraits_0065.png",
+      "label": "ai",
+      "source": "dalle3",
+      "category": "realistic_portraits",
+      "metadata": {
+        "generator_model": "dall-e-3",
+        "revised_prompt": "Create a candid, serene image of an elderly South Asian man sitting alone on a park bench. The vivid natural light breaking through the trees accentuates his genuine expression. The focus is finely tuned to him, introducing a wonderful depth of field that gently blurs the surrounding park scenery. He wears simple but warm clothing, further accenting his humble grace. The colors should be natural and vibrant, reflecting a typical sunny day in the park.",
+        "generated_at": "2026-03-11T20:22:37.866Z",
+        "size": "1024x1024",
+        "quality": "standard"
+      }
+    },
+    {
+      "id": "ai_dalle3_realistic_portraits_0067",
+      "filename": "dalle3_realistic_portraits_0067.png",
+      "filepath": "dalle-training/images/dalle3_realistic_portraits_0067.png",
+      "label": "ai",
+      "source": "dalle3",
+      "category": "realistic_portraits",
+      "metadata": {
+        "generator_model": "dall-e-3",
+        "revised_prompt": "Group portrait of business professionals engaged in a meeting inside a conference room. Among them there is a confident Black woman in a crisp white suit, an elderly Caucasian man with glasses sporting a grey suit, a young Asian woman with a blue power dress and a Middle-Eastern man in his mid-40s wearing a maroon suit. The room is well lit with natural light pouring in through large windows. The long mahogany conference table reflects the soft glow, and there is a faint hum of serious discussion in the air.",
+        "generated_at": "2026-03-11T20:22:44.015Z",
+        "size": "1024x1024",
+        "quality": "standard"
+      }
+    }
+  ]
+}
