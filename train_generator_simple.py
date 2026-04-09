@@ -1,5 +1,3 @@
-python3 << 'PYEOF'
-script = '''
 import json, random, torch, torch.nn as nn
 from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms, models
@@ -93,9 +91,4 @@ for epoch in range(1, 21):
     print(f"Epoch {epoch}/20 train:{train_acc:.1f}% val:{val_acc:.1f}% {marker}")
     for cls, cnt in per_class_total.items():
         print(f"  {LABEL_NAMES[cls]}: {100.*per_class[cls]/cnt:.1f}%")
-print(f"Best: {best_acc:.1f}%")
-'''
-with open("/tmp/train_generator_simple.py", "w") as f:
-    f.write(script)
-print("Script written successfully")
-PYEOF
+print(f"Best: {best_acc:.1f}% — saved to /mnt/verisource/models/generator_classifier.pth")
