@@ -3813,12 +3813,20 @@ app.post('/verify', upload.single('file'), authenticateApiKey, async (req, res) 
     console.log('🤖 Running AI detection...');
     
     // --- GPU Neural Detection (Primary) ---
-    const gpuDetector = new GPUAIDetector();
     let gpuResult = null;
     
-    if (gpuDetector.enabled) {
+    if (GPUAIDetector.isAvailable()) {
       console.log('🔥 Attempting GPU neural detection...');
-      gpuResult = await gpuDetector.detect(req.file.path);
+      gpuResult = await GPUAIDetector.analyzeImage(req.file.path).then(r => ({
+        success: true,
+        ai_score: r.aiDetection.score,
+        label: r.aiDetection.isAI ? 'ai' : 'real',
+        confidence: r.aiDetection.ai_confidence,
+        gpu_inference_ms: r.aiDetection.details?.inference_ms || 0,
+        ensemble: { all_trained: true },
+        likely_ai_generated: r.aiDetection.isAI,
+        generator_detection: r.generatorDetection,
+      })).catch(err => ({ success: false, error: err.message, source: 'gpu_error' }));
       
       if (gpuResult.success) {
         console.log(`🔥 GPU result: ${gpuResult.label} (${gpuResult.confidence.toFixed(1)}% confidence, ${gpuResult.gpu_inference_ms}ms)`);
