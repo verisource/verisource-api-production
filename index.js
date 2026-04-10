@@ -889,6 +889,7 @@ app.post('/verify-remote', authenticateApiKey, async (req, res) => {
   let videoAnalysis = null;
   let deepfakeAnalysis = null;
   let screenshotDetection = null;
+  let gpuResult = null;
   let tempFilePath = null;
   let jpegForensics = null;
   let softwareAnalysis = null;
@@ -2338,23 +2339,27 @@ if (GPUAIDetector.isAvailable()) {
     let generatorDetection = null;
     try {
       console.log('🔍 Running AI generator detection...');
-      const generatorDetector = new AIGeneratorDetector();
-      
-      if (kind === 'video' && videoAnalysis && videoAnalysis.success) {
-        generatorDetection = await generatorDetector.analyzeVideo(
-          videoAnalysis.frames || [],
-          videoAnalysis.analysis?.temporalAnalysis || null,
-          videoAnalysis.metadata || {}
-        );
-      } else if (kind === 'image' && aiDetection) {
-        generatorDetection = await generatorDetector.analyzeImage(
-          tempFilePath,
-          aiDetection,
-          {}
-        );
-      }
-      if (generatorDetection) {
-        console.log(`✅ Generator detection: ${generatorDetection.likelyGenerator} (${generatorDetection.confidence}%)`);
+      if (gpuResult && gpuResult.success && gpuResult.generator_detection) {
+        generatorDetection = gpuResult.generator_detection;
+        console.log(`✅ Generator detection (GPU): ${generatorDetection.detected_generator} (${generatorDetection.confidence}%)`);
+      } else {
+        const generatorDetector = new AIGeneratorDetector();
+        if (kind === 'video' && videoAnalysis && videoAnalysis.success) {
+          generatorDetection = await generatorDetector.analyzeVideo(
+            videoAnalysis.frames || [],
+            videoAnalysis.analysis?.temporalAnalysis || null,
+            videoAnalysis.metadata || {}
+          );
+        } else if (kind === 'image' && aiDetection) {
+          generatorDetection = await generatorDetector.analyzeImage(
+            tempFilePath,
+            aiDetection,
+            {}
+          );
+        }
+        if (generatorDetection) {
+          console.log(`✅ Generator detection (heuristic): ${generatorDetection.likelyGenerator} (${generatorDetection.confidence}%)`);
+        }
       }
     } catch (err) {
       console.error('⚠️ Generator detection error:', err.message);
@@ -3813,8 +3818,6 @@ app.post('/verify', upload.single('file'), authenticateApiKey, async (req, res) 
     console.log('🤖 Running AI detection...');
     
     // --- GPU Neural Detection (Primary) ---
-    let gpuResult = null;
-    
     if (GPUAIDetector.isAvailable()) {
       console.log('🔥 Attempting GPU neural detection...');
       gpuResult = await GPUAIDetector.analyzeImage(req.file.path).then(r => ({
