@@ -1230,7 +1230,6 @@ if (kind === 'video') {
     console.log('🤖 Running AI detection...');
     
     // --- GPU Neural Detection (Primary) ---
-    let gpuResult = null;
 
 if (GPUAIDetector.isAvailable()) {
   console.log('🔥 Attempting GPU neural detection...');
