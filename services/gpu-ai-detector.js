@@ -176,11 +176,11 @@ class GPUAIDetector {
 
       const aiDetection = {
         isAI: data.is_ai,
-        confidence: data.confidence || data.ensemble_score || 0,
-        ai_confidence: Math.round((data.confidence || data.ensemble_score || 0) * 100 * 10) / 10,
+        confidence: data.ai_score || data.ensemble_score || 0,
+        ai_confidence: Math.round((data.ai_score || data.ensemble_score || 0) * 100 * 10) / 10,
         likely_ai_generated: data.is_ai,
         provider: 'gpu_ensemble',
-        score: data.ensemble_score || data.confidence || 0,
+        score: data.ai_score || data.ensemble_score || 0,
         details: {
           clip_score: data.clip_score || null,
           freq_score: data.freq_score || null,
