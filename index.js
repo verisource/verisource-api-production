@@ -3822,7 +3822,7 @@ app.post('/verify', upload.single('file'), authenticateApiKey, async (req, res) 
         ai_score: r.aiDetection.score,
         label: r.aiDetection.isAI ? 'ai' : 'real',
         confidence: r.aiDetection.score,
-        gpu_inference_ms: r.aiDetection.details?.ensemble_score || 0,
+        gpu_inference_ms: r.aiDetection.details?.inference_ms || 0,
         ensemble: { all_trained: true },
         likely_ai_generated: r.aiDetection.isAI,
         generator_detection: r.generatorDetection,
