@@ -4701,22 +4701,28 @@ app.post('/verify', upload.single('file'), authenticateApiKey, async (req, res) 
       let generatorDetection = null;
       try {
         console.log('🔍 Running AI generator detection...');
-        const generatorDetector = new AIGeneratorDetector();
-        
-        if (kind === 'video' && videoAnalysis && videoAnalysis.success) {
-          generatorDetection = await generatorDetector.analyzeVideo(
-            videoAnalysis.frames || [],
-            videoAnalysis.analysis?. temporalAnalysis || null,
-            videoAnalysis.metadata || {}
-          );
-          console.log(`✅ Generator detection: ${generatorDetection.likelyGenerator} (${generatorDetection.confidence}%)`);
-        } else if (kind === 'image' && aiDetection) {
-          generatorDetection = await generatorDetector.analyzeImage(
-            req.file.path,
-            aiDetection,
-            {}
-          );
-          console.log(`✅ Generator detection: ${generatorDetection.likelyGenerator} (${generatorDetection.confidence}%)`);
+        // Use GPU trained classifier if available
+        if (gpuResult && gpuResult.success && gpuResult.generator_detection) {
+          generatorDetection = gpuResult.generator_detection;
+          console.log(`✅ Generator detection (GPU): ${generatorDetection.detected_generator} (${generatorDetection.confidence}%)`);
+        } else {
+          // Fall back to heuristic detector
+          const generatorDetector = new AIGeneratorDetector();
+          if (kind === 'video' && videoAnalysis && videoAnalysis.success) {
+            generatorDetection = await generatorDetector.analyzeVideo(
+              videoAnalysis.frames || [],
+              videoAnalysis.analysis?.temporalAnalysis || null,
+              videoAnalysis.metadata || {}
+            );
+            console.log(`✅ Generator detection (heuristic): ${generatorDetection.likelyGenerator} (${generatorDetection.confidence}%)`);
+          } else if (kind === 'image' && aiDetection) {
+            generatorDetection = await generatorDetector.analyzeImage(
+              req.file.path,
+              aiDetection,
+              {}
+            );
+            console.log(`✅ Generator detection (heuristic): ${generatorDetection.likelyGenerator} (${generatorDetection.confidence}%)`);
+          }
         }
       } catch (err) {
         console.error('⚠️ Generator detection error:', err.message);
