@@ -55,14 +55,14 @@ except ImportError:
 # ---- Generator Classes -------------------------------------------------------
 
 GENERATOR_CLASSES = [
-    'authentic',
     'stable_diffusion',
     'sdxl_realistic',
     'dall_e_3',
     'grok',
     'gemini_flash',
+    'midjourney',
     'flux',
-    'unknown',
+    'gpt_image1',
 ]
 
 NUM_CLASSES    = len(GENERATOR_CLASSES)
@@ -214,12 +214,14 @@ def load_dataset(dataset_dir, min_samples, max_samples):
     else:
         print("No metadata found - scanning directories directly...")
         scan_dirs = {
-            'authentic':        Path('/mnt/verisource/training-data/real'),
             'stable_diffusion': Path('/mnt/verisource/training-data/ai/civitai'),
+            'sdxl_realistic':   Path('/mnt/verisource/training-data/ai/portrait'),
             'dall_e_3':         Path('/mnt/verisource/training-data/ai/dalle3'),
             'grok':             Path('/mnt/verisource/training-data/ai/grok'),
             'gemini_flash':     Path('/mnt/verisource/training-data/ai/nanobana'),
-            'sdxl_realistic':   Path('/mnt/verisource/training-data/ai/portrait'),
+            'midjourney':       Path('/mnt/verisource/training-data/ai/midjourney'),
+            'flux':             Path('/mnt/verisource/training-data/ai/flux'),
+            'gpt_image1':       Path('/mnt/verisource/training-data/ai/gpt_image1'),
         }
         for gen_label, dir_path in scan_dirs.items():
             if not dir_path.exists():
