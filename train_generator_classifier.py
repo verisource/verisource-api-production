@@ -264,7 +264,7 @@ def train_epoch(model, loader, optimizer, criterion, device, clip_proc, clip_net
         if clip_proc and clip_net:
             with torch.no_grad():
                 inp = clip_proc(images=images, return_tensors='pt', do_rescale=False).to(device)
-                clip_feats = F.normalize(clip_net.get_image_features(**inp), dim=-1)
+                raw = clip_net.get_image_features(**inp); clip_feats = F.normalize(raw if isinstance(raw, torch.Tensor) else raw.image_embeds, dim=-1)
         logits = model(images, clip_feats)
         loss = criterion(logits, labels)
         loss.backward()
@@ -284,7 +284,7 @@ def eval_epoch(model, loader, criterion, device, clip_proc, clip_net):
         clip_feats = None
         if clip_proc and clip_net:
             inp = clip_proc(images=images, return_tensors='pt', do_rescale=False).to(device)
-            clip_feats = F.normalize(clip_net.get_image_features(**inp), dim=-1)
+            raw = clip_net.get_image_features(**inp); clip_feats = F.normalize(raw if isinstance(raw, torch.Tensor) else raw.image_embeds, dim=-1)
         logits = model(images, clip_feats)
         loss = criterion(logits, labels)
         total_loss += loss.item()
