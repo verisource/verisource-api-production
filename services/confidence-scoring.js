@@ -12,6 +12,8 @@ const GENERATOR_DISPLAY_NAMES = {
   'dall_e_3':          'DALL-E 3',
   'grok':              'Grok (xAI)',
   'gemini_flash':      'Gemini Flash Image (Nano Banana)',
+  'gpt_image1':       'GPT Image 1',
+  'midjourney':        'Midjourney',
   'unknown_generator': 'Unknown Generator',
 };
 
