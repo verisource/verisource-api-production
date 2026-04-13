@@ -312,6 +312,36 @@ PLATFORM_PROFILES = {
         'compression_gens': 4,
     },
 
+
+    'instagram_facebook': {
+        'description': 'Instagram then reshared to Facebook',
+        'chain_keys': ['instagram_feed', 'facebook_hq'],
+        'compression_gens': 4,
+    },
+
+    'facebook_instagram': {
+        'description': 'Facebook then reshared to Instagram',
+        'chain_keys': ['facebook_hq', 'instagram_feed'],
+        'compression_gens': 4,
+    },
+
+    'instagram_tiktok': {
+        'description': 'Instagram then reshared to TikTok',
+        'chain_keys': ['instagram_feed', 'tiktok'],
+        'compression_gens': 4,
+    },
+
+    'tiktok_instagram': {
+        'description': 'TikTok then reshared to Instagram',
+        'chain_keys': ['tiktok', 'instagram_feed'],
+        'compression_gens': 4,
+    },
+
+    'tiktok_facebook': {
+        'description': 'TikTok then reshared to Facebook',
+        'chain_keys': ['tiktok', 'facebook_hq'],
+        'compression_gens': 4,
+    },
     'edited_instagram_whatsapp': {
         'description': 'Edited → Instagram → WhatsApp (3-platform chain)',
         'edit_software': 'brightness_contrast',
