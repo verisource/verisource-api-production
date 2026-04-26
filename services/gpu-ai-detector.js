@@ -287,18 +287,34 @@ class GPUAIDetector {
       }
 
       return results.map((r) => {
-        const score = r.ai_score || r.confidence || r.ensemble_score || 0;
+        // RunPod /analyze-batch returns { ai_probability, label }
+        // Other endpoints use ai_score/confidence — accept all for compatibility
+        const score = r.ai_probability != null
+          ? r.ai_probability
+          : (r.ai_score || r.confidence || r.ensemble_score || 0);
+        // Derive is_ai from explicit field, label string, or score threshold
+        const isAI = r.is_ai === true
+          ? true
+          : r.is_ai === false
+            ? false
+            : r.label === 'ai'
+              ? true
+              : r.label === 'real'
+                ? false
+                : score >= 0.5;
         return {
-          isAI: r.is_ai,
+          isAI: isAI,
           confidence: score,
           ai_confidence: Math.round(score * 100 * 10) / 10,
-          likely_ai_generated: r.is_ai,
+          likely_ai_generated: isAI,
           provider: 'gpu_ensemble_batch',
           score: score,
           details: {
             clip_score: r.clip_score || null,
             freq_score: r.freq_score || null,
             ensemble_score: r.ensemble_score || null,
+            label: r.label || null,
+            ai_probability: r.ai_probability != null ? r.ai_probability : null,
           },
         };
       });
