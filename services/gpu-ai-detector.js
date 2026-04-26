@@ -4,6 +4,7 @@
  * Calls the RunPod GPU inference service for:
  *   1. Binary AI detection (AI vs authentic) — CLIP + Frequency CNN ensemble
  *   2. Generator classification — which AI tool produced the image
+ *   3. Batch detection — multiple frames in one GPU call (used for video)
  *
  * The GPU service runs on RunPod at the URL stored in RUNPOD_ENDPOINT.
  * Falls back gracefully if the service is unavailable.
@@ -20,6 +21,8 @@ const fs = require('fs');
 
 const RUNPOD_ENDPOINT = process.env.RUNPOD_ENDPOINT || '';
 const RUNPOD_TIMEOUT = parseInt(process.env.RUNPOD_TIMEOUT || '30000', 10);
+// Batch endpoint timeout — longer than single-image since N frames at once
+const RUNPOD_BATCH_TIMEOUT = parseInt(process.env.RUNPOD_BATCH_TIMEOUT || '60000', 10);
 
 // OOD confidence thresholds
 const OOD_HIGH_THRESHOLD   = 0.80;
@@ -208,6 +211,111 @@ class GPUAIDetector {
         ? await this.classifyGenerator(imagePath)
         : null;
       return { aiDetection, generatorDetection };
+    }
+  }
+
+  /**
+   * Run binary AI detection on multiple frames in a single GPU batch.
+   * Used by video-analyzer.js to avoid N sequential HTTP round-trips.
+   *
+   * Falls back to sequential detectAI() calls if /analyze-batch is unavailable
+   * (e.g. older RunPod app.py without the batch endpoint).
+   *
+   * @param {string[]} imagePaths - Array of local frame paths
+   * @returns {Object[]} Array of per-frame results in the same order as input.
+   *                    Each result has the same shape as detectAI() output.
+   */
+  static async analyzeBatch(imagePaths) {
+    if (!Array.isArray(imagePaths) || imagePaths.length === 0) {
+      return [];
+    }
+
+    if (!this.isAvailable()) {
+      // GPU not configured — caller should fall back to legacy detector
+      return imagePaths.map(() => ({
+        isAI: false,
+        confidence: 0,
+        ai_confidence: 0,
+        provider: 'gpu_unavailable',
+        score: 0,
+        details: 'GPU service not configured',
+        error: true,
+      }));
+    }
+
+    // Try the batch endpoint first
+    try {
+      const form = new FormData();
+      for (const p of imagePaths) {
+        form.append('files', fs.createReadStream(p));
+      }
+
+      const response = await axios.post(
+        `${RUNPOD_ENDPOINT}/analyze-batch`,
+        form,
+        {
+          headers: form.getHeaders(),
+          timeout: RUNPOD_BATCH_TIMEOUT,
+          maxContentLength: Infinity,
+          maxBodyLength: Infinity,
+        }
+      );
+
+      // Expected response shape from app.py /analyze-batch:
+      // { results: [{ is_ai, confidence|ai_score, clip_score, freq_score, ensemble_score }, ...] }
+      const results = response.data?.results || response.data || [];
+
+      if (!Array.isArray(results) || results.length !== imagePaths.length) {
+        throw new Error(
+          `Batch result length mismatch: expected ${imagePaths.length}, got ${results.length}`
+        );
+      }
+
+      return results.map((r) => {
+        const score = r.ai_score || r.confidence || r.ensemble_score || 0;
+        return {
+          isAI: r.is_ai,
+          confidence: score,
+          ai_confidence: Math.round(score * 100 * 10) / 10,
+          likely_ai_generated: r.is_ai,
+          provider: 'gpu_ensemble_batch',
+          score: score,
+          details: {
+            clip_score: r.clip_score || null,
+            freq_score: r.freq_score || null,
+            ensemble_score: r.ensemble_score || null,
+          },
+        };
+      });
+
+    } catch (err) {
+      // Fall back to sequential single-image calls
+      // Handles: 404 (no batch endpoint), 5xx, network errors
+      const status = err.response?.status;
+      if (status === 404) {
+        console.warn('⚠️  GPU /analyze-batch not available, falling back to sequential calls');
+      } else {
+        console.warn(`⚠️  GPU batch failed (${err.message}), falling back to sequential calls`);
+      }
+
+      // Sequential fallback — still uses GPU, just one frame at a time
+      const results = [];
+      for (const p of imagePaths) {
+        try {
+          results.push(await this.detectAI(p));
+        } catch (singleErr) {
+          results.push({
+            isAI: false,
+            confidence: 0,
+            ai_confidence: 0,
+            provider: 'gpu_error',
+            score: 0,
+            details: singleErr.message,
+            error: true,
+          });
+        }
+      }
+      return results;
     }
   }
 
