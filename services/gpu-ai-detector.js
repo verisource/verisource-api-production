@@ -10,9 +10,9 @@
  * Falls back gracefully if the service is unavailable.
  *
  * OOD Thresholds for generator classification:
- *   > 80% confidence  → specific generator label
- *   50-80% confidence → "possibly_[generator]"
- *   < 50% confidence  → "unknown_generator"
+ *   > 80% confidence  -> specific generator label
+ *   50-80% confidence -> "possibly_[generator]"
+ *   < 50% confidence  -> "unknown_generator"
  */
 
 const axios = require('axios');
@@ -21,7 +21,7 @@ const fs = require('fs');
 
 const RUNPOD_ENDPOINT = process.env.RUNPOD_ENDPOINT || '';
 const RUNPOD_TIMEOUT = parseInt(process.env.RUNPOD_TIMEOUT || '30000', 10);
-// Batch endpoint timeout — longer than single-image since N frames at once
+// Batch endpoint timeout - longer than single-image since N frames at once
 const RUNPOD_BATCH_TIMEOUT = parseInt(process.env.RUNPOD_BATCH_TIMEOUT || '60000', 10);
 
 // OOD confidence thresholds
@@ -73,7 +73,7 @@ class GPUAIDetector {
       form.append('file', fs.createReadStream(imagePath));
 
       const response = await axios.post(
-        `${RUNPOD_ENDPOINT}/detect`,
+        RUNPOD_ENDPOINT + '/detect',
         form,
         {
           headers: form.getHeaders(),
@@ -99,7 +99,7 @@ class GPUAIDetector {
       };
 
     } catch (err) {
-      console.warn(`⚠️  GPU AI detection failed: ${err.message}`);
+      console.warn('GPU AI detection failed: ' + err.message);
       return {
         isAI: false,
         confidence: 0,
@@ -129,7 +129,7 @@ class GPUAIDetector {
       form.append('file', fs.createReadStream(imagePath));
 
       const response = await axios.post(
-        `${RUNPOD_ENDPOINT}/classify-generator`,
+        RUNPOD_ENDPOINT + '/classify-generator',
         form,
         {
           headers: form.getHeaders(),
@@ -141,7 +141,7 @@ class GPUAIDetector {
       return this._formatGeneratorResult(generator, confidence, 'ok', raw_scores || {});
 
     } catch (err) {
-      console.warn(`⚠️  Generator classification failed: ${err.message}`);
+      console.warn('Generator classification failed: ' + err.message);
       return this._formatGeneratorResult('unknown_generator', 0, 'error', {});
     }
   }
@@ -167,7 +167,7 @@ class GPUAIDetector {
 
       // Try combined endpoint first
       const response = await axios.post(
-        `${RUNPOD_ENDPOINT}/analyze`,
+        RUNPOD_ENDPOINT + '/analyze',
         form,
         {
           headers: form.getHeaders(),
@@ -205,7 +205,7 @@ class GPUAIDetector {
 
     } catch (err) {
       // Fall back to separate calls
-      console.warn(`⚠️  Combined analyze failed, falling back: ${err.message}`);
+      console.warn('Combined analyze failed, falling back: ' + err.message);
       const aiDetection = await this.detectAI(imagePath);
       const generatorDetection = aiDetection.isAI
         ? await this.classifyGenerator(imagePath)
@@ -231,7 +231,7 @@ class GPUAIDetector {
     }
 
     if (!this.isAvailable()) {
-      // GPU not configured — caller should fall back to legacy detector
+      // GPU not configured - caller should fall back to legacy detector
       return imagePaths.map(() => ({
         isAI: false,
         confidence: 0,
@@ -251,7 +251,7 @@ class GPUAIDetector {
       }
 
       const response = await axios.post(
-        `${RUNPOD_ENDPOINT}/analyze-batch`,
+        RUNPOD_ENDPOINT + '/analyze-batch',
         form,
         {
           headers: form.getHeaders(),
@@ -263,11 +263,26 @@ class GPUAIDetector {
 
       // Expected response shape from app.py /analyze-batch:
       // { results: [{ is_ai, confidence|ai_score, clip_score, freq_score, ensemble_score }, ...] }
-      const results = response.data?.results || response.data || [];
+      const results = response.data && response.data.results
+        ? response.data.results
+        : (Array.isArray(response.data) ? response.data : []);
+
+      // ===== TEMPORARY DEBUG LOGGING =====
+      // Captures the raw RunPod /analyze-batch response shape so we can
+      // diagnose why frame scores come back as zeros. Remove after fix.
+      try {
+        console.log('[BATCH-DEBUG] response keys:', Object.keys(response.data || {}));
+        const sample = JSON.stringify(response.data);
+        console.log('[BATCH-DEBUG] response sample (first 800 chars):', sample.slice(0, 800));
+        console.log('[BATCH-DEBUG] first result item:', JSON.stringify(results[0] || null));
+      } catch (logErr) {
+        console.log('[BATCH-DEBUG] log error:', logErr.message);
+      }
+      // ===== END DEBUG LOGGING =====
 
       if (!Array.isArray(results) || results.length !== imagePaths.length) {
         throw new Error(
-          `Batch result length mismatch: expected ${imagePaths.length}, got ${results.length}`
+          'Batch result length mismatch: expected ' + imagePaths.length + ', got ' + results.length
         );
       }
 
@@ -291,14 +306,14 @@ class GPUAIDetector {
     } catch (err) {
       // Fall back to sequential single-image calls
       // Handles: 404 (no batch endpoint), 5xx, network errors
-      const status = err.response?.status;
+      const status = err.response && err.response.status;
       if (status === 404) {
-        console.warn('⚠️  GPU /analyze-batch not available, falling back to sequential calls');
+        console.warn('GPU /analyze-batch not available, falling back to sequential calls');
       } else {
-        console.warn(`⚠️  GPU batch failed (${err.message}), falling back to sequential calls`);
+        console.warn('GPU batch failed (' + err.message + '), falling back to sequential calls');
       }
 
-      // Sequential fallback — still uses GPU, just one frame at a time
+      // Sequential fallback - still uses GPU, just one frame at a time
       const results = [];
       for (const p of imagePaths) {
         try {
@@ -335,7 +350,7 @@ class GPUAIDetector {
       finalGenerator = generator;
     } else if (confidence >= OOD_MEDIUM_THRESHOLD) {
       oodLevel = 'uncertain';
-      finalGenerator = `possibly_${generator}`;
+      finalGenerator = 'possibly_' + generator;
     } else {
       oodLevel = 'unknown';
       finalGenerator = 'unknown_generator';
@@ -347,10 +362,10 @@ class GPUAIDetector {
     let verdictMessage;
     switch (oodLevel) {
       case 'confident':
-        verdictMessage = `Generated by ${displayName}`;
+        verdictMessage = 'Generated by ' + displayName;
         break;
       case 'uncertain':
-        verdictMessage = `Possibly generated by ${displayName}`;
+        verdictMessage = 'Possibly generated by ' + displayName;
         break;
       default:
         verdictMessage = 'Unknown AI generator';
@@ -385,7 +400,7 @@ class GPUAIDetector {
   static async healthCheck() {
     if (!this.isAvailable()) return false;
     try {
-      const response = await axios.get(`${RUNPOD_ENDPOINT}/health`, { timeout: 5000 });
+      const response = await axios.get(RUNPOD_ENDPOINT + '/health', { timeout: 5000 });
       return response.status === 200;
     } catch {
       return false;
