@@ -2338,15 +2338,27 @@ if (GPUAIDetector.isAvailable()) {
     let generatorDetection = null;
     try {
       console.log('🔍 Running AI generator detection...');
+      // Tier 1: GPU image generator detection (from single-image analyze)
       if (gpuResult && gpuResult.success && gpuResult.generator_detection) {
         generatorDetection = gpuResult.generator_detection;
-        console.log(`✅ Generator detection (GPU): ${generatorDetection.detected_generator} (${generatorDetection.confidence}%)`);
-      } else {
+        console.log(`✅ Generator detection (GPU image): ${generatorDetection.detected_generator} (${generatorDetection.confidence}%)`);
+      }
+      // Tier 2: GPU video generator detection (from video-analyzer's top-frame classify)
+      else if (kind === 'video' && videoAnalysis?.analysis?.generatorDetection) {
+        generatorDetection = videoAnalysis.analysis.generatorDetection;
+        console.log(`✅ Generator detection (GPU video): ${generatorDetection.detected_generator} (${generatorDetection.confidence}%)`);
+      }
+      // Tier 3: heuristic fallback (only if GPU didn't classify)
+      else {
         const generatorDetector = new AIGeneratorDetector();
         if (kind === 'video' && videoAnalysis && videoAnalysis.success) {
+          // Use the actual frame paths from the video analyzer output
+          const heuristicFrames = (videoAnalysis.analysis?.frameResults || [])
+            .map(f => f.frame_path)
+            .filter(Boolean);
           generatorDetection = await generatorDetector.analyzeVideo(
-            videoAnalysis.frames || [],
-            videoAnalysis.analysis?.temporalAnalysis || null,
+            heuristicFrames,
+            videoAnalysis.analysis?.temporalConsistency || null,
             videoAnalysis.metadata || {}
           );
         } else if (kind === 'image' && aiDetection) {
@@ -2357,7 +2369,7 @@ if (GPUAIDetector.isAvailable()) {
           );
         }
         if (generatorDetection) {
-          console.log(`✅ Generator detection (heuristic): ${generatorDetection.likelyGenerator} (${generatorDetection.confidence}%)`);
+          console.log(`✅ Generator detection (heuristic): ${generatorDetection.likelyGenerator || generatorDetection.detected_generator} (${generatorDetection.confidence}%)`);
         }
       }
     } catch (err) {
@@ -4713,26 +4725,40 @@ app.post('/verify', upload.single('file'), authenticateApiKey, async (req, res) 
       try {
         console.log('🔍 Running AI generator detection...');
         // Use GPU trained classifier if available
+        // Tier 1: GPU image generator detection
         if (gpuResult && gpuResult.success && gpuResult.generator_detection) {
           generatorDetection = gpuResult.generator_detection;
-          console.log(`✅ Generator detection (GPU): ${generatorDetection.detected_generator} (${generatorDetection.confidence}%)`);
-        } else {
-          // Fall back to heuristic detector
+          console.log(`✅ Generator detection (GPU image): ${generatorDetection.detected_generator} (${generatorDetection.confidence}%)`);
+        }
+        // Tier 2: GPU video generator detection
+        else if (kind === 'video' && videoAnalysis?.analysis?.generatorDetection) {
+          generatorDetection = videoAnalysis.analysis.generatorDetection;
+          console.log(`✅ Generator detection (GPU video): ${generatorDetection.detected_generator} (${generatorDetection.confidence}%)`);
+        }
+        // Tier 3: heuristic fallback
+        else {
           const generatorDetector = new AIGeneratorDetector();
           if (kind === 'video' && videoAnalysis && videoAnalysis.success) {
+            const heuristicFrames = (videoAnalysis.analysis?.frameResults || [])
+              .map(f => f.frame_path)
+              .filter(Boolean);
             generatorDetection = await generatorDetector.analyzeVideo(
-              videoAnalysis.frames || [],
-              videoAnalysis.analysis?.temporalAnalysis || null,
+              heuristicFrames,
+              videoAnalysis.analysis?.temporalConsistency || null,
               videoAnalysis.metadata || {}
             );
-            console.log(`✅ Generator detection (heuristic): ${generatorDetection.likelyGenerator} (${generatorDetection.confidence}%)`);
+            if (generatorDetection) {
+              console.log(`✅ Generator detection (heuristic): ${generatorDetection.likelyGenerator || generatorDetection.detected_generator} (${generatorDetection.confidence}%)`);
+            }
           } else if (kind === 'image' && aiDetection) {
             generatorDetection = await generatorDetector.analyzeImage(
               req.file.path,
               aiDetection,
               {}
             );
-            console.log(`✅ Generator detection (heuristic): ${generatorDetection.likelyGenerator} (${generatorDetection.confidence}%)`);
+            if (generatorDetection) {
+              console.log(`✅ Generator detection (heuristic): ${generatorDetection.likelyGenerator || generatorDetection.detected_generator} (${generatorDetection.confidence}%)`);
+            }
           }
         }
       } catch (err) {
