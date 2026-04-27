@@ -2589,6 +2589,9 @@ if (GPUAIDetector.isAvailable()) {
     // ============================================
     
     try {
+      if (!phash) {
+        console.log('🔗 Skipping provenance check (no pHash — likely video)');
+      } else {
       console.log('🔗 Checking content provenance...');
       const isScreenshot = screenshotDetection?.is_screenshot || false;
       const fileMeta = {
@@ -2626,6 +2629,7 @@ if (GPUAIDetector.isAvailable()) {
           console.log(`   📎 Most similar: ${provenanceResult.most_similar.similarity}% match`);
         }
       }
+      } // end if(phash)
     } catch (err) {
       console.error('⚠️ Provenance check error:', err.message);
     }
@@ -2635,6 +2639,9 @@ if (GPUAIDetector.isAvailable()) {
     // ============================================
     let fingerprintMatches = null;
     try {
+      if (!phash) {
+        console.log('🔍 Skipping fingerprint DB check (no pHash — likely video)');
+      } else {
       console.log('🔍 Checking fingerprint database...');
       fingerprintMatches = await FingerprintDBService.search(fingerprint, phash);
       if (fingerprintMatches.total_matches > 0) {
@@ -2643,6 +2650,7 @@ if (GPUAIDetector.isAvailable()) {
       } else {
         console.log('   ✅ No prior appearances in fingerprint database');
       }
+      } // end if(phash)
     } catch (err) {
       console.error('⚠️ Fingerprint database error:', err.message);
     }
@@ -3536,6 +3544,7 @@ app.post('/verify', upload.single('file'), authenticateApiKey, async (req, res) 
   let newsSourceMatch = null;
   let phash = null;
   let phashRegions = null;
+  let gpuResult = null;
 
   try {
     const buf = fs.readFileSync(req.file.path);
